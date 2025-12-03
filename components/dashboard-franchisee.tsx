@@ -15,6 +15,7 @@ export function DashboardFranchisee() {
   const [deals, setDeals] = useState<any[]>([])
   const [expenses, setExpenses] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
+  const [topLocations, setTopLocations] = useState<any[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -32,6 +33,10 @@ export function DashboardFranchisee() {
         if (dealsRes.ok) setDeals(await dealsRes.json())
         if (expensesRes.ok) setExpenses(await expensesRes.json())
         if (transactionsRes.ok) setTransactions(await transactionsRes.json())
+
+        // Fetch top locations data
+        const topLocationsRes = await fetch(`/api/top-locations?franchiseeId=${user.franchiseeId}`)
+        if (topLocationsRes.ok) setTopLocations(await topLocationsRes.json())
       } catch (error) {
         console.error("[v0] Failed to fetch dashboard data:", error)
       } finally {
@@ -81,14 +86,6 @@ export function DashboardFranchisee() {
       trend: { value: 3.2, isPositive: false },
       icon: <Users className="w-5 h-5" />,
     },
-  ]
-
-  const topLocations = [
-    { name: "Москва - Центр", revenue: 850000 },
-    { name: "Санкт-Петербург", revenue: 720000 },
-    { name: "Казань", revenue: 650000 },
-    { name: "Екатеринбург", revenue: 580000 },
-    { name: "Новосибирск", revenue: 520000 },
   ]
 
   const maxRevenue = Math.max(...topLocations.map((l) => l.revenue))
@@ -186,27 +183,29 @@ export function DashboardFranchisee() {
         ))}
       </DashboardGrid>
 
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-foreground mb-1">Сравнение Выручки</h3>
-        <p className="text-sm text-muted-foreground mb-6">Топ-5 локаций по выручке за предыдущий месяц</p>
+      {topLocations.length > 0 && (
+        <div className="bg-card border border-border rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-foreground mb-1">Сравнение Выручки</h3>
+          <p className="text-sm text-muted-foreground mb-6">Топ-5 локаций по выручке за предыдущий месяц</p>
 
-        <div className="space-y-4">
-          {topLocations.map((location, idx) => (
-            <div key={idx} className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-foreground font-medium">{location.name}</span>
-                <span className="text-primary font-semibold">{location.revenue.toLocaleString("ru-RU")} ₽</span>
+          <div className="space-y-4">
+            {topLocations.map((location, idx) => (
+              <div key={idx} className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-foreground font-medium">{location.name}</span>
+                  <span className="text-primary font-semibold">{location.revenue.toLocaleString("ru-RU")} ₽</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+                  <div
+                    className="bg-primary h-full rounded-full transition-all"
+                    style={{ width: `${(location.revenue / maxRevenue) * 100}%` }}
+                  />
+                </div>
               </div>
-              <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
-                <div
-                  className="bg-primary h-full rounded-full transition-all"
-                  style={{ width: `${(location.revenue / maxRevenue) * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="bg-card border border-border rounded-lg p-6">
         <h3 className="text-lg font-semibold text-foreground mb-1">Предстоящие Игры</h3>

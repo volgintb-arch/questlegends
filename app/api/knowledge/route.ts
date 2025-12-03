@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@neondatabase/serverless"
-
-const databaseUrl = process.env.DATABASE_URL!
+import { prisma } from "@/lib/prisma"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,45 +9,26 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get("category")
     const search = searchParams.get("search")
 
-    let query = `
-      SELECT 
-        ka.*,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', kf.id,
-              'name', kf.name,
-              'url', kf.url,
-              'size', kf.size,
-              'uploadedAt', kf."uploadedAt"
-            )
-          ) FILTER (WHERE kf.id IS NOT NULL),
-          '[]'
-        ) as files
-      FROM "KnowledgeArticle" ka
-      LEFT JOIN "KnowledgeFile" kf ON ka.id = kf."articleId"
-    `
-
-    const conditions: string[] = []
-    const params: any[] = []
+    const where: any = {}
 
     if (category && category !== "all") {
-      conditions.push(`ka.category = $${params.length + 1}`)
-      params.push(category)
+      where.category = category
     }
 
     if (search) {
-      conditions.push(`(ka.title ILIKE $${params.length + 1} OR ka.content ILIKE $${params.length + 1})`)
-      params.push(`%${search}%`)
+      where.OR = [
+        { title: { contains: search, mode: "insensitive" } },
+        { content: { contains: search, mode: "insensitive" } },
+      ]
     }
 
-    if (conditions.length > 0) {
-      query += ` WHERE ` + conditions.join(" AND ")
-    }
-
-    query += ` GROUP BY ka.id ORDER BY ka."createdAt" DESC`
-
-    const articles = await sql(databaseUrl, query, params)
+    const articles = await prisma.knowledgeArticle.findMany({
+      where,
+      include: {
+        files: true,
+      },
+      orderBy: { createdAt: "desc" },
+    })
 
     return NextResponse.json({ articles })
   } catch (error: any) {
@@ -58,49 +39,44 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { title, category, content, author, authorId, type, tags, files } = body
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-    if (!title || !category || !content || !author) {
+    const body = await request.json()
+    const { title, category, content, type, tags, files } = body
+
+    if (!title || !category || !content) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Insert article
-    const [article] = await sql(databaseUrl)`
-      INSERT INTO "KnowledgeArticle" (
-        id, title, category, content, author, "authorId", type, tags, "createdAt", "updatedAt"
-      ) VALUES (
-        ${`KB-${Date.now()}`},
-        ${title},
-        ${category},
-        ${content},
-        ${author},
-        ${authorId ? authorId : null},
-        ${type ? type : "article"},
-        ${tags ? tags : []},
-        NOW(),
-        NOW()
-      )
-      RETURNING *
-    `
-
-    // Insert files if provided
-    if (files && files.length > 0) {
-      for (const file of files) {
-        await sql(databaseUrl)`
-          INSERT INTO "KnowledgeFile" (
-            id, "articleId", name, url, size, "uploadedAt"
-          ) VALUES (
-            ${file.id},
-            ${article.id},
-            ${file.name},
-            ${file.url},
-            ${file.size},
-            NOW()
-          )
-        `
-      }
-    }
+    const article = await prisma.knowledgeArticle.create({
+      data: {
+        id: `KB-${Date.now()}`,
+        title,
+        category,
+        content,
+        author: session.user.name || "Unknown",
+        authorId: session.user.id,
+        type: type || "article",
+        tags: tags || [],
+        files:
+          files && files.length > 0
+            ? {
+                create: files.map((file: any) => ({
+                  id: file.id || `FILE-${Date.now()}-${Math.random()}`,
+                  name: file.name,
+                  url: file.url,
+                  size: file.size,
+                })),
+              }
+            : undefined,
+      },
+      include: {
+        files: true,
+      },
+    })
 
     return NextResponse.json({ article }, { status: 201 })
   } catch (error: any) {

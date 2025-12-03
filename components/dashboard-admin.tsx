@@ -16,30 +16,58 @@ export function DashboardAdmin() {
     payroll: 0,
   })
   const [gamesRequiringAssignment, setGamesRequiringAssignment] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadMetrics()
     loadGamesRequiringAssignment()
-  }, [])
+  }, [user?.franchiseeId])
 
   const loadMetrics = async () => {
+    if (!user?.franchiseeId) return
+
     try {
-      const response = await fetch("/api/metrics")
-      const data = await response.json()
-      if (response.ok) {
-        setMetrics(data.metrics)
+      const [transactionsRes, expensesRes] = await Promise.all([
+        fetch(`/api/transactions?franchiseeId=${user.franchiseeId}`),
+        fetch(`/api/expenses?franchiseeId=${user.franchiseeId}`),
+      ])
+
+      let revenue = 0
+      let expenses = 0
+      let payroll = 0
+
+      if (transactionsRes.ok) {
+        const transactions = await transactionsRes.json()
+        revenue = transactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0)
       }
+
+      if (expensesRes.ok) {
+        const expensesData = await expensesRes.json()
+        expenses = expensesData
+          .filter((e: any) => e.category !== "Зарплата")
+          .reduce((sum: number, e: any) => sum + (e.amount || 0), 0)
+        payroll = expensesData
+          .filter((e: any) => e.category === "Зарплата")
+          .reduce((sum: number, e: any) => sum + (e.amount || 0), 0)
+      }
+
+      setMetrics({ revenue, expenses, payroll })
     } catch (error) {
       console.error("[v0] Error loading metrics:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
   const loadGamesRequiringAssignment = async () => {
+    if (!user?.franchiseeId) return
+
     try {
-      const response = await fetch("/api/deals?needsAssignment=true")
-      const data = await response.json()
+      const response = await fetch(`/api/deals?franchiseeId=${user.franchiseeId}&stage=SCHEDULED`)
       if (response.ok) {
-        setGamesRequiringAssignment(data.deals || [])
+        const deals = await response.json()
+        const needsAssignment = deals.filter((deal: any) => !deal.assignments || deal.assignments.length === 0)
+        setGamesRequiringAssignment(needsAssignment)
       }
     } catch (error) {
       console.error("[v0] Error loading games:", error)
@@ -49,6 +77,14 @@ export function DashboardAdmin() {
   const handleCreateDeal = async (deal: any) => {
     console.log("[v0] Admin created new lead:", deal)
     await loadGamesRequiringAssignment()
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Загрузка данных...</div>
+      </div>
+    )
   }
 
   return (
@@ -190,26 +226,37 @@ export function DashboardAdmin() {
         </div>
         <p className="text-sm text-muted-foreground mb-4">Ближайшие игры без полного состава персонала</p>
 
-        <div className="space-y-2">
-          {gamesRequiringAssignment.map((game) => (
-            <button
-              key={game.id}
-              className="w-full bg-muted hover:bg-muted/80 border border-destructive/20 rounded-lg p-4 text-left transition-colors"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-medium text-foreground">{game.client}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {game.date} в {game.time}
-                  </p>
+        {gamesRequiringAssignment.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">Все игры укомплектованы персоналом</div>
+        ) : (
+          <div className="space-y-2">
+            {gamesRequiringAssignment.map((game) => (
+              <button
+                key={game.id}
+                className="w-full bg-muted hover:bg-muted/80 border border-destructive/20 rounded-lg p-4 text-left transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">{game.clientName || "Без названия"}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {game.gameDate
+                        ? new Date(game.gameDate).toLocaleDateString("ru-RU", {
+                            day: "numeric",
+                            month: "long",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "Дата не указана"}
+                    </p>
+                  </div>
+                  <span className="bg-destructive/20 text-destructive px-2 py-1 rounded text-xs font-medium">
+                    Не назначен персонал
+                  </span>
                 </div>
-                <span className="bg-destructive/20 text-destructive px-2 py-1 rounded text-xs font-medium">
-                  Не хватает: {game.missing}
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

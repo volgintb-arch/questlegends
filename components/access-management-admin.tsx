@@ -35,11 +35,7 @@ export function AccessManagementAdmin() {
     { id: "view_kb", name: "База знаний", description: "Доступ к документации" },
   ]
 
-  const [staffAccess, setStaffAccess] = useState<StaffAccess[]>([
-    { id: "1", name: "Иванов Иван", roleId: "role-senior-admin" },
-    { id: "2", name: "Петрова Анна", roleId: "role-admin" },
-    { id: "3", name: "Сидоров Петр", roleId: "role-host" },
-  ])
+  const [staffAccess, setStaffAccess] = useState<StaffAccess[]>([])
 
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
 

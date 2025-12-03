@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { User, Mail, Shield, Check, X } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -22,55 +22,122 @@ interface DelegatedUser {
 
 export function AccessManagementFranchisee() {
   const { user } = useAuth()
-  const [users, setUsers] = useState<DelegatedUser[]>([
-    {
-      id: "U-001",
-      name: "Анна Петрова",
-      email: "anna.petrova@questlegends.ru",
-      role: "Администратор",
-      status: "active",
-      rights: [
-        { id: "crm", name: "CRM", description: "Управление сделками и клиентами", enabled: true },
-        { id: "expenses", name: "Расходы", description: "Управление расходами локации", enabled: true },
-        { id: "schedules", name: "График", description: "Управление графиком сотрудников", enabled: true },
-        { id: "kb", name: "База Знаний", description: "Доступ к документации (всегда включено)", enabled: true },
-        { id: "users", name: "Пользователи", description: "Управление пользователями-персоналом", enabled: false },
-      ],
-    },
-    {
-      id: "U-002",
-      name: "Иван Козлов",
-      email: "ivan.kozlov@questlegends.ru",
-      role: "Администратор",
-      status: "active",
-      rights: [
-        { id: "crm", name: "CRM", description: "Управление сделками и клиентами", enabled: false },
-        { id: "expenses", name: "Расходы", description: "Управление расходами локации", enabled: false },
-        { id: "schedules", name: "График", description: "Управление графиком сотрудников", enabled: true },
-        { id: "kb", name: "База Знаний", description: "Доступ к документации (всегда включено)", enabled: true },
-        { id: "users", name: "Пользователи", description: "Управление пользователями-персоналом", enabled: true },
-      ],
-    },
-  ])
+  const [users, setUsers] = useState<DelegatedUser[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
 
-  const handleToggleRight = (userId: string, rightId: string) => {
-    if (rightId === "kb") return
+  useEffect(() => {
+    if (user?.franchiseeId) {
+      fetchUsers()
+    }
+  }, [user])
 
-    setUsers(
-      users.map((u) =>
-        u.id === userId
-          ? {
-              ...u,
-              rights: u.rights.map((r) => (r.id === rightId ? { ...r, enabled: !r.enabled } : r)),
-            }
-          : u,
-      ),
-    )
+  const fetchUsers = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/permissions?franchiseeId=${user?.franchiseeId}`)
+      if (!response.ok) throw new Error("Failed to fetch users")
+      const data = await response.json()
+
+      const formattedUsers = data.users.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.telegram || u.phone,
+        role: u.description || "Администратор",
+        status: u.isActive ? "active" : "revoked",
+        rights: [
+          {
+            id: "crm",
+            name: "CRM",
+            description: "Управление сделками и клиентами",
+            enabled: u.userPermissions?.canViewDeals ?? false,
+          },
+          {
+            id: "expenses",
+            name: "Расходы",
+            description: "Управление расходами локации",
+            enabled: u.userPermissions?.canAddExpenses ?? false,
+          },
+          {
+            id: "schedules",
+            name: "График",
+            description: "Управление графиком сотрудников",
+            enabled: u.userPermissions?.canManageSchedule ?? false,
+          },
+          { id: "kb", name: "База Знаний", description: "Доступ к документации (всегда включено)", enabled: true },
+          {
+            id: "users",
+            name: "Пользователи",
+            description: "Управление пользователями-персоналом",
+            enabled: u.userPermissions?.canManageUsers ?? false,
+          },
+        ],
+      }))
+
+      setUsers(formattedUsers)
+    } catch (error) {
+      console.error("[v0] Error fetching users:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleRevokeAccess = (userId: string) => {
-    setUsers(users.map((u) => (u.id === userId ? { ...u, status: "revoked" as const } : u)))
+  const handleToggleRight = async (userId: string, rightId: string) => {
+    if (rightId === "kb") return
+
+    const user = users.find((u) => u.id === userId)
+    if (!user) return
+
+    const right = user.rights.find((r) => r.id === rightId)
+    if (!right) return
+
+    const permissionMap = {
+      crm: "canViewDeals",
+      expenses: "canAddExpenses",
+      schedules: "canManageSchedule",
+      users: "canManageUsers",
+    }
+
+    try {
+      const response = await fetch("/api/permissions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          permissions: {
+            [permissionMap[rightId as keyof typeof permissionMap]]: !right.enabled,
+          },
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to update permissions")
+
+      await fetchUsers()
+    } catch (error) {
+      console.error("[v0] Error updating permissions:", error)
+      alert("Ошибка при обновлении прав доступа")
+    }
+  }
+
+  const handleRevokeAccess = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: false }),
+      })
+
+      if (!response.ok) throw new Error("Failed to revoke access")
+
+      await fetchUsers()
+    } catch (error) {
+      console.error("[v0] Error revoking access:", error)
+      alert("Ошибка при отзыве доступа")
+    }
+  }
+
+  if (loading) {
+    return <div className="p-6 text-center">Загрузка...</div>
   }
 
   return (

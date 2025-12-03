@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { UserPlus, Trash2, Shield } from "lucide-react"
@@ -26,18 +26,8 @@ interface AccessUser {
 }
 
 export function AccessManagementUK() {
-  const [users, setUsers] = useState<AccessUser[]>([
-    {
-      id: "1",
-      name: "Алексей Смирнов",
-      email: "alexey@questlegends.com",
-      phone: "+7 (999) 111-22-33",
-      role: "Аналитик",
-      permissions: { dashboard: true, deals: false, finances: true, constants: false, notifications: true },
-      status: "active",
-    },
-  ])
-
+  const [users, setUsers] = useState<AccessUser[]>([])
+  const [loading, setLoading] = useState(true)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [newUser, setNewUser] = useState({
     name: "",
@@ -47,37 +37,122 @@ export function AccessManagementUK() {
     permissions: { dashboard: false, deals: false, finances: false, constants: false, notifications: false },
   })
 
-  const handleAddUser = () => {
-    const user: AccessUser = {
-      id: Date.now().toString(),
-      ...newUser,
-      status: "active",
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch("/api/permissions")
+      if (!response.ok) throw new Error("Failed to fetch users")
+      const data = await response.json()
+
+      const formattedUsers = data.users.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.telegram || u.phone,
+        phone: u.phone,
+        role: u.description || "Сотрудник УК",
+        permissions: {
+          dashboard: u.userPermissions?.canViewDashboard ?? true,
+          deals: u.userPermissions?.canViewDeals ?? false,
+          finances: u.userPermissions?.canViewFinances ?? false,
+          constants: u.userPermissions?.canManageConstants ?? false,
+          notifications: u.userPermissions?.canViewNotifications ?? true,
+        },
+        status: u.isActive ? "active" : "inactive",
+      }))
+
+      setUsers(formattedUsers)
+    } catch (error) {
+      console.error("[v0] Error fetching users:", error)
+    } finally {
+      setLoading(false)
     }
-    setUsers([...users, user])
-    setIsAddModalOpen(false)
-    setNewUser({
-      name: "",
-      email: "",
-      phone: "",
-      role: "",
-      permissions: { dashboard: false, deals: false, finances: false, constants: false, notifications: false },
-    })
   }
 
-  const handleTogglePermission = (userId: string, permission: keyof AccessUser["permissions"]) => {
-    setUsers(
-      users.map((user) =>
-        user.id === userId
-          ? { ...user, permissions: { ...user.permissions, [permission]: !user.permissions[permission] } }
-          : user,
-      ),
-    )
+  const handleAddUser = async () => {
+    try {
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newUser.name,
+          phone: newUser.phone,
+          telegram: newUser.email,
+          role: "uk_employee",
+          description: newUser.role,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to create user")
+
+      await fetchUsers()
+      setIsAddModalOpen(false)
+      setNewUser({
+        name: "",
+        email: "",
+        phone: "",
+        role: "",
+        permissions: { dashboard: false, deals: false, finances: false, constants: false, notifications: false },
+      })
+    } catch (error) {
+      console.error("[v0] Error creating user:", error)
+      alert("Ошибка при создании пользователя")
+    }
   }
 
-  const handleDeleteUser = (userId: string) => {
-    if (confirm("Вы уверены, что хотите удалить доступ этого пользователя?")) {
+  const handleTogglePermission = async (userId: string, permission: keyof AccessUser["permissions"]) => {
+    const user = users.find((u) => u.id === userId)
+    if (!user) return
+
+    const newPermissions = {
+      ...user.permissions,
+      [permission]: !user.permissions[permission],
+    }
+
+    try {
+      const response = await fetch("/api/permissions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          permissions: {
+            canViewDashboard: newPermissions.dashboard,
+            canViewDeals: newPermissions.deals,
+            canViewFinances: newPermissions.finances,
+            canManageConstants: newPermissions.constants,
+            canViewNotifications: newPermissions.notifications,
+          },
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to update permissions")
+
+      setUsers(users.map((u) => (u.id === userId ? { ...u, permissions: newPermissions } : u)))
+    } catch (error) {
+      console.error("[v0] Error updating permissions:", error)
+      alert("Ошибка при обновлении прав доступа")
+    }
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm("Вы уверены, что хотите удалить доступ этого пользователя?")) return
+
+    try {
+      const response = await fetch(`/api/users/${userId}`, { method: "DELETE" })
+      if (!response.ok) throw new Error("Failed to delete user")
+
       setUsers(users.filter((user) => user.id !== userId))
+    } catch (error) {
+      console.error("[v0] Error deleting user:", error)
+      alert("Ошибка при удалении пользователя")
     }
+  }
+
+  if (loading) {
+    return <div className="p-6 text-center">Загрузка...</div>
   }
 
   return (

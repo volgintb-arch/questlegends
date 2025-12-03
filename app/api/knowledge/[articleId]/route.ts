@@ -1,43 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
-
-const sql = neon(process.env.DATABASE_URL!)
+import { prisma } from "@/lib/prisma"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 
 export async function GET(request: NextRequest, { params }: { params: { articleId: string } }) {
   try {
     const { articleId } = params
 
-    const [article] = await sql`
-      SELECT 
-        ka.*,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', kf.id,
-              'name', kf.name,
-              'url', kf.url,
-              'size', kf.size,
-              'uploadedAt', kf."uploadedAt"
-            )
-          ) FILTER (WHERE kf.id IS NOT NULL),
-          '[]'
-        ) as files
-      FROM "KnowledgeArticle" ka
-      LEFT JOIN "KnowledgeFile" kf ON ka.id = kf."articleId"
-      WHERE ka.id = ${articleId}
-      GROUP BY ka.id
-    `
+    const article = await prisma.knowledgeArticle.findUnique({
+      where: { id: articleId },
+      include: {
+        files: true,
+      },
+    })
 
     if (!article) {
       return NextResponse.json({ error: "Article not found" }, { status: 404 })
     }
 
     // Increment views
-    await sql`
-      UPDATE "KnowledgeArticle"
-      SET views = views + 1
-      WHERE id = ${articleId}
-    `
+    await prisma.knowledgeArticle.update({
+      where: { id: articleId },
+      data: { views: { increment: 1 } },
+    })
 
     return NextResponse.json({ article })
   } catch (error: any) {
@@ -48,45 +33,43 @@ export async function GET(request: NextRequest, { params }: { params: { articleI
 
 export async function PUT(request: NextRequest, { params }: { params: { articleId: string } }) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { articleId } = params
     const body = await request.json()
     const { title, category, content, type, tags, files } = body
 
-    // Update article
-    await sql`
-      UPDATE "KnowledgeArticle"
-      SET 
-        title = ${title},
-        category = ${category},
-        content = ${content},
-        type = ${type},
-        tags = ${tags},
-        "updatedAt" = NOW()
-      WHERE id = ${articleId}
-    `
+    const article = await prisma.knowledgeArticle.update({
+      where: { id: articleId },
+      data: {
+        title,
+        category,
+        content,
+        type,
+        tags,
+        updatedAt: new Date(),
+        // Delete existing files and create new ones if provided
+        ...(files && {
+          files: {
+            deleteMany: {},
+            create: files.map((file: any) => ({
+              id: file.id || `FILE-${Date.now()}-${Math.random()}`,
+              name: file.name,
+              url: file.url,
+              size: file.size,
+            })),
+          },
+        }),
+      },
+      include: {
+        files: true,
+      },
+    })
 
-    // Delete old files
-    await sql`DELETE FROM "KnowledgeFile" WHERE "articleId" = ${articleId}`
-
-    // Insert new files
-    if (files && files.length > 0) {
-      for (const file of files) {
-        await sql`
-          INSERT INTO "KnowledgeFile" (
-            id, "articleId", name, url, size, "uploadedAt"
-          ) VALUES (
-            ${file.id},
-            ${articleId},
-            ${file.name},
-            ${file.url},
-            ${file.size},
-            NOW()
-          )
-        `
-      }
-    }
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ article })
   } catch (error: any) {
     console.error("[v0] Knowledge article update error:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -95,9 +78,16 @@ export async function PUT(request: NextRequest, { params }: { params: { articleI
 
 export async function DELETE(request: NextRequest, { params }: { params: { articleId: string } }) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { articleId } = params
 
-    await sql`DELETE FROM "KnowledgeArticle" WHERE id = ${articleId}`
+    await prisma.knowledgeArticle.delete({
+      where: { id: articleId },
+    })
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

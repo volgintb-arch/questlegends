@@ -64,6 +64,7 @@ model User {
   personnel     Personnel?  @relation("UserPersonnel")
   
   permissions   AdminPermission?
+  userPermissions UserPermission? @relation("UserPermissions")
   deals         Deal[]    @relation("DealResponsible")
   expenses      Expense[] @relation("ExpenseCreator")
   gameAssignments GameAssignment[] @relation("AssignmentCreator")
@@ -280,6 +281,29 @@ model AdminPermission {
   canManageSchedule   Boolean  @default(true)
   
   createdAt           DateTime @default(now())
+}
+
+model UserPermission {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation("UserPermissions", fields: [userId], references: [id], onDelete: Cascade)
+  
+  canViewDashboard      Boolean  @default(true)
+  canViewDeals          Boolean  @default(false)
+  canEditDeals          Boolean  @default(false)
+  canViewFinances       Boolean  @default(false)
+  canAddExpenses        Boolean  @default(false)
+  canManagePersonnel    Boolean  @default(false)
+  canManageSchedule     Boolean  @default(false)
+  canViewKnowledgeBase  Boolean  @default(true)
+  canManageUsers        Boolean  @default(false)
+  canViewNotifications  Boolean  @default(true)
+  canManageConstants    Boolean  @default(false)
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@index([userId])
 }
 
 model RefreshToken {

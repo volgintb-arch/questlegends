@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Plus, Filter } from "lucide-react"
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
 import { KanbanColumn } from "./kanban-column"
@@ -39,24 +39,38 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
-  const franchiseeStages = ["Лиды", "Переговоры", "Внесена предоплата (Бронь)", "Игра проведена"]
-  const ukStages = ["Лиды", "Переговоры", "Предложение", "Подписано"]
-  const stages = role === "uk" ? ukStages : franchiseeStages
+  const stages = useMemo(() => {
+    const franchiseeStages = ["Лиды", "Переговоры", "Внесена предоплата (Бронь)", "Игра проведена"]
+    const ukStages = ["Лиды", "Переговоры", "Предложение", "Подписано"]
+    return role === "uk" ? ukStages : franchiseeStages
+  }, [role])
 
   const [boardData, setBoardData] = useState<BoardData>({})
 
   useEffect(() => {
     const fetchDeals = async () => {
       try {
+        console.log("[v0] Fetching deals for role:", role, "user:", user?.id)
+
         const params = new URLSearchParams()
         if (user?.franchiseeId && role !== "uk") {
           params.append("franchiseeId", user.franchiseeId)
         }
 
         const response = await fetch(`/api/deals?${params.toString()}`)
-        if (!response.ok) throw new Error("Failed to fetch deals")
+        console.log("[v0] Response status:", response.status)
 
-        const deals = await response.json()
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error("[v0] Failed to fetch deals:", errorText)
+          throw new Error("Failed to fetch deals")
+        }
+
+        const responseData = await response.json()
+        console.log("[v0] Response data structure:", Object.keys(responseData))
+
+        const deals = responseData.data || responseData
+        console.log("[v0] Fetched deals count:", deals.length)
 
         const grouped: BoardData = {}
         stages.forEach((stage) => {
@@ -79,15 +93,26 @@ export function DealsKanban({ role }: DealsKanbanProps) {
           })
         })
 
+        console.log(
+          "[v0] Grouped deals:",
+          Object.keys(grouped).map((k) => `${k}: ${grouped[k].length}`),
+        )
         setBoardData(grouped)
       } catch (error) {
         console.error("[v0] Error fetching deals:", error)
+        const emptyBoard: BoardData = {}
+        stages.forEach((stage) => {
+          emptyBoard[stage] = []
+        })
+        setBoardData(emptyBoard)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchDeals()
+    if (user) {
+      fetchDeals()
+    }
   }, [user, role, stages])
 
   const handleDragEnd = async (result: DropResult) => {

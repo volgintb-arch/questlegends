@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Download, Search, Plus, Eye } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/contexts/auth-context"
@@ -47,47 +47,29 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
 
-  const [transactions, setTransactions] = useState<TransactionERP[]>([
-    {
-      id: "TXN-001",
-      date: "2025-11-26",
-      amo_deal_id: "DEAL-2101",
-      participants_N: 10,
-      package_price_B: 25000,
-      location: role === "uk" ? "Москва-Юг" : "Казань",
-      required_animators: 2, // ceil(10/7) = 2
-      total_revenue: 25000, // 25000 >= 21000
-      royalty_amount: 1750, // 25000 * 0.07
-      fot_calculation: 5400, // (2 * 1300) + 1800 + 1000
-      status: "completed",
-    },
-    {
-      id: "TXN-002",
-      date: "2025-11-25",
-      amo_deal_id: "DEAL-2102",
-      participants_N: 8,
-      package_price_B: 18000,
-      location: role === "uk" ? "СПб-Север" : "Казань",
-      required_animators: 2, // ceil(8/7) = 2
-      total_revenue: 21000, // 18000 < 21000, применен мин.чек
-      royalty_amount: 1470, // 21000 * 0.07
-      fot_calculation: 5400, // (2 * 1300) + 1800 + 1000
-      status: "completed",
-    },
-    {
-      id: "TXN-003",
-      date: "2025-11-24",
-      amo_deal_id: "DEAL-2103",
-      participants_N: 15,
-      package_price_B: 42000,
-      location: role === "uk" ? "Казань" : "Казань",
-      required_animators: 3, // ceil(15/7) = 3
-      total_revenue: 42000, // 42000 >= 21000
-      royalty_amount: 2940, // 42000 * 0.07
-      fot_calculation: 6700, // (3 * 1300) + 1800 + 1000
-      status: "completed",
-    },
-  ])
+  const [transactions, setTransactions] = useState<TransactionERP[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchTransactions()
+  }, [user])
+
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true)
+      const queryParams = user?.franchiseeId ? `?franchiseeId=${user.franchiseeId}` : ""
+      const response = await fetch(`/api/transactions${queryParams}`)
+      if (!response.ok) throw new Error("Failed to fetch transactions")
+
+      const data = await response.json()
+      setTransactions(data.transactions || [])
+    } catch (error) {
+      console.error("[v0] Error fetching transactions:", error)
+      setTransactions([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const locations = [
     { id: "LOC-001", name: "Москва-Юг" },
@@ -386,6 +368,10 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
         </div>
       </div>
     )
+  }
+
+  if (loading) {
+    return <div className="p-6 text-center">Загрузка транзакций...</div>
   }
 
   return (
