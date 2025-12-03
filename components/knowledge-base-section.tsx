@@ -1,22 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Search,
   FileText,
-  Play,
   ChevronRight,
-  Book,
-  Lightbulb,
   AlertCircle,
   Plus,
   Edit2,
   Trash2,
   X,
   Save,
+  Video,
+  BookOpen,
+  HelpCircle,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { useAuth } from "@/contexts/auth-context"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import { KBFileManager } from "./kb-file-manager"
 
 interface KnowledgeArticle {
@@ -29,116 +31,67 @@ interface KnowledgeArticle {
   helpful: number
   content: string
   tags: string[]
+  files?: any[]
   type: "article" | "video" | "guide" | "faq"
-  files?: Array<{ id: string; name: string; size: string; type: string; uploadedAt: string }>
 }
 
 interface KnowledgeBaseSectionProps {
-  role: "uk" | "franchisee" | "admin"
+  role: string
 }
 
 export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
-  const { user } = useAuth()
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterCategory, setFilterCategory] = useState("all")
-  const [editingArticle, setEditingArticle] = useState<KnowledgeArticle | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState("all")
   const [showEditModal, setShowEditModal] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [articles, setArticles] = useState<KnowledgeArticle[]>([
-    {
-      id: "KB-001",
-      title: "Как подключить нового франчайзи",
-      category: "Управление",
-      author: "Иван Петров",
-      date: "2025-10-15",
-      views: 234,
-      helpful: 89,
-      content: "Полная инструкция по подключению нового франчайзинговго партнера...",
-      tags: ["франчайзи", "настройка", "новичок"],
-      type: "guide",
-      files: [],
-    },
-    {
-      id: "KB-002",
-      title: "Основы системы CRM",
-      category: "Продажи",
-      author: "Мария Сидорова",
-      date: "2025-11-10",
-      views: 567,
-      helpful: 156,
-      content: "Видеоурок по работе с системой управления взаимоотношениями с клиентами...",
-      tags: ["CRM", "продажи", "видео"],
-      type: "video",
-      files: [],
-    },
-    {
-      id: "KB-003",
-      title: "Разрешение распространенных ошибок",
-      category: "Поддержка",
-      author: "Петр Иванов",
-      date: "2025-11-20",
-      views: 892,
-      helpful: 234,
-      content: "Часто задаваемые вопросы и решения для типичных проблем...",
-      tags: ["ошибки", "поддержка", "FAQ"],
-      type: "faq",
-      files: [],
-    },
-    {
-      id: "KB-004",
-      title: "Полное руководство по финансовому учету",
-      category: "Финансы",
-      author: "Анна Волкова",
-      date: "2025-09-05",
-      views: 445,
-      helpful: 123,
-      content: "Детальное описание всех операций в модуле ERP...",
-      tags: ["финансы", "учет", "ERP"],
-      type: "article",
-      files: [],
-    },
-    {
-      id: "KB-005",
-      title: "Оптимизация процессов продаж",
-      category: "Продажи",
-      author: "Мария Сидорова",
-      date: "2025-11-01",
-      views: 723,
-      helpful: 198,
-      content: "Стратегии и практики для увеличения конверсии...",
-      tags: ["продажи", "оптимизация", "стратегия"],
-      type: "guide",
-      files: [],
-    },
-    {
-      id: "KB-006",
-      title: "Безопасность данных и конфиденциальность",
-      category: "Безопасность",
-      author: "Алексей Смирнов",
-      date: "2025-10-20",
-      views: 312,
-      helpful: 87,
-      content: "Политика безопасности и передовые практики защиты информации...",
-      tags: ["безопасность", "конфиденциальность", "политика"],
-      type: "article",
-      files: [],
-    },
-  ])
+  const [editingArticle, setEditingArticle] = useState<KnowledgeArticle | null>(null)
 
-  const categories = ["all", "Управление", "Продажи", "Поддержка", "Финансы", "Безопасность"]
+  const [articles, setArticles] = useState<KnowledgeArticle[]>([])
+  const [loading, setLoading] = useState(true)
 
   const [selectedArticle, setSelectedArticle] = useState<KnowledgeArticle | null>(null)
+
+  const categories = ["all", "Управление", "Продажи", "Финансы", "Поддержка", "Безопасность"]
 
   const getTypeIcon = (type: string) => {
     switch (type) {
       case "video":
-        return <Play size={16} className="text-blue-500" />
+        return <Video size={20} className="text-primary" />
       case "guide":
-        return <Book size={16} className="text-green-500" />
+        return <BookOpen size={20} className="text-primary" />
       case "faq":
-        return <Lightbulb size={16} className="text-yellow-500" />
+        return <HelpCircle size={20} className="text-primary" />
       default:
-        return <FileText size={16} className="text-purple-500" />
+        return <FileText size={20} className="text-primary" />
+    }
+  }
+
+  useEffect(() => {
+    loadArticles()
+  }, [selectedCategory, searchQuery])
+
+  const loadArticles = async () => {
+    try {
+      setLoading(true)
+      const params = new URLSearchParams()
+      if (selectedCategory !== "all") params.set("category", selectedCategory)
+      if (searchQuery) params.set("search", searchQuery)
+
+      const response = await fetch(`/api/knowledge?${params}`)
+      const data = await response.json()
+
+      if (response.ok) {
+        setArticles(
+          data.articles.map((a: any) => ({
+            ...a,
+            date: new Date(a.createdAt).toLocaleDateString("ru-RU"),
+          })),
+        )
+      }
+    } catch (error) {
+      console.error("[v0] Error loading articles:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -150,10 +103,10 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
   const handleAddNewArticle = () => {
     setEditingArticle({
       id: `KB-${Date.now()}`,
-      title: "Новая статья",
-      category: "Управление",
-      author: user.name,
-      date: new Date().toISOString().split("T")[0],
+      title: "",
+      category: categories[1],
+      author: "Текущий пользователь",
+      date: new Date().toLocaleDateString("ru-RU"),
       views: 0,
       helpful: 0,
       content: "",
@@ -164,27 +117,46 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
     setShowAddModal(true)
   }
 
-  const handleSaveArticle = () => {
+  const handleSaveArticle = async () => {
     if (!editingArticle) return
 
-    const isNewArticle = !articles.some((a) => a.id === editingArticle.id)
+    try {
+      const isNewArticle = !articles.some((a) => a.id === editingArticle.id)
 
-    if (isNewArticle) {
-      setArticles((prev) => [editingArticle, ...prev])
-    } else {
-      setArticles((prev) => prev.map((a) => (a.id === editingArticle.id ? editingArticle : a)))
+      const response = await fetch(isNewArticle ? "/api/knowledge" : `/api/knowledge/${editingArticle.id}`, {
+        method: isNewArticle ? "POST" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editingArticle),
+      })
+
+      if (response.ok) {
+        await loadArticles()
+        setShowEditModal(false)
+        setShowAddModal(false)
+        setEditingArticle(null)
+      }
+    } catch (error) {
+      console.error("[v0] Error saving article:", error)
     }
-
-    setShowAddModal(false)
-    setShowEditModal(false)
-    setEditingArticle(null)
   }
 
-  const handleDeleteArticle = (id: string) => {
-    setArticles((prev) => prev.filter((a) => a.id !== id))
+  const handleDeleteArticle = async (id: string) => {
+    if (!confirm("Вы уверены, что хотите удалить эту статью?")) return
+
+    try {
+      const response = await fetch(`/api/knowledge/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        await loadArticles()
+      }
+    } catch (error) {
+      console.error("[v0] Error deleting article:", error)
+    }
   }
 
-  const handleAddFile = (file: any) => {
+  const handleFileAdd = (file: any) => {
     if (!editingArticle) return
     setEditingArticle({
       ...editingArticle,
@@ -192,7 +164,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
     })
   }
 
-  const handleDeleteFile = (fileId: string) => {
+  const handleFileDelete = (fileId: string) => {
     if (!editingArticle) return
     setEditingArticle({
       ...editingArticle,
@@ -205,11 +177,11 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
   }
 
   const filteredArticles = articles.filter(
-    (a) =>
-      (filterCategory === "all" || a.category === filterCategory) &&
-      (searchTerm === "" ||
-        a.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.tags.some((t) => t.toLowerCase().includes(searchTerm.toLowerCase()))),
+    (article) =>
+      (selectedCategory === "all" || article.category === selectedCategory) &&
+      (searchQuery === "" ||
+        article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        article.content.toLowerCase().includes(searchQuery.toLowerCase())),
   )
 
   const categoryCounts = {
@@ -219,39 +191,30 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
   const canManageArticles = role === "uk"
 
-  const getRoleTitle = () => {
-    if (role === "franchisee") return "Справка и рекомендации"
-    return `База знаний ${user.franchiseeName}`
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">База Знаний</h1>
-          <p className="text-sm text-muted-foreground mt-1">{getRoleTitle()}</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">База Знаний</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Документация, руководства и FAQ</p>
         </div>
-
         {canManageArticles && (
-          <button
-            onClick={handleAddNewArticle}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
-          >
+          <Button onClick={handleAddNewArticle} className="flex items-center gap-2">
             <Plus size={18} />
-            <span className="text-sm">Добавить статью</span>
-          </button>
+            <span className="hidden sm:inline">Добавить</span>
+          </Button>
         )}
       </div>
 
       {/* Search */}
       <div className="relative">
         <Search size={18} className="absolute left-3 top-2.5 text-muted-foreground" />
-        <input
+        <Input
           type="text"
           placeholder="Поиск в базе знаний..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full bg-card border border-border rounded-lg pl-10 pr-4 py-3 text-sm outline-none focus:border-primary"
         />
       </div>
@@ -259,18 +222,18 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
       {/* Categories */}
       <div className="flex flex-wrap gap-2">
         {categories.map((category) => (
-          <button
+          <Button
             key={category}
-            onClick={() => setFilterCategory(category)}
+            onClick={() => setSelectedCategory(category)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filterCategory === category
+              selectedCategory === category
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
             }`}
           >
             {category === "all" ? "Все" : category}
             <span className="ml-2 text-xs opacity-75">({categoryCounts[category as keyof typeof categoryCounts]})</span>
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -302,7 +265,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                   <div className="flex items-center gap-2">
                     {canManageArticles && (
                       <>
-                        <button
+                        <Button
                           onClick={(e) => {
                             e.stopPropagation()
                             handleEditArticle(article)
@@ -311,8 +274,8 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                           title="Редактировать"
                         >
                           <Edit2 size={16} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={(e) => {
                             e.stopPropagation()
                             handleDeleteArticle(article.id)
@@ -321,7 +284,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                           title="Удалить"
                         >
                           <Trash2 size={16} />
-                        </button>
+                        </Button>
                       </>
                     )}
                     <ChevronRight
@@ -361,7 +324,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                 </div>
                 {canManageArticles && (
                   <div className="flex items-center gap-1">
-                    <button
+                    <Button
                       onClick={(e) => {
                         e.stopPropagation()
                         handleEditArticle(article)
@@ -370,8 +333,8 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                       title="Редактировать"
                     >
                       <Edit2 size={16} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={(e) => {
                         e.stopPropagation()
                         handleDeleteArticle(article.id)
@@ -380,7 +343,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                       title="Удалить"
                     >
                       <Trash2 size={16} />
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -422,7 +385,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
           <div className="bg-card border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold text-foreground">Редактировать статью</h2>
-              <button
+              <Button
                 onClick={() => {
                   setShowEditModal(false)
                   setEditingArticle(null)
@@ -430,13 +393,13 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X size={20} />
-              </button>
+              </Button>
             </div>
 
             <div className="space-y-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Название</label>
-                <input
+                <Input
                   type="text"
                   value={editingArticle.title}
                   onChange={(e) => setEditingArticle({ ...editingArticle, title: e.target.value })}
@@ -454,8 +417,8 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                   >
                     <option>Управление</option>
                     <option>Продажи</option>
-                    <option>Поддержка</option>
                     <option>Финансы</option>
+                    <option>Поддержка</option>
                     <option>Безопасность</option>
                   </select>
                 </div>
@@ -482,7 +445,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Содержание</label>
-                <textarea
+                <Textarea
                   value={editingArticle.content}
                   onChange={(e) => setEditingArticle({ ...editingArticle, content: e.target.value })}
                   className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary h-32 resize-none"
@@ -491,7 +454,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Теги (через запятую)</label>
-                <input
+                <Input
                   type="text"
                   value={editingArticle.tags.join(", ")}
                   onChange={(e) =>
@@ -507,13 +470,13 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
               <KBFileManager
                 articleId={editingArticle.id}
                 files={editingArticle.files || []}
-                onFileAdd={handleAddFile}
-                onFileDelete={handleDeleteFile}
+                onFileAdd={handleFileAdd}
+                onFileDelete={handleFileDelete}
               />
             </div>
 
             <div className="flex gap-2">
-              <button
+              <Button
                 onClick={() => {
                   setShowEditModal(false)
                   setEditingArticle(null)
@@ -521,14 +484,14 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                 className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
               >
                 Отмена
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleSaveArticle}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
               >
                 <Save size={16} />
                 Сохранить
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -539,7 +502,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
           <div className="bg-card border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold text-foreground">Создать новую статью</h2>
-              <button
+              <Button
                 onClick={() => {
                   setShowAddModal(false)
                   setEditingArticle(null)
@@ -547,13 +510,13 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X size={20} />
-              </button>
+              </Button>
             </div>
 
             <div className="space-y-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Название</label>
-                <input
+                <Input
                   type="text"
                   value={editingArticle.title}
                   onChange={(e) => setEditingArticle({ ...editingArticle, title: e.target.value })}
@@ -571,8 +534,8 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                   >
                     <option>Управление</option>
                     <option>Продажи</option>
-                    <option>Поддержка</option>
                     <option>Финансы</option>
+                    <option>Поддержка</option>
                     <option>Безопасность</option>
                   </select>
                 </div>
@@ -599,7 +562,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Содержание</label>
-                <textarea
+                <Textarea
                   value={editingArticle.content}
                   onChange={(e) => setEditingArticle({ ...editingArticle, content: e.target.value })}
                   className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary h-32 resize-none"
@@ -608,7 +571,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Теги (через запятую)</label>
-                <input
+                <Input
                   type="text"
                   value={editingArticle.tags.join(", ")}
                   onChange={(e) =>
@@ -624,13 +587,13 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
               <KBFileManager
                 articleId={editingArticle.id}
                 files={editingArticle.files || []}
-                onFileAdd={handleAddFile}
-                onFileDelete={handleDeleteFile}
+                onFileAdd={handleFileAdd}
+                onFileDelete={handleFileDelete}
               />
             </div>
 
             <div className="flex gap-2">
-              <button
+              <Button
                 onClick={() => {
                   setShowAddModal(false)
                   setEditingArticle(null)
@@ -638,14 +601,14 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                 className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
               >
                 Отмена
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleSaveArticle}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
               >
                 <Save size={16} />
                 Сохранить
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -666,12 +629,12 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                   <Badge variant="secondary">{selectedArticle.category}</Badge>
                 </div>
               </div>
-              <button
+              <Button
                 onClick={() => setSelectedArticle(null)}
                 className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
               >
                 <X size={24} />
-              </button>
+              </Button>
             </div>
 
             <div className="space-y-6">
@@ -749,12 +712,12 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
             </div>
 
             <div className="flex gap-2 mt-8 border-t border-border pt-6">
-              <button
+              <Button
                 onClick={() => setSelectedArticle(null)}
                 className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
               >
                 Закрыть
-              </button>
+              </Button>
             </div>
           </div>
         </div>

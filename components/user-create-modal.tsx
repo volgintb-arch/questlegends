@@ -22,6 +22,7 @@ interface UserCreateModalProps {
 
 export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalProps) {
   const { user: currentUser, canCreateRole, getAccessibleFranchisees } = useAuth()
+  const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -55,7 +56,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
 
   const franchisees = getAccessibleFranchisees()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!formData.name || !formData.phone || !formData.role) {
@@ -78,16 +79,51 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
 
     const password = formData.password || generatePassword()
 
-    console.log("[v0] Creating user:", { ...formData, password })
+    setIsLoading(true)
 
-    toast({
-      title: "Пользователь создан",
-      description: `Логин: ${formData.phone}\nПароль: ${password}`,
-    })
+    try {
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          phone: formData.phone,
+          role: formData.role,
+          telegram: formData.telegram_id,
+          whatsapp: formData.whatsapp,
+          description: formData.description,
+          password: password,
+          franchiseeId: formData.franchisee_id || undefined,
+          city: formData.city || undefined,
+        }),
+      })
 
-    onSuccess?.()
-    onClose()
-    resetForm()
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Ошибка создания пользователя")
+      }
+
+      toast({
+        title: "Пользователь создан",
+        description: `Логин: ${formData.phone}\nПароль: ${data.tempPassword || password}`,
+      })
+
+      onSuccess?.()
+      onClose()
+      resetForm()
+    } catch (error: any) {
+      console.error("[v0] Error creating user:", error)
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось создать пользователя",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const generatePassword = () => {
@@ -285,10 +321,12 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
               Отмена
             </Button>
-            <Button type="submit">Создать пользователя</Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? "Создание..." : "Создать пользователя"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

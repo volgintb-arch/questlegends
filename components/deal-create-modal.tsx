@@ -33,6 +33,7 @@ interface DealCreateModalProps {
 
 export function DealCreateModal({ isOpen, onClose, onCreate, role }: DealCreateModalProps) {
   const { user, franchisees } = useAuth()
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [formData, setFormData] = useState({
     title: "",
@@ -56,48 +57,85 @@ export function DealCreateModal({ isOpen, onClose, onCreate, role }: DealCreateM
 
   if (!isOpen) return null
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsSubmitting(true)
 
-    const newDeal: Deal = {
-      id: `D-${Date.now()}`,
-      title: formData.title,
-      location: formData.location,
-      amount: `${Number(formData.amount).toLocaleString()} ₽`,
-      daysOpen: 0,
-      priority: formData.priority,
-      participants: formData.participants,
-      package: formData.package,
-      checkPerPerson: formData.checkPerPerson,
-      animatorsCount: formData.animatorsCount,
-      animatorRate: formData.animatorRate,
-      hostRate: formData.hostRate,
-      djRate: formData.djRate,
-      contactTelegram: formData.contactTelegram,
-      contactWhatsapp: formData.contactWhatsapp,
+    try {
+      const response = await fetch("/api/deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientName: formData.title,
+          clientPhone: formData.contactPhone,
+          clientTelegram: formData.contactTelegram,
+          clientWhatsapp: formData.contactWhatsapp,
+          gameType: formData.package,
+          location: formData.location,
+          participants: formData.participants || null,
+          packageType: formData.package || null,
+          price: Number(formData.amount) || null,
+          stage: "NEW",
+          source: formData.source,
+          description: `Чек: ${formData.checkPerPerson}₽, Аниматоры: ${formData.animatorsCount}, Ставка аниматора: ${formData.animatorRate}₽, Ставка ведущего: ${formData.hostRate}₽, Ставка DJ: ${formData.djRate}₽`,
+          franchiseeId: role === "uk" ? formData.location : user.franchiseeId,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to create deal")
+      }
+
+      const savedDeal = await response.json()
+      console.log("[v0] Deal created successfully:", savedDeal.id)
+
+      // Convert saved deal to UI format and pass to parent
+      const newDeal: Deal = {
+        id: savedDeal.id,
+        title: formData.title,
+        location: formData.location,
+        amount: `${Number(formData.amount).toLocaleString()} ₽`,
+        daysOpen: 0,
+        priority: formData.priority,
+        participants: formData.participants,
+        package: formData.package,
+        checkPerPerson: formData.checkPerPerson,
+        animatorsCount: formData.animatorsCount,
+        animatorRate: formData.animatorRate,
+        hostRate: formData.hostRate,
+        djRate: formData.djRate,
+        contactTelegram: formData.contactTelegram,
+        contactWhatsapp: formData.contactWhatsapp,
+      }
+
+      onCreate(newDeal)
+      onClose()
+      setFormData({
+        title: "",
+        location: role === "uk" ? "" : user.franchiseeName || "",
+        amount: "",
+        priority: "normal",
+        participants: 0,
+        package: "",
+        source: "Сайт",
+        contactName: "",
+        contactPhone: "",
+        contactEmail: "",
+        contactTelegram: "",
+        contactWhatsapp: "",
+        checkPerPerson: 0,
+        animatorsCount: 0,
+        animatorRate: 0,
+        hostRate: 0,
+        djRate: 0,
+      })
+    } catch (error) {
+      console.error("[v0] Failed to create deal:", error)
+      alert(`Ошибка при создании сделки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+    } finally {
+      setIsSubmitting(false)
     }
-
-    onCreate(newDeal)
-    onClose()
-    setFormData({
-      title: "",
-      location: role === "uk" ? "" : user.franchiseeName || "",
-      amount: "",
-      priority: "normal",
-      participants: 0,
-      package: "",
-      source: "Сайт",
-      contactName: "",
-      contactPhone: "",
-      contactEmail: "",
-      contactTelegram: "",
-      contactWhatsapp: "",
-      checkPerPerson: 0,
-      animatorsCount: 0,
-      animatorRate: 0,
-      hostRate: 0,
-      djRate: 0,
-    })
   }
 
   return (
@@ -358,16 +396,18 @@ export function DealCreateModal({ isOpen, onClose, onCreate, role }: DealCreateM
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
+              disabled={isSubmitting}
+              className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors disabled:opacity-50"
             >
               Отмена
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center justify-center gap-2"
+              disabled={isSubmitting}
+              className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Save size={18} />
-              <span>Создать сделку</span>
+              <span>{isSubmitting ? "Создание..." : "Создать сделку"}</span>
             </button>
           </div>
         </form>

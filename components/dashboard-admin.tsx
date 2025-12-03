@@ -2,7 +2,7 @@
 
 import { DollarSign, TrendingDown, Users, AlertTriangle, Plus } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { DealCreateModal } from "./deal-create-modal"
 
 export function DashboardAdmin() {
@@ -10,25 +10,45 @@ export function DashboardAdmin() {
   const [showExpenseForm, setShowExpenseForm] = useState(false)
   const [showDealModal, setShowDealModal] = useState(false)
 
-  // Mock data for operational metrics
-  const metrics = {
-    revenue: 450000,
-    expenses: 120000,
-    payroll: 85000,
+  const [metrics, setMetrics] = useState({
+    revenue: 0,
+    expenses: 0,
+    payroll: 0,
+  })
+  const [gamesRequiringAssignment, setGamesRequiringAssignment] = useState<any[]>([])
+
+  useEffect(() => {
+    loadMetrics()
+    loadGamesRequiringAssignment()
+  }, [])
+
+  const loadMetrics = async () => {
+    try {
+      const response = await fetch("/api/metrics")
+      const data = await response.json()
+      if (response.ok) {
+        setMetrics(data.metrics)
+      }
+    } catch (error) {
+      console.error("[v0] Error loading metrics:", error)
+    }
   }
 
-  // Mock games requiring staff assignment
-  const gamesRequiringAssignment = [
-    { id: 1, date: "2025-01-15", time: "14:00", client: "ООО Рога и Копыта", missing: 2 },
-    { id: 2, date: "2025-01-16", time: "18:00", client: "День рождения Василия", missing: 1 },
-    { id: 3, date: "2025-01-17", time: "16:00", client: "Корпоратив Яндекс", missing: 3 },
-    { id: 4, date: "2025-01-18", time: "19:00", client: "Семья Ивановых", missing: 1 },
-    { id: 5, date: "2025-01-19", time: "15:00", client: "ИП Петров", missing: 2 },
-  ]
+  const loadGamesRequiringAssignment = async () => {
+    try {
+      const response = await fetch("/api/deals?needsAssignment=true")
+      const data = await response.json()
+      if (response.ok) {
+        setGamesRequiringAssignment(data.deals || [])
+      }
+    } catch (error) {
+      console.error("[v0] Error loading games:", error)
+    }
+  }
 
-  const handleCreateDeal = (deal: any) => {
+  const handleCreateDeal = async (deal: any) => {
     console.log("[v0] Admin created new lead:", deal)
-    // TODO: API integration to create deal
+    await loadGamesRequiringAssignment()
   }
 
   return (

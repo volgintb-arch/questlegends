@@ -73,25 +73,37 @@ export function KPIManagementModal({
   }
 
   const handleSave = async () => {
+    if (kpis.length === 0) {
+      alert("Добавьте хотя бы один KPI перед сохранением")
+      return
+    }
+
     try {
-      // Save all KPIs via API
-      for (const kpi of kpis) {
+      const promises = kpis.map((kpi) => {
         if (!kpi.id) {
-          await fetch("/api/kpi", {
+          return fetch("/api/kpi", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               franchiseeId,
               ...kpi,
             }),
+          }).then((res) => {
+            if (!res.ok) throw new Error("Failed to save KPI")
+            return res.json()
           })
         }
-      }
+        return Promise.resolve(kpi)
+      })
 
-      console.log("[v0] KPIs saved for franchisee:", franchiseeId)
+      await Promise.all(promises)
+
+      console.log("[v0] All KPIs saved for franchisee:", franchiseeId)
+      alert(`Успешно сохранено ${kpis.length} KPI для ${franchiseeName}`)
       onClose()
     } catch (error) {
       console.error("[v0] Failed to save KPIs:", error)
+      alert("Ошибка при сохранении KPI. Попробуйте еще раз.")
     }
   }
 

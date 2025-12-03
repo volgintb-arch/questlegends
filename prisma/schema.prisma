@@ -68,12 +68,12 @@ model User {
   expenses      Expense[] @relation("ExpenseCreator")
   gameAssignments GameAssignment[] @relation("AssignmentCreator")
   refreshTokens RefreshToken[]
+  articles      KnowledgeArticle[] @relation("ArticleAuthor")
   
   @@index([phone])
   @@index([role])
   @@index([franchiseeId])
 }
-
 
 model Personnel {
   id            String     @id @default(cuid())
@@ -293,4 +293,38 @@ model RefreshToken {
   
   @@index([userId])
   @@index([token])
+}
+
+model KnowledgeArticle {
+  id          String   @id @default(cuid())
+  title       String
+  category    String
+  content     String
+  author      String
+  authorId    String?
+  authorUser  User?    @relation("ArticleAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  type        String   @default("article")
+  tags        String[]
+  views       Int      @default(0)
+  helpful     Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  files       KnowledgeFile[]
+  
+  @@index([category])
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model KnowledgeFile {
+  id          String   @id @default(cuid())
+  articleId   String
+  article     KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  name        String
+  url         String
+  size        String
+  uploadedAt  DateTime @default(now())
+  
+  @@index([articleId])
 }
