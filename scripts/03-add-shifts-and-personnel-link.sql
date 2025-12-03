@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS "Shift" (
   CONSTRAINT "Shift_dealId_fkey" FOREIGN KEY ("dealId") REFERENCES "Deal"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
+-- Add status column to existing Shift table
+ALTER TABLE "Shift" ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'scheduled';
+
+COMMENT ON COLUMN "Shift".status IS 'Shift status: scheduled, in_progress, completed, cancelled';
+
 CREATE INDEX IF NOT EXISTS "Shift_personnelId_idx" ON "Shift"("personnelId");
 CREATE INDEX IF NOT EXISTS "Shift_franchiseeId_idx" ON "Shift"("franchiseeId");
 CREATE INDEX IF NOT EXISTS "Shift_dealId_idx" ON "Shift"("dealId");

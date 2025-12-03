@@ -15,25 +15,8 @@ CREATE TABLE IF NOT EXISTS "FranchiseeKPI" (
   "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_franchisee_kpi_franchisee ON "FranchiseeKPI"("franchiseeId");
-CREATE INDEX idx_franchisee_kpi_period ON "FranchiseeKPI"("periodYear", "periodType", "periodNumber");
-
--- Add Transaction table (if not exists)
-CREATE TABLE IF NOT EXISTS "Transaction" (
-  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  "dealId" TEXT UNIQUE NOT NULL REFERENCES "Deal"(id) ON DELETE CASCADE,
-  "franchiseeId" TEXT NOT NULL REFERENCES "Franchisee"(id) ON DELETE CASCADE,
-  amount INTEGER NOT NULL,
-  "paymentMethod" TEXT,
-  "paymentDate" TIMESTAMP NOT NULL DEFAULT NOW(),
-  "royaltyAmount" INTEGER DEFAULT 0,
-  notes TEXT,
-  "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_transaction_deal ON "Transaction"("dealId");
-CREATE INDEX idx_transaction_franchisee ON "Transaction"("franchiseeId");
-CREATE INDEX idx_transaction_date ON "Transaction"("paymentDate");
+CREATE INDEX IF NOT EXISTS idx_franchisee_kpi_franchisee ON "FranchiseeKPI"("franchiseeId");
+CREATE INDEX IF NOT EXISTS idx_franchisee_kpi_period ON "FranchiseeKPI"("periodYear", "periodType", "periodNumber");
 
 -- Add Expense table (if not exists)
 CREATE TABLE IF NOT EXISTS "Expense" (
@@ -43,13 +26,13 @@ CREATE TABLE IF NOT EXISTS "Expense" (
   category TEXT NOT NULL,
   amount INTEGER NOT NULL,
   description TEXT,
-  "expenseDate" TIMESTAMP NOT NULL DEFAULT NOW(),
+  date TIMESTAMP NOT NULL DEFAULT NOW(),
   "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_expense_franchisee ON "Expense"("franchiseeId");
-CREATE INDEX idx_expense_date ON "Expense"("expenseDate");
-CREATE INDEX idx_expense_category ON "Expense"(category);
+CREATE INDEX IF NOT EXISTS idx_expense_franchisee ON "Expense"("franchiseeId");
+CREATE INDEX IF NOT EXISTS idx_expense_date ON "Expense"(date);
+CREATE INDEX IF NOT EXISTS idx_expense_category ON "Expense"(category);
 
 -- Add GameAssignment table (if not exists)
 CREATE TABLE IF NOT EXISTS "GameAssignment" (
@@ -60,8 +43,8 @@ CREATE TABLE IF NOT EXISTS "GameAssignment" (
   "assignedAt" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_game_assignment_deal ON "GameAssignment"("dealId");
-CREATE INDEX idx_game_assignment_personnel ON "GameAssignment"("personnelId");
+CREATE INDEX IF NOT EXISTS idx_game_assignment_deal ON "GameAssignment"("dealId");
+CREATE INDEX IF NOT EXISTS idx_game_assignment_personnel ON "GameAssignment"("personnelId");
 
 -- Add AdminPermission table (if not exists)
 CREATE TABLE IF NOT EXISTS "AdminPermission" (
@@ -83,8 +66,8 @@ CREATE TABLE IF NOT EXISTS "RefreshToken" (
   "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_refresh_token_user ON "RefreshToken"("userId");
-CREATE INDEX idx_refresh_token_token ON "RefreshToken"(token);
+CREATE INDEX IF NOT EXISTS idx_refresh_token_user ON "RefreshToken"("userId");
+CREATE INDEX IF NOT EXISTS idx_refresh_token_token ON "RefreshToken"(token);
 
 -- Add royaltyPercent column to Franchisee if not exists
 DO $$ 
