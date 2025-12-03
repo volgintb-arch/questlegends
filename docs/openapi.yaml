@@ -1,0 +1,437 @@
+openapi: 3.0.3
+info:
+  title: QuestLegends OS 2.0 API
+  description: Complete API specification for QuestLegends franchise management system
+  version: 2.0.0
+  contact:
+    name: QuestLegends API Support
+    email: api@questlegends.com
+
+servers:
+  - url: https://api.questlegends.com/v2
+    description: Production server
+  - url: https://staging-api.questlegends.com/v2
+    description: Staging server
+  - url: http://localhost:3001/api
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Authentication and authorization
+  - name: Deals
+    description: CRM - Deal management
+  - name: Transactions
+    description: ERP - Financial transactions
+  - name: Expenses
+    description: ERP - Operating expenses
+  - name: Personnel
+    description: Staff management
+  - name: Analytics
+    description: Financial analytics and reports
+  - name: Notifications
+    description: User notifications
+  - name: Knowledge Base
+    description: Internal documentation
+  - name: Audit
+    description: Audit logs
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum: [VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, INTERNAL_ERROR]
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+
+    Deal:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        stage:
+          type: string
+        amount:
+          type: number
+          format: decimal
+        source:
+          type: string
+        priority:
+          type: string
+          enum: [low, medium, high]
+        participants:
+          type: integer
+        package:
+          type: string
+        game_date:
+          type: string
+          format: date-time
+        check_per_person:
+          type: number
+          format: decimal
+        animators_count:
+          type: integer
+        animator_rate:
+          type: number
+          format: decimal
+        host_rate:
+          type: number
+          format: decimal
+        dj_rate:
+          type: number
+          format: decimal
+        location_id:
+          type: string
+          format: uuid
+        responsible_user_id:
+          type: string
+          format: uuid
+        contact_name:
+          type: string
+        contact_phone:
+          type: string
+        contact_email:
+          type: string
+          format: email
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        deal_id:
+          type: string
+          format: uuid
+        location_id:
+          type: string
+          format: uuid
+        participants_count:
+          type: integer
+        check_per_person:
+          type: number
+          format: decimal
+        animators_count:
+          type: integer
+        animator_rate:
+          type: number
+          format: decimal
+        host_rate:
+          type: number
+          format: decimal
+        dj_rate:
+          type: number
+          format: decimal
+        total_revenue:
+          type: number
+          format: decimal
+        royalty_amount:
+          type: number
+          format: decimal
+        fot_calculation:
+          type: number
+          format: decimal
+        historical_rates:
+          type: object
+        idempotency_key:
+          type: string
+        status:
+          type: string
+          enum: [completed, pending, cancelled]
+        created_at:
+          type: string
+          format: date-time
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+
+  /deals:
+    get:
+      tags: [Deals]
+      summary: Get all deals
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: stage
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: List of deals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      deals:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Deal'
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      pages:
+                        type: integer
+
+    post:
+      tags: [Deals]
+      summary: Create new deal
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Deal'
+      responses:
+        '201':
+          description: Deal created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      deal:
+                        $ref: '#/components/schemas/Deal'
+
+  /deals/{id}/stage:
+    put:
+      tags: [Deals]
+      summary: Update deal stage
+      description: Updates deal stage and automatically creates transaction if stage is "Игра проведена"
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          description: Optional idempotency key for transaction creation
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stage]
+              properties:
+                stage:
+                  type: string
+      responses:
+        '200':
+          description: Stage updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      deal:
+                        $ref: '#/components/schemas/Deal'
+                      transaction:
+                        $ref: '#/components/schemas/Transaction'
+
+  /analytics/pnl:
+    get:
+      tags: [Analytics]
+      summary: Get P&L report
+      description: Returns profit and loss calculation with optimized SQL aggregation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: P&L report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      totalRevenue:
+                        type: number
+                      totalRoyalty:
+                        type: number
+                      totalFOT:
+                        type: number
+                      totalExpenses:
+                        type: number
+                      netProfit:
+                        type: number
+                      margin:
+                        type: number
+                      gamesCount:
+                        type: integer
+                      avgCheck:
+                        type: number
+
+  /audit-logs:
+    get:
+      tags: [Audit]
+      summary: Get audit logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entityType
+          in: query
+          schema:
+            type: string
+        - name: entityId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [create, update, delete]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                      total:
+                        type: integer

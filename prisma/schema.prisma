@@ -1,0 +1,296 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  uk
+  uk_employee
+  franchisee
+  admin
+  employee
+}
+
+enum PersonnelRole {
+  animator
+  host
+  dj
+  staff
+}
+
+enum DealStage {
+  NEW
+  NEGOTIATION
+  PREPAID
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ShiftStatus {
+  scheduled
+  in_progress
+  completed
+  cancelled
+}
+
+model User {
+  id            String    @id @default(cuid())
+  phone         String    @unique
+  passwordHash  String
+  name          String
+  role          Role
+  telegram      String?
+  whatsapp      String?
+  telegramId    String?
+  description   String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  franchiseeId  String?
+  franchisee    Franchisee? @relation("UserFranchisee", fields: [franchiseeId], references: [id])
+  
+  personnel     Personnel?  @relation("UserPersonnel")
+  
+  permissions   AdminPermission?
+  deals         Deal[]    @relation("DealResponsible")
+  expenses      Expense[] @relation("ExpenseCreator")
+  gameAssignments GameAssignment[] @relation("AssignmentCreator")
+  refreshTokens RefreshToken[]
+  
+  @@index([phone])
+  @@index([role])
+  @@index([franchiseeId])
+}
+
+
+model Personnel {
+  id            String     @id @default(cuid())
+  franchiseeId  String
+  franchisee    Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  
+  userId        String?    @unique
+  user          User?      @relation("UserPersonnel", fields: [userId], references: [id], onDelete: SetNull)
+  
+  name          String
+  role          PersonnelRole
+  phone         String?
+  telegram      String?
+  whatsapp      String?
+  
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  
+  assignments   GameAssignment[]
+  shifts        Shift[]
+  
+  @@index([franchiseeId])
+  @@index([role])
+  @@index([userId])
+}
+
+model Shift {
+  id            String       @id @default(cuid())
+  personnelId   String
+  personnel     Personnel    @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  
+  franchiseeId  String
+  franchisee    Franchisee   @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  
+  dealId        String?
+  deal          Deal?        @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  
+  startTime     DateTime
+  endTime       DateTime
+  role          PersonnelRole
+  status        ShiftStatus  @default(scheduled)
+  notes         String?
+  
+  createdAt     DateTime     @default(now())
+  
+  @@index([personnelId])
+  @@index([franchiseeId])
+  @@index([dealId])
+  @@index([startTime])
+  @@index([status])
+}
+
+model Franchisee {
+  id              String   @id @default(cuid())
+  name            String
+  city            String
+  address         String?
+  royaltyPercent  Int      @default(10)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  users           User[]   @relation("UserFranchisee")
+  deals           Deal[]
+  transactions    Transaction[]
+  expenses        Expense[]
+  personnel       Personnel[]
+  shifts          Shift[]
+  kpis            FranchiseeKPI[]
+  
+  @@index([city])
+}
+
+model FranchiseeKPI {
+  id              String     @id @default(cuid())
+  franchiseeId    String
+  franchisee      Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  
+  periodType      String     // 'month', 'quarter', 'year'
+  periodNumber    Int        // 1-12 for month, 1-4 for quarter, 1 for year
+  periodYear      Int
+  
+  targetRevenue   Int?       // Target revenue in rubles
+  targetGames     Int?       // Target number of games
+  maxExpenses     Int?       // Maximum allowed expenses
+  
+  actualRevenue   Int        @default(0)
+  actualGames     Int        @default(0)
+  actualExpenses  Int        @default(0)
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  @@index([franchiseeId])
+  @@index([periodYear, periodType, periodNumber])
+}
+
+model Deal {
+  id              String    @id @default(cuid())
+  title           String
+  stage           DealStage @default(NEW)
+  source          String?
+  priority        Priority  @default(MEDIUM)
+  
+  clientName      String
+  clientPhone     String
+  clientTelegram  String?
+  clientWhatsapp  String?
+  clientEmail     String?
+  
+  participants    Int       @default(0)
+  checkPerPerson  Int       @default(0)
+  gameDate        DateTime?
+  
+  animatorsCount  Int       @default(0)
+  animatorRate    Int       @default(0)
+  hostRate        Int       @default(0)
+  djRate          Int       @default(0)
+  
+  responsibleId   String?
+  responsible     User?     @relation("DealResponsible", fields: [responsibleId], references: [id])
+  
+  franchiseeId    String
+  franchisee      Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  assignments     GameAssignment[]
+  transaction     Transaction?
+  shifts          Shift[]
+  
+  @@index([stage])
+  @@index([franchiseeId])
+  @@index([gameDate])
+  @@index([responsibleId])
+}
+
+model Transaction {
+  id            String     @id @default(cuid())
+  dealId        String     @unique
+  deal          Deal       @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  
+  franchiseeId  String
+  franchisee    Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  
+  amount        Int
+  paymentMethod String?
+  paymentDate   DateTime   @default(now())
+  royaltyAmount Int        @default(0)
+  notes         String?
+  
+  createdAt     DateTime   @default(now())
+  
+  @@index([dealId])
+  @@index([franchiseeId])
+  @@index([paymentDate])
+}
+
+model Expense {
+  id            String     @id @default(cuid())
+  franchiseeId  String
+  franchisee    Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  
+  createdById   String
+  createdBy     User       @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  
+  category      String
+  amount        Int
+  description   String?
+  expenseDate   DateTime   @default(now())
+  
+  createdAt     DateTime   @default(now())
+  
+  @@index([franchiseeId])
+  @@index([expenseDate])
+  @@index([category])
+}
+
+model GameAssignment {
+  id            String     @id @default(cuid())
+  dealId        String
+  deal          Deal       @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  
+  personnelId   String
+  personnel     Personnel  @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  
+  createdById   String
+  createdBy     User       @relation("AssignmentCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  
+  assignedAt    DateTime   @default(now())
+  
+  @@index([dealId])
+  @@index([personnelId])
+}
+
+model AdminPermission {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  canManagePersonnel  Boolean  @default(true)
+  canManageDeals      Boolean  @default(true)
+  canViewFinances     Boolean  @default(true)
+  canManageSchedule   Boolean  @default(true)
+  
+  createdAt           DateTime @default(now())
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([token])
+}
