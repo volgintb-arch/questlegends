@@ -44,6 +44,14 @@ enum ShiftStatus {
   cancelled
 }
 
+enum NotificationType {
+  critical
+  warning
+  info
+  success
+  message
+}
+
 model User {
   id            String    @id @default(cuid())
   phone         String    @unique
@@ -70,6 +78,11 @@ model User {
   gameAssignments GameAssignment[] @relation("AssignmentCreator")
   refreshTokens RefreshToken[]
   articles      KnowledgeArticle[] @relation("ArticleAuthor")
+  
+  sentNotifications     Notification[]          @relation("NotificationSender")
+  receivedNotifications Notification[]          @relation("NotificationRecipient")
+  notificationComments  NotificationComment[]   @relation("NotificationCommentAuthor")
+  alertComments         AlertComment[]          @relation("AlertCommentAuthor")
   
   @@index([phone])
   @@index([role])
@@ -143,6 +156,7 @@ model Franchisee {
   personnel       Personnel[]
   shifts          Shift[]
   kpis            FranchiseeKPI[]
+  alerts        Alert[]
   
   @@index([city])
 }
@@ -205,6 +219,8 @@ model Deal {
   assignments     GameAssignment[]
   transaction     Transaction?
   shifts          Shift[]
+  notifications Notification[]
+  alerts        Alert[]
   
   @@index([stage])
   @@index([franchiseeId])
@@ -351,4 +367,82 @@ model KnowledgeFile {
   uploadedAt  DateTime @default(now())
   
   @@index([articleId])
+}
+
+model Notification {
+  id            String             @id @default(cuid())
+  type          NotificationType
+  title         String
+  message       String
+  location      String?
+  dealId        String?
+  deal          Deal?              @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  
+  senderId      String?
+  sender        User?              @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+  
+  recipientId   String
+  recipient     User               @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  
+  isRead        Boolean            @default(false)
+  isArchived    Boolean            @default(false)
+  
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  
+  comments      NotificationComment[]
+  
+  @@index([recipientId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model NotificationComment {
+  id              String       @id @default(cuid())
+  notificationId  String
+  notification    Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  
+  authorId        String
+  author          User         @relation("NotificationCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  
+  text            String
+  createdAt       DateTime     @default(now())
+  
+  @@index([notificationId])
+}
+
+model Alert {
+  id            String         @id @default(cuid())
+  location      String
+  dealId        String?
+  deal          Deal?          @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  
+  message       String
+  franchiseeId  String
+  franchisee    Franchisee     @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  
+  severity      String         // 'critical' or 'warning'
+  isArchived    Boolean        @default(false)
+  
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  comments      AlertComment[]
+  
+  @@index([franchiseeId])
+  @@index([severity])
+}
+
+model AlertComment {
+  id        String   @id @default(cuid())
+  alertId   String
+  alert     Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  
+  authorId  String
+  author    User     @relation("AlertCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  
+  text      String
+  createdAt DateTime @default(now())
+  
+  @@index([alertId])
 }

@@ -49,9 +49,16 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
   const [transactions, setTransactions] = useState<TransactionERP[]>([])
   const [loading, setLoading] = useState(true)
+  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([])
+  const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>({
+    start: new Date(),
+    end: new Date(),
+  })
+  const [groupBy, setGroupBy] = useState<"day" | "week" | "month">("month")
 
   useEffect(() => {
     fetchTransactions()
+    loadLocations()
   }, [user])
 
   const fetchTransactions = async () => {
@@ -71,13 +78,21 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
     }
   }
 
-  const locations = [
-    { id: "LOC-001", name: "Москва-Юг" },
-    { id: "LOC-002", name: "СПб-Север" },
-    { id: "LOC-003", name: "Казань" },
-    { id: "LOC-004", name: "Екатеринбург" },
-    { id: "LOC-005", name: "Новосибирск" },
-  ]
+  const loadLocations = async () => {
+    try {
+      const response = await fetch("/api/franchisees")
+      if (response.ok) {
+        const franchisees = await response.json()
+        const locs = franchisees.map((f: any) => ({
+          id: f.id,
+          name: f.name,
+        }))
+        setLocations(locs)
+      }
+    } catch (error) {
+      console.error("[v0] Error loading locations:", error)
+    }
+  }
 
   const handleCreateTransaction = (newTransaction: any) => {
     const transaction: TransactionERP = {
@@ -95,58 +110,44 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
     setShowDetailModal(true)
   }
 
-  const generateMonthlyData = () => {
-    const start = new Date(filters.dateFrom || new Date().toISOString().split("T")[0])
-    const end = new Date(filters.dateTo || new Date().toISOString().split("T")[0])
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
-    let groupBy: "day" | "week" | "month" = "month"
-    if (diffDays <= 14) {
-      groupBy = "day"
-    } else if (diffDays <= 90) {
-      groupBy = "week"
-    }
-
+  const generateChartData = (start: Date, end: Date, groupBy: string) => {
     const data = []
-    const current = new Date(start)
+    const monthNames = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
 
-    while (current <= end) {
-      let label = ""
-      const revenue = 80000 + Math.random() * 40000
-      const expenses = 30000 + Math.random() * 20000
-      const fot = 15000 + Math.random() * 10000
-      const gamesCount = Math.floor(3 + Math.random() * 5)
-      const avgCheck = revenue / gamesCount
+    if (groupBy === "month") {
+      // Group transactions by month
+      const monthlyData = new Map<string, { revenue: number; expenses: number; fot: number; gamesCount: number }>()
 
-      if (groupBy === "day") {
-        label = `${current.getDate()}.${current.getMonth() + 1}`
-        current.setDate(current.getDate() + 1)
-      } else if (groupBy === "week") {
-        const weekStart = current.getDate()
-        label = `${weekStart}.${current.getMonth() + 1}`
-        current.setDate(current.getDate() + 7)
-      } else {
-        const monthNames = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
-        label = monthNames[current.getMonth()]
-        current.setMonth(current.getMonth() + 1)
-      }
-
-      data.push({
-        month: label,
-        revenue: Math.round(revenue),
-        expenses: Math.round(expenses),
-        fot: Math.round(fot),
-        profit: Math.round(revenue - expenses - fot),
-        avgCheck: Math.round(avgCheck),
+      transactions.forEach((t: any) => {
+        const date = new Date(t.date)
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+        const existing = monthlyData.get(monthKey) || { revenue: 0, expenses: 0, fot: 0, gamesCount: 0 }
+        monthlyData.set(monthKey, {
+          revenue: existing.revenue + (t.total_revenue || 0),
+          expenses: existing.expenses + (t.royalty_amount || 0),
+          fot: existing.fot + (t.fot_calculation || 0),
+          gamesCount: existing.gamesCount + 1,
+        })
       })
 
-      if (data.length > 100) break
+      monthlyData.forEach((values, key) => {
+        const [year, month] = key.split("-")
+        const monthIndex = Number.parseInt(month) - 1
+        data.push({
+          label: monthNames[monthIndex],
+          revenue: values.revenue,
+          expenses: values.expenses,
+          fot: values.fot,
+          gamesCount: values.gamesCount,
+          avgCheck: values.gamesCount > 0 ? values.revenue / values.gamesCount : 0,
+        })
+      })
     }
-    return data
+
+    return data.slice(-12) // Last 12 periods
   }
 
-  const monthlyData = generateMonthlyData()
+  const chartData = generateChartData(dateRange.start, dateRange.end, groupBy)
 
   const filteredTransactions = transactions.filter((t) => {
     const matchesSearch =
@@ -240,7 +241,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
           <div className="bg-card border border-border rounded-lg p-6">
             <p className="text-sm font-medium text-muted-foreground mb-2">Общий Доход</p>
             <p className="text-2xl font-bold text-green-500">
-              {monthlyData.reduce((sum, d) => sum + d.revenue, 0).toLocaleString()} ₽
+              {chartData.reduce((sum, d) => sum + d.revenue, 0).toLocaleString()} ₽
             </p>
             <p className="text-xs text-muted-foreground mt-1">За выбранный период</p>
           </div>
@@ -248,21 +249,21 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
           <div className="bg-card border border-border rounded-lg p-6">
             <p className="text-sm font-medium text-muted-foreground mb-2">Общие Расходы</p>
             <p className="text-2xl font-bold text-orange-500">
-              {monthlyData.reduce((sum, d) => sum + d.expenses, 0).toLocaleString()} ₽
+              {chartData.reduce((sum, d) => sum + d.expenses, 0).toLocaleString()} ₽
             </p>
           </div>
 
           <div className="bg-card border border-border rounded-lg p-6">
             <p className="text-sm font-medium text-muted-foreground mb-2">ФОТ</p>
             <p className="text-2xl font-bold text-purple-500">
-              {monthlyData.reduce((sum, d) => sum + d.fot, 0).toLocaleString()} ₽
+              {chartData.reduce((sum, d) => sum + d.fot, 0).toLocaleString()} ₽
             </p>
           </div>
 
           <div className="bg-card border border-border rounded-lg p-6">
             <p className="text-sm font-medium text-muted-foreground mb-2">Средний Чек</p>
             <p className="text-2xl font-bold text-blue-500">
-              {Math.round(monthlyData.reduce((sum, d) => sum + d.avgCheck, 0) / monthlyData.length).toLocaleString()} ₽
+              {Math.round(chartData.reduce((sum, d) => sum + d.avgCheck, 0) / chartData.length).toLocaleString()} ₽
             </p>
           </div>
         </div>
@@ -270,9 +271,9 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
         <div className="bg-card border border-border rounded-lg p-6">
           <h2 className="text-lg font-semibold text-foreground mb-4">Динамика Доходов и Расходов</h2>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={monthlyData}>
+            <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+              <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" />
               <YAxis stroke="hsl(var(--muted-foreground))" />
               <Tooltip
                 contentStyle={{
@@ -292,9 +293,9 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
         <div className="bg-card border border-border rounded-lg p-6">
           <h2 className="text-lg font-semibold text-foreground mb-4">Количество Дохода по Месяцам</h2>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={monthlyData}>
+            <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+              <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" />
               <YAxis stroke="hsl(var(--muted-foreground))" />
               <Tooltip
                 contentStyle={{
@@ -311,9 +312,9 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
         <div className="bg-card border border-border rounded-lg p-6">
           <h2 className="text-lg font-semibold text-foreground mb-4">Количество Расходов по Месяцам</h2>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={monthlyData}>
+            <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+              <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" />
               <YAxis stroke="hsl(var(--muted-foreground))" />
               <Tooltip
                 contentStyle={{
@@ -331,9 +332,9 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
           <div className="bg-card border border-border rounded-lg p-6">
             <h2 className="text-lg font-semibold text-foreground mb-4">ФОТ по Месяцам</h2>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={monthlyData}>
+              <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+                <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" />
                 <YAxis stroke="hsl(var(--muted-foreground))" />
                 <Tooltip
                   contentStyle={{
@@ -350,9 +351,9 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
           <div className="bg-card border border-border rounded-lg p-6">
             <h2 className="text-lg font-semibold text-foreground mb-4">Средний Чек по Месяцам</h2>
             <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={monthlyData}>
+              <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+                <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" />
                 <YAxis stroke="hsl(var(--muted-foreground))" />
                 <Tooltip
                   contentStyle={{

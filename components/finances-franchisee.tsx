@@ -36,11 +36,41 @@ export function FinancesFranchisee() {
 
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
 
-  // Calculate P&L data from real transactions
   const revenue = transactions.reduce((sum, t) => sum + t.revenue, 0)
   const royalty = transactions.reduce((sum, t) => sum + t.royalty, 0)
   const fot = transactions.reduce((sum, t) => sum + t.fot, 0)
   const netProfit = revenue - royalty - fot - totalExpenses
+
+  // Group transactions and expenses by month for chart
+  const monthlyData = new Map<string, { revenue: number; expenses: number }>()
+
+  transactions.forEach((t) => {
+    const date = new Date(t.date)
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+    const existing = monthlyData.get(monthKey) || { revenue: 0, expenses: 0 }
+    monthlyData.set(monthKey, { ...existing, revenue: existing.revenue + t.revenue })
+  })
+
+  expenses.forEach((e) => {
+    const date = new Date(e.date)
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+    const existing = monthlyData.get(monthKey) || { revenue: 0, expenses: 0 }
+    monthlyData.set(monthKey, { ...existing, expenses: existing.expenses + e.amount })
+  })
+
+  const monthNames = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+  const plData = Array.from(monthlyData.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-5)
+    .map(([key, data]) => {
+      const [year, month] = key.split("-")
+      const monthIndex = Number.parseInt(month) - 1
+      return {
+        month: monthNames[monthIndex],
+        revenue: data.revenue,
+        expenses: data.expenses,
+      }
+    })
 
   const handleCreateExpense = async () => {
     if (!newExpense.amount || !newExpense.date) {
@@ -69,14 +99,6 @@ export function FinancesFranchisee() {
       alert("Ошибка при создании расхода")
     }
   }
-
-  const plData = [
-    { month: "Июль", revenue: 380000, expenses: 52000 },
-    { month: "Август", revenue: 395000, expenses: 54000 },
-    { month: "Сентябрь", revenue: 410000, expenses: 51000 },
-    { month: "Октябрь", revenue: 418000, expenses: 53000 },
-    { month: "Ноябрь", revenue: revenue, expenses: totalExpenses },
-  ]
 
   return (
     <div className="space-y-6">

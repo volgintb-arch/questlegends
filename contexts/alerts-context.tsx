@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 
 export interface AlertData {
   id: string
@@ -31,69 +31,67 @@ interface AlertsContextType {
 const AlertsContext = createContext<AlertsContextType | undefined>(undefined)
 
 export function AlertsProvider({ children }: { children: ReactNode }) {
-  const [alerts, setAlerts] = useState<AlertData[]>([
-    {
-      id: "A-001",
-      location: "Москва",
-      dealId: "DEAL-2547",
-      message: "нарушен стандарт качества обслуживания",
-      franchisee: "Франчайзи Москва-Юг",
-      severity: "critical",
-      comments: [
-        {
-          id: "C-1",
-          author: "Система",
-          text: "Обнаружен критический сбой в системе франчайзи",
-          timestamp: "2025-11-26 14:30",
-          role: "system",
-        },
-      ],
-      archived: false,
-    },
-    {
-      id: "A-002",
-      location: "СПб",
-      dealId: "DEAL-2589",
-      message: "критическое отставание по плану продаж",
-      franchisee: "Франчайзи СПб-Север",
-      severity: "warning",
-      comments: [
-        {
-          id: "C-1",
-          author: "Система",
-          text: "Отставание по плану: 35%",
-          timestamp: "2025-11-26 12:00",
-          role: "system",
-        },
-      ],
-      archived: false,
-    },
-    {
-      id: "A-003",
-      location: "Казань",
-      dealId: "DEAL-2601",
-      message: "невыплачен роялти в срок",
-      franchisee: "Франчайзи Казань",
-      severity: "critical",
-      comments: [
-        {
-          id: "C-1",
-          author: "Система",
-          text: "Просрочка платежа: 5 дней",
-          timestamp: "2025-11-25 10:00",
-          role: "system",
-        },
-      ],
-      archived: false,
-    },
-  ])
+  const [alerts, setAlerts] = useState<AlertData[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const archiveAlert = (alertId: string) => {
-    setAlerts(alerts.map((a) => (a.id === alertId ? { ...a, archived: true } : a)))
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch("/api/alerts")
+        const data = await response.json()
+
+        if (data.success && data.data?.alerts) {
+          const transformed = data.data.alerts.map((a: any) => ({
+            id: a.id,
+            location: a.location,
+            dealId: a.deal?.id || a.dealId,
+            message: a.message,
+            franchisee: a.franchisee.name,
+            severity: a.severity,
+            comments: a.comments.map((c: any) => ({
+              id: c.id,
+              author: c.author.name,
+              text: c.text,
+              timestamp: new Date(c.createdAt).toLocaleString("ru-RU"),
+              role: c.author.role,
+            })),
+            archived: a.isArchived,
+          }))
+          setAlerts(transformed)
+        }
+      } catch (error) {
+        console.error("[v0] Error fetching alerts:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAlerts()
+  }, [])
+
+  const archiveAlert = async (alertId: string) => {
+    try {
+      await fetch(`/api/alerts/${alertId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isArchived: true }),
+      })
+      setAlerts(alerts.map((a) => (a.id === alertId ? { ...a, archived: true } : a)))
+    } catch (error) {
+      console.error("[v0] Error archiving alert:", error)
+    }
   }
 
-  const deleteAlert = (alertId: string) => {
-    setAlerts(alerts.filter((a) => a.id !== alertId))
+  const deleteAlert = async (alertId: string) => {
+    try {
+      await fetch(`/api/alerts/${alertId}`, {
+        method: "DELETE",
+      })
+      setAlerts(alerts.filter((a) => a.id !== alertId))
+    } catch (error) {
+      console.error("[v0] Error deleting alert:", error)
+    }
   }
 
   const updateAlert = (alertId: string, updatedAlert: Partial<AlertData>) => {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AlertTriangle, AlertCircle, CheckCircle, Info, Bell, Trash2, MessageSquare } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { NotificationDetailModal } from "./notification-detail-modal"
@@ -24,106 +24,8 @@ interface NotificationsSectionProps {
 }
 
 export function NotificationsSection({ role }: NotificationsSectionProps) {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: "N-001",
-      type: "critical",
-      title: "Критический сбой в системе",
-      message: "Франчайзи №12 (Москва) нарушил стандарт качества. Необходимо срочное вмешательство.",
-      timestamp: "2 минуты назад",
-      read: false,
-      location: "Москва",
-      dealId: "DEAL-2512",
-      comments: [],
-      archived: false,
-    },
-    {
-      id: "N-002",
-      type: "warning",
-      title: "Задержка платежа",
-      message: "Франчайзи №18 не произвел оплату роялти в установленный срок.",
-      timestamp: "1 час назад",
-      read: false,
-      location: "СПб",
-      dealId: "DEAL-2513",
-      comments: [],
-      archived: false,
-    },
-    {
-      id: "N-003",
-      type: "warning",
-      title: "Снижение производительности",
-      message: "Франчайзи №5 показывает 65% от плана продаж. Рекомендуется проверка.",
-      timestamp: "3 часа назад",
-      read: false,
-      location: "Казань",
-      dealId: "DEAL-2514",
-      comments: [],
-      archived: false,
-    },
-    {
-      id: "N-004",
-      type: "info",
-      title: "Новое приглашение от партнера",
-      message: "Франчайзи №45 пригласил новых инвесторов. Ознакомьтесь с деталями.",
-      timestamp: "Вчера",
-      read: true,
-      location: "Екатеринбург",
-      dealId: "DEAL-2515",
-      comments: [],
-      archived: false,
-    },
-    {
-      id: "N-005",
-      type: "success",
-      title: "Новый франчайзи активирован",
-      message: "Франчайзи №51 (Новосибирск) успешно завершил процесс регистрации.",
-      timestamp: "2 дня назад",
-      read: true,
-      location: "Новосибирск",
-      dealId: "DEAL-2516",
-      comments: [],
-      archived: false,
-    },
-    {
-      id: "N-006",
-      type: "critical",
-      title: "Сбой платежной системы",
-      message: "Транзакция T-2025-1142 не прошла. Возможна проблема с интеграцией.",
-      timestamp: "2 дня назад",
-      read: true,
-      location: "Москва",
-      dealId: "DEAL-2517",
-      comments: [],
-      archived: false,
-    },
-    {
-      id: "N-007",
-      type: "info",
-      title: "Обновление базы знаний",
-      message: "Добавлена новая статья: 'Полное руководство по финансовому учету'",
-      timestamp: "3 дня назад",
-      read: true,
-      location: "Екатеринбург",
-      dealId: "DEAL-2518",
-      comments: [],
-      archived: false,
-    },
-    {
-      id: "N-008",
-      type: "message",
-      title: "Сообщение от Управляющей Компании",
-      message:
-        "Пожалуйста, обратите внимание на качество обслуживания. Получены отзывы о задержках в обслуживании клиентов.",
-      timestamp: "10 минут назад",
-      read: false,
-      location: "Москва",
-      comments: [],
-      archived: false,
-      sender: "УК QuestLegends",
-    },
-  ])
-
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState("all")
   const [filterRead, setFilterRead] = useState("unread")
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({})
@@ -182,17 +84,47 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
       (filterRead === "all" || (filterRead === "unread" && !n.read) || (filterRead === "read" && n.read)),
   )
 
-  const markAsRead = (id: string) => {
-    setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)))
+  const markAsRead = async (id: string) => {
+    try {
+      await fetch(`/api/notifications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isRead: true }),
+      })
+      setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)))
+    } catch (error) {
+      console.error("[v0] Error marking notification as read:", error)
+    }
   }
 
-  const deleteNotification = (id: string) => {
-    setNotifications(notifications.filter((n) => n.id !== id))
+  const deleteNotification = async (id: string) => {
+    try {
+      await fetch(`/api/notifications/${id}`, {
+        method: "DELETE",
+      })
+      setNotifications(notifications.filter((n) => n.id !== id))
+    } catch (error) {
+      console.error("[v0] Error deleting notification:", error)
+    }
   }
 
-  const addCommentAndArchive = (id: string) => {
+  const addCommentAndArchive = async (id: string) => {
     const comment = commentInputs[id]?.trim()
-    if (comment) {
+    if (!comment) return
+
+    try {
+      await fetch(`/api/notifications/${id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: comment }),
+      })
+
+      await fetch(`/api/notifications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isArchived: true }),
+      })
+
       setNotifications(
         notifications.map((n) =>
           n.id === id
@@ -205,10 +137,54 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
         ),
       )
       setCommentInputs({ ...commentInputs, [id]: "" })
+    } catch (error) {
+      console.error("[v0] Error archiving notification:", error)
     }
   }
 
   const unreadCount = notifications.filter((n) => !n.read && !n.archived).length
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch(`/api/notifications?type=${filterType}&read=${filterRead}`)
+        const data = await response.json()
+
+        if (data.success && data.data?.notifications) {
+          // Transform API data to component format
+          const transformed = data.data.notifications.map((n: any) => ({
+            id: n.id,
+            type: n.type,
+            title: n.title,
+            message: n.message,
+            timestamp: new Date(n.createdAt).toLocaleString("ru-RU"),
+            read: n.isRead,
+            location: n.location,
+            dealId: n.deal?.id,
+            comments: n.comments.map((c: any) => c.text),
+            archived: n.isArchived,
+            sender: n.sender?.name,
+          }))
+          setNotifications(transformed)
+        }
+      } catch (error) {
+        console.error("[v0] Error fetching notifications:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchNotifications()
+  }, [filterType, filterRead])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-muted-foreground">Загрузка уведомлений...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

@@ -8,7 +8,6 @@ import { useEffect } from "react"
 import { DollarSign, TrendingUp, Users, Settings, BarChart3, Send } from "lucide-react"
 import { MetricCard } from "./metric-card"
 import { KPISettingsModal } from "./kpi-settings-modal"
-import { TransactionTable } from "./transaction-table"
 
 interface KPIData {
   id: string
@@ -245,47 +244,39 @@ export function DashboardUK() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-        <div className="lg:col-span-2">
-          <TransactionTable transactions={transactions} title="Недавние Транзакции" />
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-lg bg-card border border-border p-4 sm:p-6">
-            <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-4">Статистика Сети</h3>
-            {networkStats ? (
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Средний Рейтинг</p>
-                  <p className="text-2xl font-bold text-foreground">{networkStats.averageRating}/5.0</p>
-                </div>
-                <div className="border-t border-border pt-3">
-                  <p className="text-xs text-muted-foreground mb-1">Уровень Удовлетворения</p>
-                  <p className="text-2xl font-bold text-green-500">{networkStats.satisfactionRate}%</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {networkStats.franchiseesMeetingTargets} из {networkStats.totalFranchisees} франшиз выполняют план
-                  </p>
-                </div>
-                <div className="border-t border-border pt-3">
-                  <p className="text-xs text-muted-foreground mb-1">Выполнение Плана</p>
-                  <p
-                    className={`text-2xl font-bold ${networkStats.planFulfillment >= 100 ? "text-green-500" : networkStats.planFulfillment >= 80 ? "text-blue-500" : "text-orange-500"}`}
-                  >
-                    {networkStats.planFulfillment}%
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {networkStats.totalActualRevenue.toLocaleString("ru-RU")} ₽ из{" "}
-                    {networkStats.totalTargetRevenue.toLocaleString("ru-RU")} ₽
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                {loading ? "Загрузка статистики..." : "Нет данных для отображения"}
-              </div>
-            )}
+      <div className="rounded-lg bg-card border border-border p-4 sm:p-6">
+        <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-4">Статистика Сети</h3>
+        {networkStats ? (
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Средний Рейтинг</p>
+              <p className="text-2xl font-bold text-foreground">{networkStats.averageRating}/5.0</p>
+            </div>
+            <div className="border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground mb-1">Уровень Удовлетворения</p>
+              <p className="text-2xl font-bold text-green-500">{networkStats.satisfactionRate}%</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {networkStats.franchiseesMeetingTargets} из {networkStats.totalFranchisees} франшиз выполняют план
+              </p>
+            </div>
+            <div className="border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground mb-1">Выполнение Плана</p>
+              <p
+                className={`text-2xl font-bold ${networkStats.planFulfillment >= 100 ? "text-green-500" : networkStats.planFulfillment >= 80 ? "text-blue-500" : "text-orange-500"}`}
+              >
+                {networkStats.planFulfillment}%
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {networkStats.totalActualRevenue.toLocaleString("ru-RU")} ₽ из{" "}
+                {networkStats.totalTargetRevenue.toLocaleString("ru-RU")} ₽
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            {loading ? "Загрузка статистики..." : "Нет данных для отображения"}
+          </div>
+        )}
       </div>
 
       <KPISettingsModal
