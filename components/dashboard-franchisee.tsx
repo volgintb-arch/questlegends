@@ -12,25 +12,34 @@ export function DashboardFranchisee() {
   const [selectedDeal, setSelectedDeal] = useState<any>(null)
   const [kpis, setKpis] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [deals, setDeals] = useState<any[]>([])
+  const [expenses, setExpenses] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<any[]>([])
 
   useEffect(() => {
-    const fetchKPIs = async () => {
+    const fetchData = async () => {
       if (!user?.franchiseeId) return
 
       try {
-        const response = await fetch(`/api/kpi?franchiseeId=${user.franchiseeId}`)
-        if (response.ok) {
-          const data = await response.json()
-          setKpis(data)
-        }
+        const [kpisRes, dealsRes, expensesRes, transactionsRes] = await Promise.all([
+          fetch(`/api/kpi?franchiseeId=${user.franchiseeId}`),
+          fetch(`/api/deals?franchiseeId=${user.franchiseeId}`),
+          fetch(`/api/expenses?franchiseeId=${user.franchiseeId}`),
+          fetch(`/api/transactions?franchiseeId=${user.franchiseeId}`),
+        ])
+
+        if (kpisRes.ok) setKpis(await kpisRes.json())
+        if (dealsRes.ok) setDeals(await dealsRes.json())
+        if (expensesRes.ok) setExpenses(await expensesRes.json())
+        if (transactionsRes.ok) setTransactions(await transactionsRes.json())
       } catch (error) {
-        console.error("[v0] Failed to fetch KPIs:", error)
+        console.error("[v0] Failed to fetch dashboard data:", error)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchKPIs()
+    fetchData()
   }, [user?.franchiseeId])
 
   const currentDate = new Date()
@@ -40,23 +49,23 @@ export function DashboardFranchisee() {
     (kpi) => kpi.periodType === "month" && kpi.periodNumber === currentMonth && kpi.periodYear === currentYear,
   )
 
-  const revenue = 425000
+  const revenue = transactions.reduce((sum, t) => sum + (t.revenue || 0), 0)
   const royalty = revenue * 0.07
-  const fot = 86500
-  const expenses = 52000
-  const netProfit = revenue - royalty - fot - expenses
+  const fot = transactions.reduce((sum, t) => sum + (t.fot || 0), 0)
+  const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+  const netProfit = revenue - royalty - fot - totalExpenses
 
   const metrics = [
     {
       title: "Итоговая Прибыль (P&L)",
       value: `${netProfit.toLocaleString("ru-RU")} ₽`,
-      trend: { value: 18.5, isPositive: true },
+      trend: { value: 18.5, isPositive: netProfit > 0 },
       icon: <DollarSign className="w-6 h-6" />,
       large: true,
     },
     {
       title: "Общие Расходы",
-      value: `${expenses.toLocaleString("ru-RU")} ₽`,
+      value: `${totalExpenses.toLocaleString("ru-RU")} ₽`,
       trend: { value: 5.2, isPositive: false },
       icon: <TrendingDown className="w-5 h-5" />,
     },
@@ -84,77 +93,24 @@ export function DashboardFranchisee() {
 
   const maxRevenue = Math.max(...topLocations.map((l) => l.revenue))
 
-  const upcomingGames = [
-    {
-      id: "G-001",
-      title: "День рождения Маши",
-      clientName: "Иванова Мария",
-      clientPhone: "+7 (999) 123-45-67",
-      clientTelegram: "@maria_iv",
-      participants: 8,
-      package: "Премиум",
-      gameDate: "2025-11-27",
-      time: "15:00",
-      staff: "Алексей С., Елена М.",
-      stage: "SCHEDULED",
-      checkPerPerson: 3000,
-      animatorsCount: 2,
-      animatorRate: 1500,
-      hostRate: 2000,
-      djRate: 0,
-    },
-    {
-      id: "G-002",
-      title: "Корпоратив TechCorp",
-      clientName: "Петров Иван",
-      clientPhone: "+7 (999) 234-56-78",
-      participants: 12,
-      package: "VIP",
-      gameDate: "2025-11-28",
-      time: "18:00",
-      staff: "Дмитрий Н., Татьяна К.",
-      stage: "PREPAID",
-      checkPerPerson: 4000,
-      animatorsCount: 3,
-      animatorRate: 1800,
-      hostRate: 2500,
-      djRate: 2500,
-    },
-    {
-      id: "G-003",
-      title: "Квест для школьников",
-      clientName: "Сидорова Анна",
-      clientPhone: "+7 (999) 345-67-89",
-      participants: 10,
-      package: "Стандарт",
-      gameDate: "2025-11-29",
-      time: "14:00",
-      staff: "Елена М., Дмитрий Н.",
-      stage: "SCHEDULED",
-      checkPerPerson: 2500,
-      animatorsCount: 2,
-      animatorRate: 1500,
-      hostRate: 2000,
-      djRate: 0,
-    },
-    {
-      id: "G-004",
-      title: "Семейный квест",
-      clientName: "Козлов Сергей",
-      clientPhone: "+7 (999) 456-78-90",
-      participants: 6,
-      package: "Стандарт",
-      gameDate: "2025-11-30",
-      time: "16:30",
-      staff: "Алексей С.",
-      stage: "NEGOTIATION",
-      checkPerPerson: 2800,
-      animatorsCount: 1,
-      animatorRate: 1500,
-      hostRate: 2000,
-      djRate: 0,
-    },
-  ]
+  const upcomingGames = deals
+    .filter((deal: any) => deal.gameDate && new Date(deal.gameDate) > new Date())
+    .sort((a: any, b: any) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
+    .slice(0, 4)
+    .map((deal: any) => ({
+      id: deal.id,
+      title: deal.clientName || "Без названия",
+      clientName: deal.clientName,
+      clientPhone: deal.clientPhone,
+      clientTelegram: deal.clientTelegram,
+      participants: deal.participants || 0,
+      package: deal.packageType || "Стандарт",
+      gameDate: deal.gameDate,
+      time: new Date(deal.gameDate).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
+      staff: "Не назначен",
+      stage: deal.stage,
+      checkPerPerson: deal.price && deal.participants ? Math.round(deal.price / deal.participants) : 0,
+    }))
 
   const handleGameClick = (game: any) => {
     setSelectedDeal({
@@ -172,6 +128,14 @@ export function DashboardFranchisee() {
 
   const handleDealClose = () => {
     setSelectedDeal(null)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Загрузка данных...</div>
+      </div>
+    )
   }
 
   return (
@@ -250,47 +214,53 @@ export function DashboardFranchisee() {
           Ближайшие запланированные мероприятия - нажмите для редактирования
         </p>
 
-        <div className="space-y-3">
-          {upcomingGames.map((game) => (
-            <button
-              key={game.id}
-              onClick={() => handleGameClick(game)}
-              className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 rounded-lg transition-colors border border-border text-left"
-            >
-              <div className="flex items-center gap-4">
-                <div className="bg-primary/20 p-3 rounded-lg">
-                  <Calendar className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{game.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {new Date(game.gameDate).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
-                  </p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock size={14} />
-                      {game.time}
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Users size={14} />
-                      {game.participants} чел.
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <span className="px-2 py-0.5 bg-primary/20 text-primary rounded text-xs font-medium">
-                        {game.package}
-                      </span>
+        {upcomingGames.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            Нет запланированных игр. Добавьте сделки с датой игры.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {upcomingGames.map((game: any) => (
+              <button
+                key={game.id}
+                onClick={() => handleGameClick(game)}
+                className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 rounded-lg transition-colors border border-border text-left"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="bg-primary/20 p-3 rounded-lg">
+                    <Calendar className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{game.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {new Date(game.gameDate).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock size={14} />
+                        {game.time}
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Users size={14} />
+                        {game.participants} чел.
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <span className="px-2 py-0.5 bg-primary/20 text-primary rounded text-xs font-medium">
+                          {game.package}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <User size={14} />
-                <span>{game.staff}</span>
-              </div>
-            </button>
-          ))}
-        </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <User size={14} />
+                  <span>{game.staff}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {selectedDeal && (

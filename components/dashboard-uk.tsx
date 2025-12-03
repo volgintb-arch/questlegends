@@ -1,10 +1,11 @@
 "use client"
 
+import { useState } from "react"
+
 import type React from "react"
 import { UKKPIManagement } from "./uk-kpi-management"
-
-import { useState } from "react"
-import { DollarSign, TrendingUp, Users, Settings, Trophy, BarChart3, Send } from "lucide-react"
+import { useEffect } from "react"
+import { DollarSign, TrendingUp, Users, Settings, BarChart3, Send } from "lucide-react"
 import { MetricCard } from "./metric-card"
 import { KPISettingsModal } from "./kpi-settings-modal"
 import { TransactionTable } from "./transaction-table"
@@ -39,62 +40,46 @@ export function DashboardUK() {
   const [isSending, setIsSending] = useState(false)
   const [sendError, setSendError] = useState("")
   const [sendSuccess, setSendSuccess] = useState("")
+  const [franchises, setFranchises] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const franchiseData: FranchiseData[] = [
-    {
-      id: "F-001",
-      name: "Москва-Юг",
-      location: "Москва",
-      revenue: 450000, // Выручка с мин.чеком
-      royalties: 31500, // 7% от выручки
-      expenses: 120000, // ФОТ
-      profit: 298500, // revenue - royalties - expenses
-    },
-    {
-      id: "F-002",
-      name: "СПб-Север",
-      location: "Санкт-Петербург",
-      revenue: 380000,
-      royalties: 26600,
-      expenses: 95000,
-      profit: 258400,
-    },
-    {
-      id: "F-003",
-      name: "Казань",
-      location: "Казань",
-      revenue: 320000,
-      royalties: 22400,
-      expenses: 85000,
-      profit: 212600,
-    },
-    {
-      id: "F-004",
-      name: "Екатеринбург",
-      location: "Екатеринбург",
-      revenue: 290000,
-      royalties: 20300,
-      expenses: 75000,
-      profit: 194700,
-    },
-    {
-      id: "F-005",
-      name: "Новосибирск",
-      location: "Новосибирск",
-      revenue: 250000,
-      royalties: 17500,
-      expenses: 65000,
-      profit: 167500,
-    },
-  ]
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [franchisesRes, transactionsRes] = await Promise.all([
+          fetch("/api/franchisees"),
+          fetch("/api/transactions"),
+        ])
 
-  const bestFranchisee = franchiseData.reduce((prev, current) => (prev.revenue > current.revenue ? prev : current))
+        if (franchisesRes.ok) {
+          const franchisesData = await franchisesRes.json()
+          setFranchises(franchisesData)
+        }
+        if (transactionsRes.ok) {
+          const transactionsData = await transactionsRes.json()
+          setTransactions(transactionsData)
+        }
+      } catch (error) {
+        console.error("[v0] Failed to fetch UK dashboard data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
 
-  const [kpiData, setKpiData] = useState<KPIData[]>([
+    fetchData()
+  }, [])
+
+  const totalRevenue = transactions.reduce((sum, t) => sum + (t.revenue || 0), 0)
+  const totalRoyalties = transactions.reduce((sum, t) => sum + (t.royalty || 0), 0)
+  const averageCheck = transactions.length > 0 ? totalRevenue / transactions.length : 0
+  const totalGames = transactions.length
+
+  const [kpiData, setKpiData] = useState<any[]>([
     {
       id: "1",
       name: "Общая Выручка Сети",
-      value: `${(franchiseData.reduce((sum, f) => sum + f.revenue, 0) / 1000).toFixed(0)}K ₽`,
+      value: `${(totalRevenue / 1000).toFixed(0)}K ₽`,
       target: 3000000,
       unit: "₽",
       weight: 30,
@@ -105,7 +90,7 @@ export function DashboardUK() {
     {
       id: "2",
       name: "Сводное Роялти",
-      value: `${(franchiseData.reduce((sum, f) => sum + f.royalties, 0) / 1000).toFixed(0)}K ₽`,
+      value: `${(totalRoyalties / 1000).toFixed(0)}K ₽`,
       target: 210000,
       unit: "₽",
       weight: 20,
@@ -116,7 +101,7 @@ export function DashboardUK() {
     {
       id: "3",
       name: "Средний Чек",
-      value: `${(franchiseData.reduce((sum, f) => sum + f.revenue, 0) / franchiseData.length / 1000).toFixed(1)}K ₽`,
+      value: `${(averageCheck / 1000).toFixed(1)}K ₽`,
       target: 30000,
       unit: "₽",
       weight: 15,
@@ -127,7 +112,7 @@ export function DashboardUK() {
     {
       id: "4",
       name: "Количество Игр",
-      value: "100",
+      value: totalGames.toString(),
       target: 120,
       unit: "игр",
       weight: 10,
@@ -135,25 +120,7 @@ export function DashboardUK() {
       icon: <Users className="w-5 h-5" />,
       visible: true,
     },
-    {
-      id: "6",
-      name: "Лучший Франчайзи",
-      value: `${bestFranchisee.name} (${bestFranchisee.location})`,
-      target: 0,
-      unit: "",
-      weight: 0,
-      trend: { value: 0, isPositive: true },
-      icon: <Trophy className="w-5 h-5" />,
-      visible: false,
-    },
   ])
-
-  const recentTransactions = [
-    { id: "1", name: "Оплата от Франчайзи №5", amount: "+45,000 ₽", status: "completed" as const, date: "2025-11-26" },
-    { id: "2", name: "Выплата роялти сети", amount: "-35,500 ₽", status: "completed" as const, date: "2025-11-25" },
-    { id: "3", name: "Депозит нового франчайзи", amount: "+50,000 ₽", status: "pending" as const, date: "2025-11-24" },
-    { id: "4", name: "Возврат залога", amount: "-25,000 ₽", status: "failed" as const, date: "2025-11-23" },
-  ]
 
   const handleSaveKPIs = (newKPISettings: any) => {
     setKpiData(
@@ -208,6 +175,14 @@ export function DashboardUK() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Загрузка данных...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 sm:space-y-8">
       <UKKPIManagement />
@@ -224,7 +199,7 @@ export function DashboardUK() {
             className="flex-1 bg-muted border border-border rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm outline-none focus:border-primary"
           >
             <option value="">Выберите франчайзи...</option>
-            {franchiseData.map((f) => (
+            {franchises.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.name} - {f.location}
               </option>
@@ -265,46 +240,9 @@ export function DashboardUK() {
         </div>
       </div>
 
-      {visibleKPIs.some((kpi) => kpi.id === "6") && (
-        <div className="rounded-lg bg-card border border-border p-4 sm:p-6">
-          <div className="flex items-center gap-2 mb-4 sm:mb-6">
-            <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
-            <h3 className="text-base sm:text-lg font-semibold text-foreground">
-              Финансовое состояние: {bestFranchisee.name}
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div className="p-4 rounded-lg bg-muted/50 border border-border">
-              <p className="text-xs text-muted-foreground mb-2">Выручка с мин.чеком</p>
-              <p className="text-xl font-bold text-blue-500">{(bestFranchisee.revenue / 1000).toFixed(0)}K ₽</p>
-              <p className="text-xs text-muted-foreground mt-1">{bestFranchisee.location}</p>
-            </div>
-
-            <div className="p-4 rounded-lg bg-muted/50 border border-border">
-              <p className="text-xs text-muted-foreground mb-2">Роялти (7%)</p>
-              <p className="text-xl font-bold text-green-500">{(bestFranchisee.royalties / 1000).toFixed(1)}K ₽</p>
-              <p className="text-xs text-muted-foreground mt-1">от выручки</p>
-            </div>
-
-            <div className="p-4 rounded-lg bg-muted/50 border border-border">
-              <p className="text-xs text-muted-foreground mb-2">ФОТ</p>
-              <p className="text-xl font-bold text-orange-500">{(bestFranchisee.expenses / 1000).toFixed(0)}K ₽</p>
-              <p className="text-xs text-muted-foreground mt-1">расходы</p>
-            </div>
-
-            <div className="p-4 rounded-lg bg-muted/50 border border-border">
-              <p className="text-xs text-muted-foreground mb-2">Чистая Прибыль</p>
-              <p className="text-xl font-bold text-green-600">{(bestFranchisee.profit / 1000).toFixed(1)}K ₽</p>
-              <p className="text-xs text-muted-foreground mt-1">выр-роял-фот</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         <div className="lg:col-span-2">
-          <TransactionTable transactions={recentTransactions} title="Недавние Транзакции" />
+          <TransactionTable transactions={transactions} title="Недавние Транзакции" />
         </div>
 
         <div className="space-y-4">
@@ -339,7 +277,7 @@ export function DashboardUK() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
           <div className="bg-card border border-border rounded-lg max-w-2xl w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">
-              Отправить сообщение в Telegram: {franchiseData.find((f) => f.id === selectedFranchisee)?.name}
+              Отправить сообщение в Telegram: {franchises.find((f) => f.id === selectedFranchisee)?.name}
             </h3>
 
             {sendSuccess && (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { FileText, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -10,72 +10,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { AuditLogViewer } from "./audit-log-viewer"
 import type { AuditLog } from "@/lib/types"
 
-// Mock data - replace with actual API call
-const mockAuditLogs: AuditLog[] = [
-  {
-    id: "1",
-    entity: "deal",
-    entity_id: "D-001",
-    action: "update",
-    field: "stage",
-    old_value: "Лиды",
-    new_value: "Переговоры",
-    user_id: "U-001",
-    user_name: "Иван Петров",
-    created_at: new Date("2025-01-15T14:30:00"),
-  },
-  {
-    id: "2",
-    entity: "transaction",
-    entity_id: "T-001",
-    action: "create",
-    user_id: "U-002",
-    user_name: "Мария Сидорова",
-    created_at: new Date("2025-01-15T12:15:00"),
-  },
-  {
-    id: "3",
-    entity: "expense",
-    entity_id: "E-001",
-    action: "update",
-    field: "status",
-    old_value: "pending",
-    new_value: "approved",
-    user_id: "U-003",
-    user_name: "Александр Козлов",
-    created_at: new Date("2025-01-14T16:45:00"),
-  },
-  {
-    id: "4",
-    entity: "personnel",
-    entity_id: "P-001",
-    action: "update",
-    field: "status",
-    old_value: "active",
-    new_value: "on_leave",
-    user_id: "U-001",
-    user_name: "Иван Петров",
-    created_at: new Date("2025-01-14T10:20:00"),
-  },
-  {
-    id: "5",
-    entity: "deal",
-    entity_id: "D-002",
-    action: "update",
-    field: "amount",
-    old_value: 40000,
-    new_value: 45000,
-    user_id: "U-002",
-    user_name: "Мария Сидорова",
-    created_at: new Date("2025-01-13T15:30:00"),
-  },
-]
-
 export function AuditLogPage() {
-  const [logs, setLogs] = useState<AuditLog[]>(mockAuditLogs)
+  const [logs, setLogs] = useState<AuditLog[]>([])
+  const [loading, setLoading] = useState(true)
   const [entityFilter, setEntityFilter] = useState<string>("all")
   const [actionFilter, setActionFilter] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState<string>("")
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        const response = await fetch("/api/audit-logs")
+        if (response.ok) {
+          const data = await response.json()
+          setLogs(data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch audit logs:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchLogs()
+  }, [])
 
   const filteredLogs = logs.filter((log) => {
     if (entityFilter !== "all" && log.entity !== entityFilter) return false
@@ -92,8 +49,11 @@ export function AuditLogPage() {
   })
 
   const handleExport = () => {
-    // TODO: Implement export functionality
     console.log("Exporting audit logs...")
+  }
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64">Загрузка...</div>
   }
 
   return (
@@ -167,10 +127,19 @@ export function AuditLogPage() {
             <FileText className="w-5 h-5" />
             Лог изменений
           </CardTitle>
-          <CardDescription>Найдено записей: {filteredLogs.length}</CardDescription>
+          <CardDescription>
+            {logs.length === 0 ? "Записей пока нет" : `Найдено записей: ${filteredLogs.length}`}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <AuditLogViewer logs={filteredLogs} maxHeight="600px" />
+          {logs.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>Записей истории изменений пока нет</p>
+            </div>
+          ) : (
+            <AuditLogViewer logs={filteredLogs} maxHeight="600px" />
+          )}
         </CardContent>
       </Card>
     </div>

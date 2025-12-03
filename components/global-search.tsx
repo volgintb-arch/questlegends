@@ -21,56 +21,11 @@ interface SearchResult {
   url: string
 }
 
-// Mock data - replace with actual API call when backend is ready
-const mockSearchResults: SearchResult[] = [
-  {
-    id: "1",
-    type: "deal",
-    title: "Корпоратив TechCorp",
-    subtitle: "45,000 ₽ • Лиды",
-    url: "/crm/deal/1",
-  },
-  {
-    id: "2",
-    type: "transaction",
-    title: "Транзакция #TR-001",
-    subtitle: "38,000 ₽ • 15.01.2025",
-    url: "/erp/transaction/2",
-  },
-  {
-    id: "3",
-    type: "personnel",
-    title: "Иван Петров",
-    subtitle: "Аниматор • Активен",
-    url: "/personnel/3",
-  },
-  {
-    id: "4",
-    type: "expense",
-    title: "Аренда помещения",
-    subtitle: "Январь 2025 • 150,000 ₽",
-    url: "/erp/expense/4",
-  },
-  {
-    id: "5",
-    type: "article",
-    title: "Инструкция по проведению квестов",
-    subtitle: "База знаний • Обучение",
-    url: "/knowledge/5",
-  },
-  {
-    id: "6",
-    type: "franchisee",
-    title: "Франшиза Москва-Центр",
-    subtitle: "Москва • Активна",
-    url: "/franchisees/6",
-  },
-]
-
 export function GlobalSearch() {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [results, setResults] = useState<SearchResult[]>([])
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
 
   // Keyboard shortcut: Cmd+K / Ctrl+K
@@ -88,16 +43,21 @@ export function GlobalSearch() {
 
   // Search handler with debounce
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       if (search.trim()) {
-        // TODO: Replace with actual API call when backend is ready
-        // const results = await searchApi.globalSearch(search)
-        const filtered = mockSearchResults.filter(
-          (item) =>
-            item.title.toLowerCase().includes(search.toLowerCase()) ||
-            item.subtitle?.toLowerCase().includes(search.toLowerCase()),
-        )
-        setResults(filtered)
+        setLoading(true)
+        try {
+          const response = await fetch(`/api/search?q=${encodeURIComponent(search)}`)
+          if (response.ok) {
+            const data = await response.json()
+            setResults(data)
+          }
+        } catch (error) {
+          console.error("Search failed:", error)
+          setResults([])
+        } finally {
+          setLoading(false)
+        }
       } else {
         setResults([])
       }
@@ -191,8 +151,8 @@ export function GlobalSearch() {
           <CommandEmpty>
             <div className="py-6 text-center text-sm">
               <Search className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
-              <p className="text-muted-foreground">Ничего не найдено</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">Попробуйте изменить запрос</p>
+              <p className="text-muted-foreground">{loading ? "Поиск..." : "Ничего не найдено"}</p>
+              {!loading && <p className="text-xs text-muted-foreground/70 mt-1">Попробуйте изменить запрос</p>}
             </div>
           </CommandEmpty>
 

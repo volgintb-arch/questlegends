@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { TrendingUp, TrendingDown, Users, DollarSign, AlertTriangle, Target, MapPin } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -39,107 +39,50 @@ interface FranchiseePerformance {
 export function KPIDashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState("month")
   const [selectedMetric, setSelectedMetric] = useState("revenue")
+  const [franchisees, setFranchisees] = useState<FranchiseePerformance[]>([])
+  const [revenueData, setRevenueData] = useState([])
+  const [gamesDistribution, setGamesDistribution] = useState([])
+  const [forecastData, setForecastData] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  // Mock data - будет заменено на реальные данные из API
-  const franchisees: FranchiseePerformance[] = [
-    {
-      id: "1",
-      name: "Москва-Юг",
-      location: "Москва",
-      revenue: 450000,
-      expenses: 151500,
-      profit: 298500,
-      margin: 66.3,
-      gamesCount: 45,
-      growth: 12.5,
-      riskScore: 15,
-      status: "excellent",
-    },
-    {
-      id: "2",
-      name: "СПб-Север",
-      location: "СПб",
-      revenue: 380000,
-      expenses: 121600,
-      profit: 258400,
-      margin: 68.0,
-      gamesCount: 38,
-      growth: 8.2,
-      riskScore: 20,
-      status: "good",
-    },
-    {
-      id: "3",
-      name: "Казань",
-      location: "Казань",
-      revenue: 320000,
-      expenses: 107400,
-      profit: 212600,
-      margin: 66.4,
-      gamesCount: 32,
-      growth: -2.5,
-      riskScore: 45,
-      status: "warning",
-    },
-    {
-      id: "4",
-      name: "Екатеринбург",
-      location: "Екат-г",
-      revenue: 290000,
-      expenses: 95300,
-      profit: 194700,
-      margin: 67.1,
-      gamesCount: 29,
-      growth: 5.1,
-      riskScore: 25,
-      status: "good",
-    },
-    {
-      id: "5",
-      name: "Новосибирск",
-      location: "Новосиб",
-      revenue: 180000,
-      expenses: 60000,
-      profit: 120000,
-      margin: 66.7,
-      gamesCount: 18,
-      growth: -8.3,
-      riskScore: 65,
-      status: "critical",
-    },
-  ]
+  useEffect(() => {
+    const fetchKPIData = async () => {
+      try {
+        const response = await fetch(`/api/kpi/analytics?period=${selectedPeriod}`)
+        if (response.ok) {
+          const data = await response.json()
+          setFranchisees(data.franchisees || [])
+          setRevenueData(data.revenueData || [])
+          setGamesDistribution(data.gamesDistribution || [])
+          setForecastData(data.forecastData || [])
+        }
+      } catch (error) {
+        console.error("Failed to fetch KPI data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchKPIData()
+  }, [selectedPeriod])
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64">Загрузка аналитики...</div>
+  }
+
+  if (franchisees.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+        <Target className="w-16 h-16 mb-4 opacity-50" />
+        <p className="text-lg font-medium">Данных для аналитики пока нет</p>
+        <p className="text-sm">Начните работу с франшизами для отображения метрик</p>
+      </div>
+    )
+  }
 
   const totalRevenue = franchisees.reduce((sum, f) => sum + f.revenue, 0)
   const totalProfit = franchisees.reduce((sum, f) => sum + f.profit, 0)
   const totalGames = franchisees.reduce((sum, f) => sum + f.gamesCount, 0)
   const avgMargin = franchisees.reduce((sum, f) => sum + f.margin, 0) / franchisees.length
-
-  // Revenue trend data
-  const revenueData = [
-    { month: "Янв", revenue: 1200000, expenses: 420000, profit: 780000 },
-    { month: "Фев", revenue: 1350000, expenses: 450000, profit: 900000 },
-    { month: "Мар", revenue: 1280000, expenses: 440000, profit: 840000 },
-    { month: "Апр", revenue: 1450000, expenses: 480000, profit: 970000 },
-    { month: "Май", revenue: 1520000, expenses: 500000, profit: 1020000 },
-    { month: "Июн", revenue: 1620000, expenses: 536000, profit: 1084000 },
-  ]
-
-  // Games distribution
-  const gamesDistribution = [
-    { name: "Москва", value: 45, color: "#3b82f6" },
-    { name: "СПб", value: 38, color: "#10b981" },
-    { name: "Казань", value: 32, color: "#f59e0b" },
-    { name: "Екат-г", value: 29, color: "#8b5cf6" },
-    { name: "Новосиб", value: 18, color: "#ef4444" },
-  ]
-
-  // Performance forecast
-  const forecastData = [
-    { month: "Июл", actual: 1620000, forecast: 1680000 },
-    { month: "Авг", forecast: 1750000 },
-    { month: "Сен", forecast: 1820000 },
-    { month: "Окт", forecast: 1900000 },
-  ]
 
   const getStatusBadge = (status: string) => {
     const variants = {

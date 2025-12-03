@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, Filter } from "lucide-react"
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
 import { KanbanColumn } from "./kanban-column"
@@ -22,17 +22,16 @@ interface Deal {
   priority?: "high" | "normal"
   participants?: number
   package?: string
-  checkPerPerson?: number
-  animatorsCount?: number
-  animatorRate?: number
-  hostRate?: number
-  djRate?: number
+  clientName?: string
+  clientPhone?: string
+  stage?: string
 }
 
 type BoardData = Record<string, Deal[]>
 
 export function DealsKanban({ role }: DealsKanbanProps) {
   const { user } = useAuth()
+  const [loading, setLoading] = useState(true)
   const [filterOpen, setFilterOpen] = useState(false)
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -41,160 +40,79 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   const franchiseeStages = ["Лиды", "Переговоры", "Внесена предоплата (Бронь)", "Игра проведена"]
-
   const ukStages = ["Лиды", "Переговоры", "Предложение", "Подписано"]
-
   const stages = role === "uk" ? ukStages : franchiseeStages
 
-  const [boardData, setBoardData] = useState<BoardData>(
-    role === "uk"
-      ? {
-          Лиды: [
-            {
-              id: "D-001",
-              title: "Франчайзи Москва-Юг",
-              location: "Москва",
-              amount: "500,000 ₽",
-              daysOpen: 5,
-              priority: "high" as const,
-            },
-            { id: "D-002", title: "Партнер Урал", location: "Екатеринбург", amount: "350,000 ₽", daysOpen: 12 },
-          ],
-          Переговоры: [
-            {
-              id: "D-003",
-              title: "Франчайзи СПб-Север",
-              location: "Санкт-Петербург",
-              amount: "450,000 ₽",
-              daysOpen: 8,
-            },
-            {
-              id: "D-004",
-              title: "Премиум партнер",
-              location: "Казань",
-              amount: "600,000 ₽",
-              daysOpen: 3,
-              priority: "high" as const,
-            },
-          ],
-          Предложение: [{ id: "D-006", title: "Франчайзи Тверь", location: "Тверь", amount: "300,000 ₽", daysOpen: 2 }],
-          Подписано: [
-            { id: "D-008", title: "Франчайзи Ростов", location: "Ростов-на-Дону", amount: "480,000 ₽", daysOpen: 20 },
-          ],
-        }
-      : {
-          Лиды: [
-            {
-              id: "C-001",
-              title: "Корпоратив TechCorp",
-              location: user.franchiseeName,
-              amount: "45,000 ₽",
-              daysOpen: 3,
-              participants: 15,
-              package: "Премиум",
-              checkPerPerson: 0,
-              animatorsCount: 0,
-              animatorRate: 0,
-              hostRate: 0,
-              djRate: 0,
-            },
-            {
-              id: "C-002",
-              title: "День рождения",
-              location: user.franchiseeName,
-              amount: "12,000 ₽",
-              daysOpen: 7,
-              participants: 8,
-              package: "Стандарт",
-              checkPerPerson: 0,
-              animatorsCount: 0,
-              animatorRate: 0,
-              hostRate: 0,
-              djRate: 0,
-            },
-          ],
-          Переговоры: [
-            {
-              id: "C-003",
-              title: "Школьное мероприятие",
-              location: user.franchiseeName,
-              amount: "28,000 ₽",
-              daysOpen: 5,
-              participants: 20,
-              package: "Образовательный",
-              checkPerPerson: 0,
-              animatorsCount: 0,
-              animatorRate: 0,
-              hostRate: 0,
-              djRate: 0,
-            },
-          ],
-          "Внесена предоплата (Бронь)": [
-            {
-              id: "C-004",
-              title: "Свадебный квест",
-              location: user.franchiseeName,
-              amount: "65,000 ₽",
-              daysOpen: 2,
-              participants: 12,
-              package: "VIP",
-              priority: "high" as const,
-              checkPerPerson: 0,
-              animatorsCount: 0,
-              animatorRate: 0,
-              hostRate: 0,
-              djRate: 0,
-            },
-          ],
-          "Игра проведена": [
-            {
-              id: "C-005",
-              title: "Корпоратив StartUp Inc",
-              location: user.franchiseeName,
-              amount: "38,000 ₽",
-              daysOpen: 15,
-              participants: 10,
-              package: "Стандарт",
-              checkPerPerson: 0,
-              animatorsCount: 0,
-              animatorRate: 0,
-              hostRate: 0,
-              djRate: 0,
-            },
-          ],
-        },
-  )
+  const [boardData, setBoardData] = useState<BoardData>({})
 
-  const handleDragEnd = (result: DropResult) => {
+  useEffect(() => {
+    const fetchDeals = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (user?.franchiseeId && role !== "uk") {
+          params.append("franchiseeId", user.franchiseeId)
+        }
+
+        const response = await fetch(`/api/deals?${params.toString()}`)
+        if (!response.ok) throw new Error("Failed to fetch deals")
+
+        const deals = await response.json()
+
+        const grouped: BoardData = {}
+        stages.forEach((stage) => {
+          grouped[stage] = []
+        })
+
+        deals.forEach((deal: any) => {
+          const stageName = stages.find((s) => s === deal.stage) || stages[0]
+          grouped[stageName].push({
+            id: deal.id,
+            title: deal.clientName || "Без названия",
+            location: deal.franchisee?.city || user?.franchiseeName || "",
+            amount: deal.price ? `${deal.price.toLocaleString()} ₽` : "0 ₽",
+            daysOpen: Math.floor((Date.now() - new Date(deal.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
+            participants: deal.participants || 0,
+            package: deal.packageType || "",
+            clientName: deal.clientName,
+            clientPhone: deal.clientPhone,
+            stage: deal.stage,
+          })
+        })
+
+        setBoardData(grouped)
+      } catch (error) {
+        console.error("[v0] Error fetching deals:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDeals()
+  }, [user, role, stages])
+
+  const handleDragEnd = async (result: DropResult) => {
     const { source, destination, draggableId } = result
 
-    // Dropped outside any droppable
-    if (!destination) {
-      return
-    }
-
-    // Dropped in same position
-    if (source.droppableId === destination.droppableId && source.index === destination.index) {
-      return
-    }
+    if (!destination) return
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return
 
     const sourceStage = source.droppableId
     const destStage = destination.droppableId
 
     const newBoardData = { ...boardData }
-
-    // Remove from source
     const [movedDeal] = newBoardData[sourceStage].splice(source.index, 1)
-
-    // Add to destination
     newBoardData[destStage].splice(destination.index, 0, movedDeal)
 
     setBoardData(newBoardData)
 
-    // Trigger webhook for game completion
-    if (destStage === "Игра проведена" && role !== "uk") {
-      console.log("[v0] Triggering webhook for game completion:", draggableId)
-      // TODO: Send webhook to backend for Scenario C2 (checklist link to admin/host)
+    try {
+      await fetch(`/api/deals/${draggableId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: destStage }),
+      })
+    } catch (error) {
+      console.error("[v0] Error updating deal stage:", error)
     }
   }
 
@@ -204,7 +122,6 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   }
 
   const handleViewDeal = (deal: Deal) => {
-    // Convert simple Deal to detailed DealData format
     const detailedDeal = {
       ...deal,
       amount: Number.parseFloat(deal.amount.replace(/[^\d]/g, "")),
@@ -247,31 +164,22 @@ export function DealsKanban({ role }: DealsKanbanProps) {
     setBoardData(newBoardData)
   }
 
-  const handleCreateDeal = (newDeal: Deal) => {
-    const dealWithDefaults = {
-      ...newDeal,
-      checkPerPerson: (newDeal as any).checkPerPerson || 0,
-      animatorsCount: (newDeal as any).animatorsCount || 0,
-      animatorRate: (newDeal as any).animatorRate || 0,
-      hostRate: (newDeal as any).hostRate || 0,
-      djRate: (newDeal as any).djRate || 0,
-    }
-
-    const newBoardData = { ...boardData }
-    const firstStage = stages[0]
-
-    if (!newBoardData[firstStage]) {
-      newBoardData[firstStage] = []
-    }
-
-    newBoardData[firstStage].unshift(dealWithDefaults)
-    setBoardData(newBoardData)
+  const handleCreateDeal = async (newDealData: any) => {
+    window.location.reload()
   }
 
   const getRoleTitle = () => {
     if (role === "uk") return "Управление франчайзи и сделками"
     if (role === "franchisee") return "Ваши активные клиенты"
     return `Клиенты ${user.franchiseeName}`
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Загрузка сделок...</div>
+      </div>
+    )
   }
 
   return (
@@ -332,11 +240,24 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         </div>
         <div className="text-center">
           <p className="text-xs text-muted-foreground mb-1">Сумма в работе</p>
-          <p className="text-base sm:text-lg font-bold text-primary">{role === "uk" ? "7.2M ₽" : "188K ₽"}</p>
+          <p className="text-base sm:text-lg font-bold text-primary">
+            {Object.values(boardData)
+              .flat()
+              .reduce((sum, d) => sum + Number.parseInt(d.amount.replace(/[^\d]/g, "") || "0"), 0)
+              .toLocaleString()}{" "}
+            ₽
+          </p>
         </div>
         <div className="text-center">
           <p className="text-xs text-muted-foreground mb-1">Конверсия</p>
-          <p className="text-xl sm:text-2xl font-bold text-green-500">{role === "uk" ? "34%" : "68%"}</p>
+          <p className="text-xl sm:text-2xl font-bold text-green-500">
+            {Object.values(boardData).flat().length > 0
+              ? Math.round(
+                  ((boardData[stages[stages.length - 1]]?.length || 0) / Object.values(boardData).flat().length) * 100,
+                )
+              : 0}
+            %
+          </p>
         </div>
       </div>
 
@@ -361,7 +282,6 @@ export function DealsKanban({ role }: DealsKanbanProps) {
           }}
           onUpdate={(updatedDeal) => {
             console.log("[v0] Deal updated:", updatedDeal)
-            // Update deal in boardData if needed
           }}
           role={role}
         />
