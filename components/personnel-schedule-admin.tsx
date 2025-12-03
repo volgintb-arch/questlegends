@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Calendar, ChevronLeft, ChevronRight, User, CheckCircle2, AlertCircle, X, Filter } from 'lucide-react'
+import { useState, useEffect } from "react"
+import { Calendar, ChevronLeft, ChevronRight, User, CheckCircle2, AlertCircle, X, Filter } from "lucide-react"
 
 interface StaffMember {
   id: string
@@ -42,16 +42,8 @@ export function PersonnelScheduleAdmin() {
   const [showOnlyFree, setShowOnlyFree] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [showFilters, setShowFilters] = useState(false)
-
-  const availableStaff: StaffMember[] = [
-    { id: "s1", name: "Иванов Иван", role: "Аниматор" },
-    { id: "s2", name: "Петрова Анна", role: "Аниматор" },
-    { id: "s3", name: "Сидоров Петр", role: "Ведущий" },
-    { id: "s4", name: "Козлова Мария", role: "DJ" },
-    { id: "s5", name: "Новиков Алексей", role: "Аниматор" },
-    { id: "s6", name: "Морозова Елена", role: "Ведущий" },
-  ]
-
+  const [availableStaff, setAvailableStaff] = useState<StaffMember[]>([])
+  const [isLoadingStaff, setIsLoadingStaff] = useState(true)
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([
     {
       id: "g1",
@@ -133,17 +125,19 @@ export function PersonnelScheduleAdmin() {
 
   const { from, to } = getPeriodDates()
 
-  const filteredByEmployee = selectedEmployees.length > 0
-    ? gameEvents.filter((g) => g.assignedStaff.some((a) => selectedEmployees.includes(a.staffId)))
-    : gameEvents
+  const filteredByEmployee =
+    selectedEmployees.length > 0
+      ? gameEvents.filter((g) => g.assignedStaff.some((a) => selectedEmployees.includes(a.staffId)))
+      : gameEvents
 
-  const filteredByStatus = statusFilter === "all" 
-    ? filteredByEmployee
-    : statusFilter === "requires_assignment"
-    ? filteredByEmployee.filter((g) => !isGameComplete(g))
-    : statusFilter === "staffed"
-    ? filteredByEmployee.filter((g) => isGameComplete(g) && g.status !== "completed")
-    : filteredByEmployee.filter((g) => g.status === "completed")
+  const filteredByStatus =
+    statusFilter === "all"
+      ? filteredByEmployee
+      : statusFilter === "requires_assignment"
+        ? filteredByEmployee.filter((g) => !isGameComplete(g))
+        : statusFilter === "staffed"
+          ? filteredByEmployee.filter((g) => isGameComplete(g) && g.status !== "completed")
+          : filteredByEmployee.filter((g) => g.status === "completed")
 
   const displayedGames = filteredByStatus.filter((g) => {
     const gameDate = new Date(g.date)
@@ -227,6 +221,51 @@ export function PersonnelScheduleAdmin() {
   })
   const [draggedStaff, setDraggedStaff] = useState<StaffMember | null>(null)
 
+  useEffect(() => {
+    fetchAvailableStaff()
+  }, [])
+
+  const fetchAvailableStaff = async () => {
+    setIsLoadingStaff(true)
+    try {
+      const response = await fetch("/api/users?role=animator,host,dj")
+      const data = await response.json()
+
+      if (data.success && Array.isArray(data.data)) {
+        const mappedStaff: StaffMember[] = data.data.map((user: any) => ({
+          id: user.id,
+          name: user.name,
+          role: getRoleLabel(user.role) as "Аниматор" | "Ведущий" | "DJ",
+        }))
+        setAvailableStaff(mappedStaff)
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching staff:", error)
+    } finally {
+      setIsLoadingStaff(false)
+    }
+  }
+
+  const getRoleLabel = (role: string): string => {
+    const labels: Record<string, string> = {
+      animator: "Аниматор",
+      host: "Ведущий",
+      dj: "DJ",
+    }
+    return labels[role] || role
+  }
+
+  if (isLoadingStaff) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Загрузка персонала...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       <div className="w-80 bg-card border-r border-border p-6 overflow-y-auto">
@@ -239,9 +278,7 @@ export function PersonnelScheduleAdmin() {
               <Filter size={18} className="text-primary" />
               <span className="font-semibold text-foreground">Фильтры</span>
             </div>
-            <span className="text-sm text-muted-foreground">
-              {showFilters ? "Скрыть" : "Показать"}
-            </span>
+            <span className="text-sm text-muted-foreground">{showFilters ? "Скрыть" : "Показать"}</span>
           </button>
 
           {showFilters && (
@@ -382,8 +419,8 @@ export function PersonnelScheduleAdmin() {
           <h3 className="text-sm font-semibold text-foreground mb-2">Загруженность за период:</h3>
           <div className="space-y-1 text-xs">
             {filteredStaff.slice(0, 3).map((staff) => {
-              const assignedGames = displayedGames.filter((g) => 
-                g.assignedStaff.some((a) => a.staffId === staff.id)
+              const assignedGames = displayedGames.filter((g) =>
+                g.assignedStaff.some((a) => a.staffId === staff.id),
               ).length
               const percentage = Math.round((assignedGames / displayedGames.length) * 100) || 0
 
@@ -402,7 +439,7 @@ export function PersonnelScheduleAdmin() {
         <div className="space-y-2">
           {filteredStaff.map((staff) => {
             const isSelected = selectedEmployees.includes(staff.id)
-            
+
             return (
               <div
                 key={staff.id}
@@ -416,9 +453,7 @@ export function PersonnelScheduleAdmin() {
                   }
                 }}
                 className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                  isSelected
-                    ? "bg-primary/20 border-primary"
-                    : "bg-muted hover:bg-primary/10 border-border"
+                  isSelected ? "bg-primary/20 border-primary" : "bg-muted hover:bg-primary/10 border-border"
                 }`}
               >
                 <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">

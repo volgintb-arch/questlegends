@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, Search, Phone, Mail, MapPin, Clock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
-import { PersonnelModal } from "@/components/personnel-modal" // Assuming PersonnelModal is imported from the correct path
+import { PersonnelModal } from "@/components/personnel-modal"
 
 interface Staff {
   id: string
@@ -28,113 +28,62 @@ export function PersonnelSection({ role }: PersonnelSectionProps) {
   const [filterStatus, setFilterStatus] = useState("all")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null)
+  const [staff, setStaff] = useState<Staff[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const franchiseeStaff: Staff[] = [
-    {
-      id: "F-001",
-      name: "Алексей Сидоров",
-      role: "Управляющий",
-      phone: "+7 (999) 111-22-33",
-      email: "alex@franchisee.ru",
-      location: "Москва",
-      schedule: "Пн-Пт 9:00-20:00",
-      status: "active",
-      joinDate: "2022-06-01",
-    },
-    {
-      id: "F-002",
-      name: "Елена Морозова",
-      role: "Специалист по обслуживанию",
-      phone: "+7 (999) 222-33-44",
-      email: "elena@franchisee.ru",
-      location: "Москва",
-      schedule: "Пн-Сб 10:00-18:00",
-      status: "active",
-      joinDate: "2023-01-15",
-    },
-    {
-      id: "F-003",
-      name: "Дмитрий Никитин",
-      role: "Консультант",
-      phone: "+7 (999) 333-44-55",
-      email: "dmitry@franchisee.ru",
-      location: "Москва",
-      schedule: "Пн-Пт 11:00-19:00",
-      status: "active",
-      joinDate: "2023-04-10",
-    },
-    {
-      id: "F-004",
-      name: "Татьяна Кузнецова",
-      role: "Администратор",
-      phone: "+7 (999) 444-55-66",
-      email: "tatiana@franchisee.ru",
-      location: "Москва",
-      schedule: "Пн-Пт 9:00-18:00",
-      status: "on_leave",
-      joinDate: "2023-02-01",
-    },
-  ]
+  useEffect(() => {
+    fetchStaff()
+  }, [role, user.franchiseeId])
 
-  const adminStaff: Staff[] = [
-    {
-      id: "A-001",
-      name: "Дмитрий Админ",
-      role: "Администратор франчайзи",
-      phone: "+7 (999) 555-66-77",
-      email: "admin@kazanka.ru",
-      location: "Казань",
-      schedule: "Пн-Пт 9:00-18:00",
-      status: "active",
-      joinDate: "2022-01-10",
-    },
-    {
-      id: "A-002",
-      name: "Ольга Сергеева",
-      role: "Менеджер направления",
-      phone: "+7 (999) 666-77-88",
-      email: "olga@kazanka.ru",
-      location: "Казань",
-      schedule: "Пн-Пт 10:00-19:00",
-      status: "active",
-      joinDate: "2023-03-15",
-    },
-    {
-      id: "A-003",
-      name: "Игорь Петухов",
-      role: "Специалист по обслуживанию",
-      phone: "+7 (999) 777-88-99",
-      email: "igor@kazanka.ru",
-      location: "Казань",
-      schedule: "Пн-Сб 11:00-20:00",
-      status: "active",
-      joinDate: "2023-05-01",
-    },
-    {
-      id: "A-004",
-      name: "Виктория Климова",
-      role: "Специалист по обслуживанию",
-      phone: "+7 (999) 888-99-00",
-      email: "victoria@kazanka.ru",
-      location: "Казань",
-      schedule: "Пн-Пт 12:00-21:00",
-      status: "active",
-      joinDate: "2023-07-20",
-    },
-    {
-      id: "A-005",
-      name: "Сергей Морозов",
-      role: "Консультант",
-      phone: "+7 (999) 999-00-11",
-      email: "sergey@kazanka.ru",
-      location: "Казань",
-      schedule: "Пн-Чт 10:00-18:00, Пт-Вс 14:00-22:00",
-      status: "on_leave",
-      joinDate: "2023-08-15",
-    },
-  ]
+  const fetchStaff = async () => {
+    setIsLoading(true)
+    try {
+      const params = new URLSearchParams()
 
-  const staff = role === "franchisee" ? franchiseeStaff : adminStaff
+      if (role === "franchisee" || role === "admin") {
+        if (user.franchiseeId) {
+          params.append("franchiseeId", user.franchiseeId)
+        }
+        // Get personnel for franchisee/admin
+        params.append("role", "animator,host,dj,admin")
+      }
+
+      const response = await fetch(`/api/users?${params.toString()}`)
+      const data = await response.json()
+
+      if (data.success && Array.isArray(data.data)) {
+        const mappedStaff: Staff[] = data.data.map((user: any) => ({
+          id: user.id,
+          name: user.name,
+          role: getRoleLabel(user.role),
+          phone: user.phone,
+          email: user.email || "Не указан",
+          location: user.franchisee?.location || user.city || "Не указана",
+          schedule: "Пн-Пт 9:00-18:00", // TODO: Add schedule to user model
+          status: "active", // TODO: Add status to user model
+          joinDate: user.createdAt,
+        }))
+        setStaff(mappedStaff)
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching staff:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, string> = {
+      animator: "Аниматор",
+      host: "Ведущий",
+      dj: "DJ",
+      admin: "Администратор",
+      franchisee: "Управляющий",
+      uk: "Директор УК",
+      uk_employee: "Сотрудник УК",
+    }
+    return labels[role] || role
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -162,7 +111,7 @@ export function PersonnelSection({ role }: PersonnelSectionProps) {
 
   const getRoleTitle = () => {
     if (role === "franchisee") return "Ваша команда и расписание"
-    return `Персонал ${user.franchiseeName}`
+    return `Персонал ${user.franchiseeName || ""}`
   }
 
   const handleAddStaff = () => {
@@ -173,6 +122,17 @@ export function PersonnelSection({ role }: PersonnelSectionProps) {
   const handleEditStaff = (member: Staff) => {
     setEditingStaff(member)
     setIsModalOpen(true)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Загрузка персонала...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -297,7 +257,9 @@ export function PersonnelSection({ role }: PersonnelSectionProps) {
 
       {filteredStaff.length === 0 && (
         <div className="text-center py-12 bg-card border border-border rounded-lg">
-          <p className="text-muted-foreground">Нет сотрудников по данным фильтрам</p>
+          <p className="text-muted-foreground">
+            {staff.length === 0 ? "Нет сотрудников. Добавьте первого!" : "Нет сотрудников по данным фильтрам"}
+          </p>
         </div>
       )}
 
@@ -305,9 +267,10 @@ export function PersonnelSection({ role }: PersonnelSectionProps) {
         isOpen={isModalOpen}
         staff={editingStaff}
         onClose={() => setIsModalOpen(false)}
-        onSave={(data) => {
+        onSave={async (data) => {
           console.log("[v0] Saving personnel:", data)
-          // Backend API call: POST /api/personnel or PUT /api/personnel/:id
+          // Reload staff after save
+          await fetchStaff()
           setIsModalOpen(false)
         }}
       />

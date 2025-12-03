@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   X,
   Phone,
@@ -77,8 +77,24 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
   const [messageInput, setMessageInput] = useState("")
   const [isEditingField, setIsEditingField] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<Record<string, any>>({})
+  const [managers, setManagers] = useState<string[]>([])
 
-  if (!isOpen) return null
+  useEffect(() => {
+    fetchManagers()
+  }, [])
+
+  const fetchManagers = async () => {
+    try {
+      const response = await fetch("/api/users?role=uk,uk_employee,franchisee,admin")
+      const data = await response.json()
+
+      if (data.success && Array.isArray(data.data)) {
+        setManagers(data.data.map((user: any) => user.name))
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching managers:", error)
+    }
+  }
 
   const stageOptions =
     role === "uk"
@@ -88,7 +104,6 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
   const leadSources = ["Instagram", "VK", "Сайт", "Рекомендация", "Реклама", "Другое"]
   const packageOptions = ["Стандарт", "Премиум", "VIP", "Корпоратив"]
   const locations = ["Москва", "Санкт-Петербург", "Казань", "Новосибирск"]
-  const managers = ["Алексей Сидоров", "Мария Иванова", "Дмитрий Никитин", "Екатерина Волкова"]
 
   const handleStageChange = (newStage: string) => {
     const updatedDeal = { ...dealData, stage: newStage }
