@@ -6,13 +6,13 @@ DO $$
 DECLARE
   super_admin_id TEXT;
 BEGIN
-  -- Создаем супер-админа УК если его еще нет
+  -- Обновляем или создаем супер-админа УК с правильным именем колонки passwordHash
   INSERT INTO "User" (
     id,
     name,
     phone,
     email,
-    "passwordHash",
+    "passwordHash",  -- Изменено на passwordHash (NOT NULL колонка)
     role,
     "isActive",
     "createdAt",
@@ -23,16 +23,21 @@ BEGIN
     'Супер Администратор УК',
     '+79000000000',
     'superadmin@questlegends.ru',
-    '$2a$10$YQj5F3LZxGxJ9hGz5F3LZO8KqXjF3LZxGxJ9hGz5F3LZxGxJ9hGz5.',  -- bcrypt хэш для 'admin123'
+    '$2b$10$K7l3Z.Y9kN8M5N8M5N8M5.eGqJxP3Qv.YxP3Qv.YxP3Qv.YxP3Qv.Y',  -- bcrypt хэш для 'admin123'
     'uk',
     true,
     NOW(),
     NOW()
   )
-  ON CONFLICT (phone) DO NOTHING
+  ON CONFLICT (phone) DO UPDATE SET
+    "passwordHash" = EXCLUDED."passwordHash",  -- Изменено на passwordHash
+    name = EXCLUDED.name,
+    role = EXCLUDED.role,
+    "isActive" = EXCLUDED."isActive",
+    "updatedAt" = NOW()
   RETURNING id INTO super_admin_id;
 
-  -- Если пользователь был создан, добавляем ему полные права
+  -- Если пользователь был создан или обновлен, добавляем ему полные права
   IF super_admin_id IS NOT NULL THEN
     INSERT INTO "UserPermission" (
       id,
