@@ -1,12 +1,9 @@
 import type { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
-import { PrismaAdapter } from "@next-auth/prisma-adapter"
 import { prisma } from "./prisma"
 import bcrypt from "bcryptjs"
-import crypto from "crypto"
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -15,82 +12,65 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Пароль", type: "password" },
       },
       async authorize(credentials) {
-        console.log("[v0] NextAuth authorize called with phone:", credentials?.phone)
-
-        if (!credentials?.phone || !credentials?.password) {
-          console.log("[v0] Missing credentials")
-          return null
-        }
-
         try {
-          const user = await prisma.user.findUnique({
-            where: { phone: credentials.phone },
-          })
+          console.log("[v0] NextAuth authorize started")
 
-          console.log("[v0] User found:", user ? user.id : "null")
-
-          if (!user || !user.isActive) {
-            console.log("[v0] User not found or inactive")
+          if (!credentials?.phone || !credentials?.password) {
+            console.log("[v0] Missing credentials")
             return null
           }
 
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash)
+          console.log("[v0] Searching user with phone:", credentials.phone)
+
+          let user
+          try {
+            user = await prisma.user.findUnique({
+              where: { phone: credentials.phone },
+            })
+          } catch (dbError) {
+            console.error("[v0] Database error finding user:", dbError)
+            return null
+          }
+
+          console.log("[v0] User lookup result:", user ? `Found user ${user.id}` : "User not found")
+
+          if (!user) {
+            console.log("[v0] User not found")
+            return null
+          }
+
+          if (!user.isActive) {
+            console.log("[v0] User is not active")
+            return null
+          }
+
+          console.log("[v0] Comparing password")
+
+          let isPasswordValid = false
+          try {
+            isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash)
+          } catch (bcryptError) {
+            console.error("[v0] Bcrypt error:", bcryptError)
+            return null
+          }
 
           if (!isPasswordValid) {
             console.log("[v0] Invalid password")
             return null
           }
 
-          console.log("[v0] Password valid, creating refresh token")
-
-          let franchiseeName = null
-          if (user.franchiseeId) {
-            try {
-              const franchisee = await prisma.franchisee.findUnique({
-                where: { id: user.franchiseeId },
-                select: { name: true },
-              })
-              franchiseeName = franchisee?.name || null
-            } catch (error) {
-              console.log("[v0] Error loading franchisee:", error)
-            }
-          }
-
-          let permissions = null
-          try {
-            const userPermissions = await prisma.userPermission.findUnique({
-              where: { userId: user.id },
-            })
-            permissions = userPermissions
-          } catch (error) {
-            console.log("[v0] Error loading permissions:", error)
-          }
-
-          const expiresAt = new Date()
-          expiresAt.setDate(expiresAt.getDate() + 7)
-
-          const refreshToken = await prisma.refreshToken.create({
-            data: {
-              token: crypto.randomUUID(),
-              userId: user.id,
-              expiresAt,
-            },
-          })
-
-          console.log("[v0] Auth successful for user:", user.id)
+          console.log("[v0] Authentication successful, returning user data")
 
           return {
             id: user.id,
             name: user.name,
+            email: user.phone,
             phone: user.phone,
             role: user.role,
-            franchiseeId: user.franchiseeId,
-            franchiseeName,
-            permissions,
-            refreshToken: refreshToken.token,
+            franchiseeId: user.franchiseeId || null,
           }
         } catch (error) {
-          console.error("[v0] Error in authorize:", error)
+          console.error("[v0] Unexpected error in authorize:", error)
           return null
         }
       },
@@ -98,33 +78,41 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
-    maxAge: 15 * 60, // 15 minutes for access token
+    maxAge: 7 * 24 * 60 * 60,
   },
   pages: {
     signIn: "/login",
   },
   callbacks: {
     async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-        token.role = user.role
-        token.franchiseeId = user.franchiseeId
-        token.franchiseeName = user.franchiseeName
-        token.permissions = user.permissions
-        token.refreshToken = user.refreshToken
+      try {
+        if (user) {
+          token.id = user.id
+          token.role = user.role
+          token.phone = user.phone
+          token.franchiseeId = user.franchiseeId
+        }
+        return token
+      } catch (error) {
+        console.error("[v0] Error in jwt callback:", error)
+        return token
       }
-      return token
     },
     async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id as string
-        session.user.role = token.role as string
-        session.user.franchiseeId = token.franchiseeId as string
-        session.user.franchiseeName = token.franchiseeName as string
-        session.user.permissions = token.permissions
-        session.user.refreshToken = token.refreshToken as string
+      try {
+        if (token && session.user) {
+          session.user.id = token.id as string
+          session.user.role = token.role as string
+          session.user.phone = token.phone as string
+          session.user.franchiseeId = token.franchiseeId as string | null
+        }
+        return session
+      } catch (error) {
+        console.error("[v0] Error in session callback:", error)
+        return session
       }
-      return session
     },
   },
+  debug: true, // Force debug mode to get more logs
+  secret: process.env.NEXTAUTH_SECRET, // Explicitly set secret
 }
