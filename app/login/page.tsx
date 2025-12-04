@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
@@ -12,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -22,21 +21,17 @@ export default function LoginPage() {
     setError("")
     setLoading(true)
 
-    console.log("[v0] Login attempt:", { email })
-
     try {
       const result = await signIn("credentials", {
-        email,
+        phone,
         password,
         redirect: false,
       })
 
-      console.log("[v0] Login result:", result)
-
       if (result?.error) {
-        setError("Неверный email или пароль")
+        setError("Неверный номер телефона или пароль")
       } else if (result?.ok) {
-        router.push("/")
+        router.push("/dashboard")
         router.refresh()
       }
     } catch (err) {
@@ -57,13 +52,13 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="phone">Номер телефона</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="user@questlegends.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="phone"
+                type="tel"
+                placeholder="+79000000000"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
                 required
                 disabled={loading}
               />
@@ -84,8 +79,10 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Вход..." : "Войти"}
             </Button>
-            <div className="text-xs text-gray-500 text-center mt-4">
-              Тестовые данные: любой email из БД, пароль: demo123
+            <div className="text-xs text-gray-500 text-center mt-4 space-y-1">
+              <p className="font-medium">Супер-админ УК:</p>
+              <p>Телефон: +79000000000</p>
+              <p>Пароль: admin123</p>
             </div>
           </form>
         </CardContent>

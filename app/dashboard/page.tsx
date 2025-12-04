@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useSession } from "next-auth/react"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { DashboardUK } from "@/components/dashboard-uk"
@@ -13,7 +13,6 @@ import { TransactionsERP } from "@/components/transactions-erp"
 import { PersonnelSection } from "@/components/personnel-section"
 import { KnowledgeBaseSection } from "@/components/knowledge-base-section"
 import { NotificationsSection } from "@/components/notifications-section"
-import { useAuth } from "@/contexts/auth-context"
 import { FinancesAdmin } from "@/components/finances-admin"
 import { PersonnelScheduleAdmin } from "@/components/personnel-schedule-admin"
 import { FinancesFranchisee } from "@/components/finances-franchisee"
@@ -36,33 +35,39 @@ type View =
 
 export default function Dashboard() {
   const router = useRouter()
-  const { user, isLoading } = useAuth()
+  const { data: session, status } = useSession()
   const [view, setView] = useState<View>("dashboard")
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
-    if (isLoading) return
-
-    if (!user) {
+    if (status === "loading") return
+    if (!session) {
       router.push("/login")
     }
-  }, [user, isLoading, router])
+  }, [session, status, router])
 
-  if (isLoading || !user) {
+  if (status === "loading" || !session) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Загрузка...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Загрузка...</p>
         </div>
       </div>
     )
   }
 
+  const user = {
+    id: session.user.id,
+    name: session.user.name || "Пользователь",
+    role: session.user.role || "uk",
+    email: session.user.email || "",
+  }
+
   const renderView = () => {
     switch (view) {
       case "dashboard":
-        if (user.role === "uk") return <DashboardUK />
+        if (user.role === "uk" || user.role === "uk_employee") return <DashboardUK />
         if (user.role === "franchisee") return <DashboardFranchisee />
         if (user.role === "admin") return <DashboardAdmin />
         if (user.role === "employee") return <DashboardEmployee />
@@ -88,7 +93,7 @@ export default function Dashboard() {
       case "notifications":
         return <NotificationsSection role={user.role} />
       case "access":
-        if (user.role === "uk") return <AccessManagementUK />
+        if (user.role === "uk" || user.role === "uk_employee") return <AccessManagementUK />
         if (user.role === "franchisee") return <AccessManagementFranchisee />
         if (user.role === "admin") return <AccessManagementAdmin />
         return <DashboardUK />
@@ -120,7 +125,7 @@ export default function Dashboard() {
         <Header
           userName={user.name}
           role={
-            user.role === "uk"
+            user.role === "uk" || user.role === "uk_employee"
               ? "Управляющая Компания"
               : user.role === "admin"
                 ? "Администратор"
