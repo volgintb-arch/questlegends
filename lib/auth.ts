@@ -15,45 +15,83 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Пароль", type: "password" },
       },
       async authorize(credentials) {
+        console.log("[v0] NextAuth authorize called with phone:", credentials?.phone)
+
         if (!credentials?.phone || !credentials?.password) {
+          console.log("[v0] Missing credentials")
           return null
         }
 
-        const user = await prisma.user.findUnique({
-          where: { phone: credentials.phone },
-          include: { franchisee: true, permissions: true },
-        })
+        try {
+          const user = await prisma.user.findUnique({
+            where: { phone: credentials.phone },
+          })
 
-        if (!user || !user.isActive) {
+          console.log("[v0] User found:", user ? user.id : "null")
+
+          if (!user || !user.isActive) {
+            console.log("[v0] User not found or inactive")
+            return null
+          }
+
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash)
+
+          if (!isPasswordValid) {
+            console.log("[v0] Invalid password")
+            return null
+          }
+
+          console.log("[v0] Password valid, creating refresh token")
+
+          let franchiseeName = null
+          if (user.franchiseeId) {
+            try {
+              const franchisee = await prisma.franchisee.findUnique({
+                where: { id: user.franchiseeId },
+                select: { name: true },
+              })
+              franchiseeName = franchisee?.name || null
+            } catch (error) {
+              console.log("[v0] Error loading franchisee:", error)
+            }
+          }
+
+          let permissions = null
+          try {
+            const userPermissions = await prisma.userPermission.findUnique({
+              where: { userId: user.id },
+            })
+            permissions = userPermissions
+          } catch (error) {
+            console.log("[v0] Error loading permissions:", error)
+          }
+
+          const expiresAt = new Date()
+          expiresAt.setDate(expiresAt.getDate() + 7)
+
+          const refreshToken = await prisma.refreshToken.create({
+            data: {
+              token: crypto.randomUUID(),
+              userId: user.id,
+              expiresAt,
+            },
+          })
+
+          console.log("[v0] Auth successful for user:", user.id)
+
+          return {
+            id: user.id,
+            name: user.name,
+            phone: user.phone,
+            role: user.role,
+            franchiseeId: user.franchiseeId,
+            franchiseeName,
+            permissions,
+            refreshToken: refreshToken.token,
+          }
+        } catch (error) {
+          console.error("[v0] Error in authorize:", error)
           return null
-        }
-
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash)
-
-        if (!isPasswordValid) {
-          return null
-        }
-
-        const expiresAt = new Date()
-        expiresAt.setDate(expiresAt.getDate() + 7)
-        
-        const refreshToken = await prisma.refreshToken.create({
-          data: {
-            token: crypto.randomUUID(),
-            userId: user.id,
-            expiresAt,
-          },
-        })
-
-        return {
-          id: user.id,
-          name: user.name,
-          phone: user.phone,
-          role: user.role,
-          franchiseeId: user.franchiseeId,
-          franchiseeName: user.franchisee?.name,
-          permissions: user.permissions,
-          refreshToken: refreshToken.token,
         }
       },
     }),
