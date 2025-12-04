@@ -81,10 +81,19 @@ export async function POST(request: Request) {
       password,
       franchiseeId,
       email,
+      city,
     } = body
 
     if (!name || !role) {
       return NextResponse.json({ error: "Name and role are required" }, { status: 400 })
+    }
+
+    if (role === "franchisee" && !city) {
+      return NextResponse.json({ error: "City is required for franchisee role" }, { status: 400 })
+    }
+
+    if (["animator", "host", "dj", "admin"].includes(role) && !franchiseeId && !session.user.franchiseeId) {
+      return NextResponse.json({ error: "Franchisee is required for admin and personnel roles" }, { status: 400 })
     }
 
     // Strict RBAC validation
@@ -110,7 +119,10 @@ export async function POST(request: Request) {
     }
 
     const userEmail =
-      email || (phone ? `${phone}@questlegends.com` : `${name.toLowerCase().replace(/\s+/g, ".")}@questlegends.com`)
+      email ||
+      (phone
+        ? `${phone.replace(/\D/g, "")}@questlegends.com`
+        : `${name.toLowerCase().replace(/\s+/g, ".")}@questlegends.com`)
 
     // Generate password
     const tempPassword = password || Math.random().toString(36).slice(-8)
@@ -118,8 +130,23 @@ export async function POST(request: Request) {
 
     let userFranchiseeId = franchiseeId || session.user.franchiseeId
 
-    if (session.user.role === "uk" && (role === "franchisee" || role === "uk_employee")) {
-      userFranchiseeId = franchiseeId || null
+    if (role === "franchisee" && city && session.user.role === "uk") {
+      console.log("[v0] Creating franchisee record for city:", city)
+
+      const newFranchisee = await prisma.franchisee.create({
+        data: {
+          name: `${city} - ${name}`,
+          city: city,
+          address: `г. ${city}`,
+        },
+      })
+
+      console.log("[v0] Franchisee created:", newFranchisee.id)
+      userFranchiseeId = newFranchisee.id
+    }
+
+    if (session.user.role === "uk" && role === "uk_employee") {
+      userFranchiseeId = null
     }
 
     const finalRole = ["animator", "host", "dj"].includes(role) ? "employee" : role

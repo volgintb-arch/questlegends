@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   X,
   Edit2,
@@ -73,11 +73,33 @@ export function DealCardFranchise({ deal, role, onClose, onUpdate }: DealCardFra
   const [isEditingField, setIsEditingField] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<Record<string, any>>({})
   const [messageInput, setMessageInput] = useState("")
+  const [activeTab, setActiveTab] = useState<"overview" | "activities" | "tasks" | "files">("overview")
+  const [editField, setEditField] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [managers, setManagers] = useState<string[]>([])
+  const [loadingManagers, setLoadingManagers] = useState(true)
+
+  useEffect(() => {
+    fetchManagers()
+  }, [])
+
+  const fetchManagers = async () => {
+    try {
+      const response = await fetch("/api/users?role=uk,franchisee")
+      if (response.ok) {
+        const users = await response.json()
+        setManagers(users.map((u: any) => u.name))
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching managers:", error)
+    } finally {
+      setLoadingManagers(false)
+    }
+  }
 
   // Stage options for B2B CRM
   const stageOptions = ["Лид", "Переговоры", "Франшиза открыта", "Потеряна"]
   const leadSources = ["Выставка", "Сайт", "Холодный звонок", "Партнер", "Рекомендация", "Соцсети"]
-  const managers = ["Иван Иванов", "Петр Петров", "Анна Сидорова"]
   const regions = ["Москва", "Санкт-Петербург", "Казань", "Екатеринбург", "Новосибирск"]
 
   const handleFieldEdit = (field: string, value: any) => {
@@ -182,8 +204,8 @@ export function DealCardFranchise({ deal, role, onClose, onUpdate }: DealCardFra
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 z-50">
-      <div className="bg-background border border-border rounded-lg w-full max-w-7xl h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-card border border-border rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-4">
@@ -383,12 +405,17 @@ export function DealCardFranchise({ deal, role, onClose, onUpdate }: DealCardFra
                           value={editValues.responsibleManager || deal.responsibleManager}
                           onChange={(e) => setEditValues({ ...editValues, responsibleManager: e.target.value })}
                           className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
+                          disabled={loadingManagers}
                         >
-                          {managers.map((mgr) => (
-                            <option key={mgr} value={mgr}>
-                              {mgr}
-                            </option>
-                          ))}
+                          {loadingManagers ? (
+                            <option>Загрузка...</option>
+                          ) : (
+                            managers.map((mgr) => (
+                              <option key={mgr} value={mgr}>
+                                {mgr}
+                              </option>
+                            ))
+                          )}
                         </select>
                         <button onClick={() => handleFieldSave("responsibleManager")} className="text-primary">
                           <Save size={16} />

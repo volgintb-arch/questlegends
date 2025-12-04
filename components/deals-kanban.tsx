@@ -146,39 +146,30 @@ export function DealsKanban({ role }: DealsKanbanProps) {
     setIsEditModalOpen(true)
   }
 
-  const handleViewDeal = (deal: Deal) => {
-    const detailedDeal = {
-      ...deal,
-      amount: Number.parseFloat(deal.amount.replace(/[^\d]/g, "")),
-      source: "Сайт",
-      createdAt: new Date(),
-      stage: "Лиды",
-      participants: deal.participants || 0,
-      checkPerPerson: (deal as any).checkPerPerson || 0,
-      animatorsCount: (deal as any).animatorsCount || 0,
-      animatorRate: (deal as any).animatorRate || 0,
-      hostRate: (deal as any).hostRate || 0,
-      djRate: (deal as any).djRate || 0,
-      contact: {
-        name: "Иван Иванов",
-        phone: "+7 (999) 123-45-67",
-        email: "client@example.com",
-        company: "ООО Компания",
-      },
-      responsible: user.name,
-      activities: [
-        {
-          id: "1",
-          type: "event" as const,
-          timestamp: new Date(),
-          user: "Система",
-          content: "Сделка создана",
-        },
-      ],
-      tasks: [],
+  const handleViewDeal = async (deal: Deal) => {
+    try {
+      const response = await fetch(`/api/deals/${deal.id}`)
+      if (response.ok) {
+        const fullDeal = await response.json()
+        setViewingDeal({
+          ...fullDeal,
+          amount: fullDeal.price || 0,
+          participants: fullDeal.participants || 0,
+          contact: {
+            name: fullDeal.clientName || "",
+            phone: fullDeal.clientPhone || "",
+            email: fullDeal.clientEmail || "",
+            company: fullDeal.clientCompany || "",
+          },
+          responsible: fullDeal.responsibleManager || user?.name || "",
+          activities: fullDeal.activities || [],
+          tasks: fullDeal.tasks || [],
+        })
+        setIsViewModalOpen(true)
+      }
+    } catch (error) {
+      console.error("[v0] Error loading deal details:", error)
     }
-    setViewingDeal(detailedDeal)
-    setIsViewModalOpen(true)
   }
 
   const handleSaveDeal = (updatedDeal: Deal) => {

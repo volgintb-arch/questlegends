@@ -13,53 +13,23 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         try {
-          console.log("[v0] NextAuth authorize started")
-
           if (!credentials?.phone || !credentials?.password) {
-            console.log("[v0] Missing credentials")
             return null
           }
 
-          console.log("[v0] Searching user with phone:", credentials.phone)
+          const user = await prisma.user.findUnique({
+            where: { phone: credentials.phone },
+          })
 
-          let user
-          try {
-            user = await prisma.user.findUnique({
-              where: { phone: credentials.phone },
-            })
-          } catch (dbError) {
-            console.error("[v0] Database error finding user:", dbError)
+          if (!user || !user.isActive || !user.passwordHash) {
             return null
           }
 
-          console.log("[v0] User lookup result:", user ? `Found user ${user.id}` : "User not found")
-
-          if (!user) {
-            console.log("[v0] User not found")
-            return null
-          }
-
-          if (!user.isActive) {
-            console.log("[v0] User is not active")
-            return null
-          }
-
-          console.log("[v0] Comparing password")
-
-          let isPasswordValid = false
-          try {
-            isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash)
-          } catch (bcryptError) {
-            console.error("[v0] Bcrypt error:", bcryptError)
-            return null
-          }
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash)
 
           if (!isPasswordValid) {
-            console.log("[v0] Invalid password")
             return null
           }
-
-          console.log("[v0] Authentication successful, returning user data")
 
           return {
             id: user.id,
@@ -70,7 +40,7 @@ export const authOptions: NextAuthOptions = {
             franchiseeId: user.franchiseeId || null,
           }
         } catch (error) {
-          console.error("[v0] Unexpected error in authorize:", error)
+          console.error("[v0] NextAuth authorize error:", error)
           return null
         }
       },
@@ -78,7 +48,6 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
-    maxAge: 7 * 24 * 60 * 60,
   },
   pages: {
     signIn: "/login",
@@ -94,7 +63,7 @@ export const authOptions: NextAuthOptions = {
         }
         return token
       } catch (error) {
-        console.error("[v0] Error in jwt callback:", error)
+        console.error("[v0] JWT callback error:", error)
         return token
       }
     },
@@ -108,11 +77,11 @@ export const authOptions: NextAuthOptions = {
         }
         return session
       } catch (error) {
-        console.error("[v0] Error in session callback:", error)
+        console.error("[v0] Session callback error:", error)
         return session
       }
     },
   },
-  debug: true, // Force debug mode to get more logs
-  secret: process.env.NEXTAUTH_SECRET, // Explicitly set secret
+  secret: process.env.NEXTAUTH_SECRET,
+  debug: false,
 }

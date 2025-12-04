@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, Filter } from "lucide-react"
 import { KanbanColumn } from "./kanban-column"
 
@@ -17,104 +17,43 @@ interface FranchiseSale {
 
 export function FranchiseSalesKanban() {
   const [filterOpen, setFilterOpen] = useState(false)
+  const [deals, setDeals] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const franchiseSales = {
-    Лиды: [
-      {
-        id: "FS-001",
-        title: "Коммерческое помещение 50м²",
-        city: "Москва-Юг",
-        investmentRequired: "2,500,000 ₽",
-        contactName: "Иван П.",
-        daysOpen: 5,
-        priority: "high" as const,
-        expectedROI: "18 месяцев",
-      },
-      {
-        id: "FS-002",
-        title: 'Торговый центр "Взлет"',
-        city: "Екатеринбург",
-        investmentRequired: "1,800,000 ₽",
-        contactName: "Сергей К.",
-        daysOpen: 12,
-        expectedROI: "22 месяца",
-      },
-    ],
-    Переговоры: [
-      {
-        id: "FS-003",
-        title: 'Офис в БЦ "Энергия"',
-        city: "Санкт-Петербург",
-        investmentRequired: "2,200,000 ₽",
-        contactName: "Мария В.",
-        daysOpen: 8,
-        expectedROI: "20 месяцев",
-      },
-      {
-        id: "FS-004",
-        title: "Премиум локация центр",
-        city: "Казань",
-        investmentRequired: "3,100,000 ₽",
-        contactName: "Александр Л.",
-        daysOpen: 3,
-        priority: "high" as const,
-        expectedROI: "16 месяцев",
-      },
-      {
-        id: "FS-005",
-        title: "Новый микрорайон",
-        city: "Новосибирск",
-        investmentRequired: "1,950,000 ₽",
-        contactName: "Дмитрий Н.",
-        daysOpen: 15,
-        expectedROI: "24 месяца",
-      },
-    ],
-    Предложение: [
-      {
-        id: "FS-006",
-        title: 'ТЦ "Квадрат" 60м²',
-        city: "Тверь",
-        investmentRequired: "1,500,000 ₽",
-        contactName: "Ольга С.",
-        daysOpen: 2,
-        priority: "high" as const,
-        expectedROI: "19 месяцев",
-      },
-      {
-        id: "FS-007",
-        title: "Пустой магазин на главной",
-        city: "Нижний Новгород",
-        investmentRequired: "2,100,000 ₽",
-        contactName: "Павел Т.",
-        daysOpen: 6,
-        expectedROI: "21 месяц",
-      },
-    ],
-    Подписано: [
-      {
-        id: "FS-008",
-        title: "Договор франчайзи Ростов",
-        city: "Ростов-на-Дону",
-        investmentRequired: "2,400,000 ₽",
-        contactName: "Юлия Р.",
-        daysOpen: 20,
-        expectedROI: "17 месяцев",
-      },
-      {
-        id: "FS-009",
-        title: "Договор франчайзи Волга",
-        city: "Саратов",
-        investmentRequired: "2,700,000 ₽",
-        contactName: "Вадим М.",
-        daysOpen: 1,
-        priority: "high" as const,
-        expectedROI: "19 месяцев",
-      },
-    ],
+  useEffect(() => {
+    fetchB2BDeals()
+  }, [])
+
+  const fetchB2BDeals = async () => {
+    try {
+      const response = await fetch("/api/b2b-deals")
+      if (response.ok) {
+        const data = await response.json()
+        setDeals(data)
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching B2B deals:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const totalDeals = Object.values(franchiseSales).flat().length
+  const franchiseSales = {
+    Лиды: deals.filter((d) => d.stage === "Лиды"),
+    Переговоры: deals.filter((d) => d.stage === "Переговоры"),
+    Предложение: deals.filter((d) => d.stage === "Предложение"),
+    Подписано: deals.filter((d) => d.stage === "Подписано"),
+  }
+
+  const totalDeals = deals.length
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Загрузка сделок...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

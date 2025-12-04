@@ -1,13 +1,18 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Calendar, ChevronLeft, ChevronRight, User, CheckCircle2, AlertCircle, X, Filter } from "lucide-react"
+import { Calendar, Filter, ChevronLeft, ChevronRight, Users, X, Check } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 interface StaffMember {
   id: string
   name: string
   role: "Аниматор" | "Ведущий" | "DJ"
   avatar?: string
+  phone: string
+  status: "available"
+  workingHours: string
+  rating: number
 }
 
 interface GameEvent {
@@ -32,54 +37,22 @@ interface AssignmentModalData {
 }
 
 export function PersonnelScheduleAdmin() {
-  const [selectedDate, setSelectedDate] = useState("2025-01-20")
-  const [viewMode, setViewMode] = useState<"week" | "day">("day")
-  const [roleFilter, setRoleFilter] = useState<string>("all")
-  const [periodFilter, setPeriodFilter] = useState<string>("today")
-  const [customDateFrom, setCustomDateFrom] = useState("")
-  const [customDateTo, setCustomDateTo] = useState("")
-  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([])
-  const [showOnlyFree, setShowOnlyFree] = useState(false)
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [showFilters, setShowFilters] = useState(false)
+  const { user } = useAuth()
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [viewMode, setViewMode] = useState<"day" | "week">("day")
+  const [roleFilter, setRoleFilter] = useState<"all" | "animator" | "host" | "dj">("all")
   const [availableStaff, setAvailableStaff] = useState<StaffMember[]>([])
   const [isLoadingStaff, setIsLoadingStaff] = useState(true)
-  const [gameEvents, setGameEvents] = useState<GameEvent[]>([
-    {
-      id: "g1",
-      dealId: "deal-123",
-      clientName: "ООО Рога и Копыта",
-      date: "2025-01-20",
-      startTime: "14:00",
-      endTime: "16:00",
-      location: "Москва",
-      requiredAnimators: 2,
-      requiredHosts: 1,
-      requiredDJ: 0,
-      assignedStaff: [{ staffId: "s1", role: "Аниматор" }],
-      status: "confirmed",
-      package: "Стандарт",
-    },
-    {
-      id: "g2",
-      dealId: "deal-456",
-      clientName: "День рождения Василия",
-      date: "2025-01-20",
-      startTime: "18:00",
-      endTime: "20:00",
-      location: "Москва",
-      requiredAnimators: 1,
-      requiredHosts: 1,
-      requiredDJ: 1,
-      assignedStaff: [
-        { staffId: "s2", role: "Аниматор" },
-        { staffId: "s3", role: "Ведущий" },
-        { staffId: "s4", role: "DJ" },
-      ],
-      status: "confirmed",
-      package: "Премиум",
-    },
-  ])
+  const [gameEvents, setGameEvents] = useState<GameEvent[]>([])
+  const [loadingGames, setLoadingGames] = useState(true)
+  const [showFilters, setShowFilters] = useState(false)
+  const [showOnlyFree, setShowOnlyFree] = useState(false)
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([])
+  const [draggedStaff, setDraggedStaff] = useState<StaffMember | null>(null)
+  const [assignmentModal, setAssignmentModal] = useState<AssignmentModalData>({
+    game: null as any,
+    isOpen: false,
+  })
 
   const timeSlots = Array.from({ length: 13 }, (_, i) => {
     const hour = 10 + i
@@ -88,35 +61,81 @@ export function PersonnelScheduleAdmin() {
 
   const filteredStaff = roleFilter === "all" ? availableStaff : availableStaff.filter((s) => s.role === roleFilter)
 
+  useEffect(() => {
+    if (user?.franchiseeId) {
+      fetchStaff()
+      fetchGameEvents()
+    }
+  }, [user])
+
+  const fetchStaff = async () => {
+    try {
+      setIsLoadingStaff(true)
+      const response = await fetch(`/api/personnel?franchiseeId=${user?.franchiseeId}`)
+      if (response.ok) {
+        const data = await response.json()
+        const formattedStaff = data.map((p: any) => ({
+          id: p.id,
+          name: p.user?.name || "Unknown",
+          role: p.position || "Персонал",
+          phone: p.user?.phone || "",
+          status: "available" as const,
+          workingHours: p.workingHours || "Полный день",
+          rating: p.rating || 4.5,
+        }))
+        setAvailableStaff(formattedStaff)
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching staff:", error)
+    } finally {
+      setIsLoadingStaff(false)
+    }
+  }
+
+  const fetchGameEvents = async () => {
+    try {
+      setLoadingGames(true)
+      const response = await fetch(`/api/deals?franchiseeId=${user?.franchiseeId}`)
+      if (response.ok) {
+        const deals = await response.json()
+        const events = deals
+          .filter((d: any) => d.gameDate && d.stage === "Внесена предоплата (Бронь)")
+          .map((d: any) => ({
+            id: d.id,
+            dealId: d.id,
+            clientName: d.clientName || "Клиент",
+            date: new Date(d.gameDate).toISOString().split("T")[0],
+            startTime: d.gameStartTime || "14:00",
+            endTime: d.gameEndTime || "16:00",
+            location: d.franchisee?.city || "",
+            requiredAnimators: d.animatorsCount || 0,
+            requiredHosts: d.hostsCount || 0,
+            requiredDJ: d.djsCount || 0,
+            assignedStaff: [],
+            status: "confirmed" as const,
+            package: d.packageType || "",
+          }))
+        setGameEvents(events)
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching game events:", error)
+    } finally {
+      setLoadingGames(false)
+    }
+  }
+
   const getPeriodDates = () => {
     const today = new Date()
     let from = new Date()
     let to = new Date()
 
-    switch (periodFilter) {
-      case "today":
-        from = to = today
+    switch (viewMode) {
+      case "day":
+        from = to = selectedDate
         break
-      case "tomorrow":
-        from = to = new Date(today.getTime() + 24 * 60 * 60 * 1000)
-        break
-      case "this_week":
-        from = today
-        to = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-        break
-      case "next_week":
-        from = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-        to = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000)
-        break
-      case "this_month":
-        from = new Date(today.getFullYear(), today.getMonth(), 1)
-        to = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-        break
-      case "custom":
-        if (customDateFrom && customDateTo) {
-          from = new Date(customDateFrom)
-          to = new Date(customDateTo)
-        }
+      case "week":
+        from = new Date(selectedDate.getTime())
+        to = new Date(selectedDate.getTime() + 7 * 24 * 60 * 60 * 1000)
         break
     }
 
@@ -125,21 +144,7 @@ export function PersonnelScheduleAdmin() {
 
   const { from, to } = getPeriodDates()
 
-  const filteredByEmployee =
-    selectedEmployees.length > 0
-      ? gameEvents.filter((g) => g.assignedStaff.some((a) => selectedEmployees.includes(a.staffId)))
-      : gameEvents
-
-  const filteredByStatus =
-    statusFilter === "all"
-      ? filteredByEmployee
-      : statusFilter === "requires_assignment"
-        ? filteredByEmployee.filter((g) => !isGameComplete(g))
-        : statusFilter === "staffed"
-          ? filteredByEmployee.filter((g) => isGameComplete(g) && g.status !== "completed")
-          : filteredByEmployee.filter((g) => g.status === "completed")
-
-  const displayedGames = filteredByStatus.filter((g) => {
+  const displayedGames = gameEvents.filter((g) => {
     const gameDate = new Date(g.date)
     const fromDate = new Date(from)
     const toDate = new Date(to)
@@ -169,14 +174,12 @@ export function PersonnelScheduleAdmin() {
   const handleDropOnGame = (game: GameEvent) => {
     if (!draggedStaff) return
 
-    // Check if staff already assigned
     if (game.assignedStaff.some((a) => a.staffId === draggedStaff.id)) {
       alert("Этот сотрудник уже назначен на эту игру")
       setDraggedStaff(null)
       return
     }
 
-    // Add staff to game
     const updatedGames = gameEvents.map((g) => {
       if (g.id === game.id) {
         return {
@@ -215,52 +218,12 @@ export function PersonnelScheduleAdmin() {
     setAssignmentModal({ game, isOpen: true })
   }
 
-  const [assignmentModal, setAssignmentModal] = useState<AssignmentModalData>({
-    game: null as any,
-    isOpen: false,
-  })
-  const [draggedStaff, setDraggedStaff] = useState<StaffMember | null>(null)
-
-  useEffect(() => {
-    fetchAvailableStaff()
-  }, [])
-
-  const fetchAvailableStaff = async () => {
-    setIsLoadingStaff(true)
-    try {
-      const response = await fetch("/api/users?role=animator,host,dj")
-      const data = await response.json()
-
-      if (data.success && Array.isArray(data.data)) {
-        const mappedStaff: StaffMember[] = data.data.map((user: any) => ({
-          id: user.id,
-          name: user.name,
-          role: getRoleLabel(user.role) as "Аниматор" | "Ведущий" | "DJ",
-        }))
-        setAvailableStaff(mappedStaff)
-      }
-    } catch (error) {
-      console.error("[v0] Error fetching staff:", error)
-    } finally {
-      setIsLoadingStaff(false)
-    }
-  }
-
-  const getRoleLabel = (role: string): string => {
-    const labels: Record<string, string> = {
-      animator: "Аниматор",
-      host: "Ведущий",
-      dj: "DJ",
-    }
-    return labels[role] || role
-  }
-
-  if (isLoadingStaff) {
+  if (isLoadingStaff || loadingGames) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Загрузка персонала...</p>
+          <p className="text-muted-foreground">Загрузка данных...</p>
         </div>
       </div>
     )
@@ -288,9 +251,9 @@ export function PersonnelScheduleAdmin() {
                 <label className="block text-sm font-medium text-foreground mb-2">Период</label>
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   <button
-                    onClick={() => setPeriodFilter("today")}
+                    onClick={() => setViewMode("day")}
                     className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                      periodFilter === "today"
+                      viewMode === "day"
                         ? "bg-primary text-primary-foreground"
                         : "bg-background border border-border hover:bg-muted"
                     }`}
@@ -298,86 +261,30 @@ export function PersonnelScheduleAdmin() {
                     Сегодня
                   </button>
                   <button
-                    onClick={() => setPeriodFilter("tomorrow")}
+                    onClick={() => setViewMode("week")}
                     className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                      periodFilter === "tomorrow"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-background border border-border hover:bg-muted"
-                    }`}
-                  >
-                    Завтра
-                  </button>
-                  <button
-                    onClick={() => setPeriodFilter("this_week")}
-                    className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                      periodFilter === "this_week"
+                      viewMode === "week"
                         ? "bg-primary text-primary-foreground"
                         : "bg-background border border-border hover:bg-muted"
                     }`}
                   >
                     Эта неделя
                   </button>
-                  <button
-                    onClick={() => setPeriodFilter("next_week")}
-                    className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                      periodFilter === "next_week"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-background border border-border hover:bg-muted"
-                    }`}
-                  >
-                    След. неделя
-                  </button>
-                  <button
-                    onClick={() => setPeriodFilter("this_month")}
-                    className={`px-3 py-2 rounded-lg text-sm col-span-2 transition-colors ${
-                      periodFilter === "this_month"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-background border border-border hover:bg-muted"
-                    }`}
-                  >
-                    Месяц
-                  </button>
                 </div>
-
-                {periodFilter === "custom" && (
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <input
-                      type="date"
-                      value={customDateFrom}
-                      onChange={(e) => setCustomDateFrom(e.target.value)}
-                      className="px-3 py-2 bg-background border border-border rounded-lg text-foreground text-sm"
-                      placeholder="От"
-                    />
-                    <input
-                      type="date"
-                      value={customDateTo}
-                      onChange={(e) => setCustomDateTo(e.target.value)}
-                      className="px-3 py-2 bg-background border border-border rounded-lg text-foreground text-sm"
-                      placeholder="До"
-                    />
-                  </div>
-                )}
-
-                <button
-                  onClick={() => setPeriodFilter("custom")}
-                  className="w-full mt-2 px-3 py-2 bg-background border border-border hover:bg-muted rounded-lg text-sm transition-colors"
-                >
-                  Произвольный период
-                </button>
               </div>
 
-              {/* Status filter */}
+              {/* Role filter */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Статус игры</label>
+                <label className="block text-sm font-medium text-foreground mb-2">Роль</label>
                 <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value as any)}
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground text-sm"
                 >
-                  <option value="all">Все</option>
-                  <option value="requires_assignment">Требуется назначение</option>
-                  <option value="staffed">Укомплектованные</option>
-                  <option value="completed">Прошедшие</option>
+                  <option value="all">Все роли</option>
+                  <option value="Аниматор">Аниматоры</option>
+                  <option value="Ведущий">Ведущие</option>
+                  <option value="DJ">DJ</option>
                 </select>
               </div>
 
@@ -401,10 +308,10 @@ export function PersonnelScheduleAdmin() {
           <h2 className="text-xl font-bold text-foreground mb-4">Доступный Персонал</h2>
 
           <div className="flex items-center gap-2 mb-4">
-            <Filter size={18} className="text-muted-foreground" />
+            <Users size={18} className="text-muted-foreground" />
             <select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
+              onChange={(e) => setRoleFilter(e.target.value as any)}
               className="flex-1 px-3 py-2 bg-muted border border-border rounded-lg text-foreground text-sm"
             >
               <option value="all">Все роли</option>
@@ -457,13 +364,13 @@ export function PersonnelScheduleAdmin() {
                 }`}
               >
                 <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                  <User size={20} className="text-primary" />
+                  <Users size={20} className="text-primary" />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-foreground text-sm">{staff.name}</p>
                   <p className="text-xs text-muted-foreground">{staff.role}</p>
                 </div>
-                {isSelected && <CheckCircle2 size={16} className="text-primary" />}
+                {isSelected && <Check size={16} className="text-primary" />}
               </div>
             )
           })}
@@ -483,7 +390,7 @@ export function PersonnelScheduleAdmin() {
               onClick={() => {
                 const date = new Date(selectedDate)
                 date.setDate(date.getDate() - 1)
-                setSelectedDate(date.toISOString().split("T")[0])
+                setSelectedDate(date)
               }}
               className="p-2 hover:bg-muted rounded-lg transition-colors"
             >
@@ -495,8 +402,8 @@ export function PersonnelScheduleAdmin() {
                 <Calendar size={20} className="text-primary" />
                 <input
                   type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  value={selectedDate.toISOString().split("T")[0]}
+                  onChange={(e) => setSelectedDate(new Date(e.target.value))}
                   className="px-3 py-2 bg-muted border border-border rounded-lg text-foreground"
                 />
               </div>
@@ -529,7 +436,7 @@ export function PersonnelScheduleAdmin() {
               onClick={() => {
                 const date = new Date(selectedDate)
                 date.setDate(date.getDate() + 1)
-                setSelectedDate(date.toISOString().split("T")[0])
+                setSelectedDate(date)
               }}
               className="p-2 hover:bg-muted rounded-lg transition-colors"
             >
@@ -582,9 +489,9 @@ export function PersonnelScheduleAdmin() {
                             </p>
                           </div>
                           {isGameComplete(game) ? (
-                            <CheckCircle2 size={20} className="text-success" />
+                            <Check size={20} className="text-success" />
                           ) : (
-                            <AlertCircle size={20} className="text-destructive" />
+                            <X size={20} className="text-destructive" />
                           )}
                         </div>
 
@@ -608,7 +515,7 @@ export function PersonnelScheduleAdmin() {
                                 key={assignment.staffId}
                                 className="flex items-center gap-1 bg-primary/20 text-primary px-2 py-1 rounded text-xs"
                               >
-                                <User size={12} />
+                                <Users size={12} />
                                 <span>{staff.name}</span>
                                 <button
                                   onClick={(e) => {
@@ -789,12 +696,12 @@ export function PersonnelScheduleAdmin() {
                 <div className="flex items-center gap-2">
                   {isGameComplete(assignmentModal.game) ? (
                     <>
-                      <CheckCircle2 size={20} className="text-success" />
+                      <Check size={20} className="text-success" />
                       <p className="font-medium text-success">Игра полностью укомплектована</p>
                     </>
                   ) : (
                     <>
-                      <AlertCircle size={20} className="text-destructive" />
+                      <X size={20} className="text-destructive" />
                       <p className="font-medium text-destructive">
                         Не хватает:{" "}
                         {getRequiredStaffCount(assignmentModal.game) - getAssignedStaffCount(assignmentModal.game)}{" "}

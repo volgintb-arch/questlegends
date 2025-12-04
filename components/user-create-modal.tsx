@@ -77,6 +77,19 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
       return
     }
 
+    if (
+      ["admin", "animator", "host", "dj"].includes(formData.role) &&
+      !formData.franchisee_id &&
+      !currentUser.franchiseeId
+    ) {
+      toast({
+        title: "Ошибка",
+        description: "Укажите локацию для создания сотрудника",
+        variant: "destructive",
+      })
+      return
+    }
+
     const password = formData.password || generatePassword()
 
     setIsLoading(true)
@@ -95,7 +108,9 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
           whatsapp: formData.whatsapp,
           description: formData.description,
           password: password,
-          franchiseeId: formData.franchisee_id || undefined,
+          franchiseeId:
+            formData.franchisee_id ||
+            (["admin", "animator", "host", "dj"].includes(formData.role) ? currentUser.franchiseeId : undefined),
           city: formData.city || undefined,
         }),
       })
@@ -245,26 +260,35 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
             </div>
           )}
 
-          {currentUser.role === "uk" && formData.role === "franchisee" && franchisees.length > 0 && (
-            <div className="space-y-2">
-              <Label htmlFor="franchisee">Локация</Label>
-              <Select
-                value={formData.franchisee_id}
-                onValueChange={(value) => setFormData({ ...formData, franchisee_id: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите локацию" />
-                </SelectTrigger>
-                <SelectContent>
-                  {franchisees.map((franchisee) => (
-                    <SelectItem key={franchisee.id} value={franchisee.id}>
-                      {franchisee.name} - {franchisee.location}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          {currentUser.role === "franchisee" &&
+            ["admin", "animator", "host", "dj"].includes(formData.role) &&
+            franchisees.length > 1 && (
+              <div className="space-y-2">
+                <Label htmlFor="franchisee">
+                  Локация <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={formData.franchisee_id}
+                  onValueChange={(value) => setFormData({ ...formData, franchisee_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите локацию" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {franchisees.map((franchisee) => (
+                      <SelectItem key={franchisee.id} value={franchisee.id}>
+                        {franchisee.name} - {franchisee.city}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {franchisees.length === 1
+                    ? "Будет создан в вашей локации автоматически"
+                    : "Выберите локацию для сотрудника"}
+                </p>
+              </div>
+            )}
 
           <div className="space-y-2">
             <Label htmlFor="telegram">Телеграм</Label>

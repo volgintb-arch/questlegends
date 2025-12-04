@@ -5,6 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { X, Save, DollarSign, User, MapPin, Package, Users } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { RF_CITIES } from "@/lib/constants/rf-cities"
 
 interface Deal {
   id: string
@@ -170,19 +171,26 @@ export function DealCreateModal({ isOpen, onClose, onCreate, role }: DealCreateM
           {role === "uk" ? (
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Локация *</label>
-              <select
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                className="w-full bg-background border border-border rounded-lg px-4 py-2 text-sm outline-none focus:border-primary"
-                required
-              >
-                <option value="">Выберите город</option>
-                {franchisees.map((f) => (
-                  <option key={f.id} value={f.location}>
-                    {f.location}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <MapPin
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10 pointer-events-none"
+                />
+                <select
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  className="w-full bg-background border border-border rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-primary"
+                  required
+                >
+                  <option value="">Выберите город</option>
+                  {RF_CITIES.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground">Города РФ с населением более 200 тысяч человек</p>
             </div>
           ) : (
             <div className="space-y-2">
