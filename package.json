@@ -21,7 +21,7 @@
     "@hello-pangea/dnd": "latest",
     "@hookform/resolvers": "^3.10.0",
     "@jest/globals": "latest",
-    "@neondatabase/serverless": "1.0.2",
+    "@neondatabase/serverless": "latest",
     "@next-auth/prisma-adapter": "1.0.5",
     "@prisma/client": "latest",
     "@radix-ui/react-accordion": "1.2.2",

@@ -21,7 +21,7 @@ importers:
         specifier: latest
         version: 30.2.0
       '@neondatabase/serverless':
-        specifier: 1.0.2
+        specifier: latest
         version: 1.0.2
       '@next-auth/prisma-adapter':
         specifier: 1.0.5

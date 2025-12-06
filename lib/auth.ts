@@ -1,7 +1,7 @@
 import type { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
-import { prisma } from "./prisma"
 import bcrypt from "bcryptjs"
+import { neon } from "@neondatabase/serverless"
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -17,11 +17,22 @@ export const authOptions: NextAuthOptions = {
             return null
           }
 
-          const user = await prisma.user.findUnique({
-            where: { phone: credentials.phone },
-          })
+          const sql = neon(process.env.DATABASE_URL!)
 
-          if (!user || !user.isActive || !user.passwordHash) {
+          const users = await sql`
+            SELECT id, name, phone, role, "passwordHash", "isActive", "franchiseeId"
+            FROM "User"
+            WHERE phone = ${credentials.phone}
+            LIMIT 1
+          `
+
+          if (users.length === 0) {
+            return null
+          }
+
+          const user = users[0]
+
+          if (!user.isActive || !user.passwordHash) {
             return null
           }
 
@@ -40,7 +51,7 @@ export const authOptions: NextAuthOptions = {
             franchiseeId: user.franchiseeId || null,
           }
         } catch (error) {
-          console.error("[v0] NextAuth authorize error:", error)
+          console.error("[v0] Auth error:", error)
           return null
         }
       },
@@ -54,34 +65,23 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user }) {
-      try {
-        if (user) {
-          token.id = user.id
-          token.role = user.role
-          token.phone = user.phone
-          token.franchiseeId = user.franchiseeId
-        }
-        return token
-      } catch (error) {
-        console.error("[v0] JWT callback error:", error)
-        return token
+      if (user) {
+        token.id = user.id
+        token.role = user.role
+        token.phone = user.phone
+        token.franchiseeId = user.franchiseeId
       }
+      return token
     },
     async session({ session, token }) {
-      try {
-        if (token && session.user) {
-          session.user.id = token.id as string
-          session.user.role = token.role as string
-          session.user.phone = token.phone as string
-          session.user.franchiseeId = token.franchiseeId as string | null
-        }
-        return session
-      } catch (error) {
-        console.error("[v0] Session callback error:", error)
-        return session
+      if (token && session.user) {
+        session.user.id = token.id as string
+        session.user.role = token.role as string
+        session.user.phone = token.phone as string
+        session.user.franchiseeId = token.franchiseeId as string | null
       }
+      return session
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: false,
 }

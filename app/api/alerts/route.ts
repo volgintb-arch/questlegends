@@ -1,61 +1,68 @@
-import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import { neon } from "@neondatabase/serverless"
 
 export async function GET(request: Request) {
   try {
     console.log("[v0] Alerts API: GET request started")
+
+    if (!process.env.DATABASE_URL) {
+      console.error("[v0] Alerts API: DATABASE_URL is not set")
+      return NextResponse.json({ success: false, error: "Database configuration error" }, { status: 500 })
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
 
     const { searchParams } = new URL(request.url)
     const severity = searchParams.get("severity")
 
     console.log("[v0] Alerts API: Fetching alerts with severity:", severity)
 
-    const alerts = await prisma.alert.findMany({
-      where: {
-        isArchived: false,
-        ...(severity && severity !== "all" ? { severity } : {}),
-      },
-      select: {
-        id: true,
-        location: true,
-        message: true,
-        severity: true,
-        franchiseeId: true,
-        dealId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    })
+    let alerts
+    if (severity && severity !== "all") {
+      alerts = await sql`
+        SELECT 
+          a.id, a.location, a.message, a.severity, a."franchiseeId", a."dealId", 
+          a."createdAt", a."updatedAt",
+          f.id as franchisee_id, f.name as franchisee_name, f.city as franchisee_city
+        FROM "Alert" a
+        LEFT JOIN "Franchisee" f ON f.id = a."franchiseeId"
+        WHERE a."isArchived" = false AND a.severity = ${severity}
+        ORDER BY a."createdAt" DESC
+      `
+    } else {
+      alerts = await sql`
+        SELECT 
+          a.id, a.location, a.message, a.severity, a."franchiseeId", a."dealId", 
+          a."createdAt", a."updatedAt",
+          f.id as franchisee_id, f.name as franchisee_name, f.city as franchisee_city
+        FROM "Alert" a
+        LEFT JOIN "Franchisee" f ON f.id = a."franchiseeId"
+        WHERE a."isArchived" = false
+        ORDER BY a."createdAt" DESC
+      `
+    }
 
     console.log("[v0] Alerts API: Successfully fetched", alerts.length, "alerts")
 
-    const alertsWithData = await Promise.all(
-      alerts.map(async (alert) => {
-        try {
-          const franchisee = await prisma.franchisee.findUnique({
-            where: { id: alert.franchiseeId },
-            select: { id: true, name: true, city: true },
-          })
-          return {
-            ...alert,
-            franchisee: franchisee || { id: alert.franchiseeId, name: "Unknown", city: "Unknown" },
-            deal: null,
-            comments: [],
+    const alertsWithData = alerts.map((alert: any) => ({
+      id: alert.id,
+      location: alert.location,
+      message: alert.message,
+      severity: alert.severity,
+      franchiseeId: alert.franchiseeid,
+      dealId: alert.dealid,
+      createdAt: alert.createdat,
+      updatedAt: alert.updatedat,
+      franchisee: alert.franchisee_id
+        ? {
+            id: alert.franchisee_id,
+            name: alert.franchisee_name || "Unknown",
+            city: alert.franchisee_city || "Unknown",
           }
-        } catch (e) {
-          console.error("[v0] Error fetching franchisee:", e)
-          return {
-            ...alert,
-            franchisee: { id: alert.franchiseeId, name: "Unknown", city: "Unknown" },
-            deal: null,
-            comments: [],
-          }
-        }
-      }),
-    )
+        : null,
+      deal: null,
+      comments: [],
+    }))
 
     console.log("[v0] Alerts API: Returning response with", alertsWithData.length, "alerts")
 
@@ -75,6 +82,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json({ success: false, error: "Database configuration error" }, { status: 500 })
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
+
     const body = await request.json()
     const { location, dealId, message, franchiseeId, severity } = body
 
@@ -82,17 +95,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 })
     }
 
-    const alert = await prisma.alert.create({
-      data: {
-        location,
-        dealId,
-        message,
-        franchiseeId,
-        severity,
-      },
-    })
+    const result = await sql`
+      INSERT INTO "Alert" (location, "dealId", message, "franchiseeId", severity, "createdAt", "updatedAt", "isArchived")
+      VALUES (${location}, ${dealId}, ${message}, ${franchiseeId}, ${severity}, NOW(), NOW(), false)
+      RETURNING id, location, "dealId", message, "franchiseeId", severity, "createdAt", "updatedAt"
+    `
 
-    return NextResponse.json({ success: true, data: { alert } })
+    return NextResponse.json({ success: true, data: { alert: result[0] } })
   } catch (error) {
     console.error("[v0] Alerts API POST error:", error)
     return NextResponse.json({ success: false, error: "Failed to create alert" }, { status: 500 })
