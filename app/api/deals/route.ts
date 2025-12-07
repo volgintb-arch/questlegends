@@ -1,117 +1,232 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
-import { dealSchema } from "@/lib/utils/validation"
-import { successResponse, errorResponse, validationErrorResponse, unauthorizedResponse } from "@/lib/utils/response"
+import { neon } from "@neondatabase/serverless"
+import { jwtVerify } from "jose"
+import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+import crypto from "crypto"
+
+async function getCurrentUser(request: Request) {
+  try {
+    const authHeader = request.headers.get("authorization")
+    let token = authHeader?.replace("Bearer ", "")
+
+    if (!token) {
+      const cookieStore = await cookies()
+      token = cookieStore.get("auth-token")?.value
+    }
+
+    if (!token) return null
+
+    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
+    const { payload } = await jwtVerify(token, secret)
+
+    return {
+      id: payload.userId as string,
+      role: payload.role as string,
+      franchiseeId: payload.franchiseeId as string | null,
+    }
+  } catch {
+    return null
+  }
+}
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return unauthorizedResponse()
+    const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const sql = neon(process.env.DATABASE_URL!)
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
     const stage = searchParams.get("stage")
 
-    const where: any = {}
+    let deals: any[]
 
-    // Filter by role
-    if (session.user.role === "franchisee" || session.user.role === "admin" || session.user.role === "employee") {
-      where.franchiseeId = session.user.franchiseeId
+    if (user.role === "franchisee" || user.role === "admin" || user.role === "employee") {
+      if (user.franchiseeId) {
+        if (stage) {
+          deals = await sql`
+            SELECT 
+              d.*,
+              u.name as "responsibleName",
+              f.name as "franchiseeName",
+              f.city as "franchiseeCity"
+            FROM "Deal" d
+            LEFT JOIN "User" u ON d."responsibleId" = u.id
+            LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+            WHERE d."franchiseeId" = ${user.franchiseeId} AND d.stage = ${stage}
+            ORDER BY d."createdAt" DESC
+          `
+        } else {
+          deals = await sql`
+            SELECT 
+              d.*,
+              u.name as "responsibleName",
+              f.name as "franchiseeName",
+              f.city as "franchiseeCity"
+            FROM "Deal" d
+            LEFT JOIN "User" u ON d."responsibleId" = u.id
+            LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+            WHERE d."franchiseeId" = ${user.franchiseeId}
+            ORDER BY d."createdAt" DESC
+          `
+        }
+      } else {
+        deals = await sql`
+          SELECT 
+            d.*,
+            u.name as "responsibleName",
+            f.name as "franchiseeName",
+            f.city as "franchiseeCity"
+          FROM "Deal" d
+          LEFT JOIN "User" u ON d."responsibleId" = u.id
+          LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+          ORDER BY d."createdAt" DESC
+        `
+      }
     } else if (franchiseeId) {
-      where.franchiseeId = franchiseeId
+      if (stage) {
+        deals = await sql`
+          SELECT 
+            d.*,
+            u.name as "responsibleName",
+            f.name as "franchiseeName",
+            f.city as "franchiseeCity"
+          FROM "Deal" d
+          LEFT JOIN "User" u ON d."responsibleId" = u.id
+          LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+          WHERE d."franchiseeId" = ${franchiseeId} AND d.stage = ${stage}
+          ORDER BY d."createdAt" DESC
+        `
+      } else {
+        deals = await sql`
+          SELECT 
+            d.*,
+            u.name as "responsibleName",
+            f.name as "franchiseeName",
+            f.city as "franchiseeCity"
+          FROM "Deal" d
+          LEFT JOIN "User" u ON d."responsibleId" = u.id
+          LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+          WHERE d."franchiseeId" = ${franchiseeId}
+          ORDER BY d."createdAt" DESC
+        `
+      }
+    } else if (stage) {
+      deals = await sql`
+        SELECT 
+          d.*,
+          u.name as "responsibleName",
+          f.name as "franchiseeName",
+          f.city as "franchiseeCity"
+        FROM "Deal" d
+        LEFT JOIN "User" u ON d."responsibleId" = u.id
+        LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+        WHERE d.stage = ${stage}
+        ORDER BY d."createdAt" DESC
+      `
+    } else {
+      deals = await sql`
+        SELECT 
+          d.*,
+          u.name as "responsibleName",
+          f.name as "franchiseeName",
+          f.city as "franchiseeCity"
+        FROM "Deal" d
+        LEFT JOIN "User" u ON d."responsibleId" = u.id
+        LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+        ORDER BY d."createdAt" DESC
+      `
     }
 
-    if (stage) {
-      where.stage = stage
-    }
+    // Transform to expected format
+    const formattedDeals = deals.map((deal: any) => ({
+      ...deal,
+      responsible: deal.responsibleName ? { id: deal.responsibleId, name: deal.responsibleName } : null,
+      franchisee: deal.franchiseeName
+        ? {
+            id: deal.franchiseeId,
+            name: deal.franchiseeName,
+            city: deal.franchiseeCity,
+          }
+        : null,
+    }))
 
-    const deals = await prisma.deal.findMany({
-      where,
-      include: {
-        responsible: { select: { id: true, name: true } },
-        franchisee: { select: { id: true, name: true, city: true } },
-        tasks: true,
-        assignments: {
-          include: {
-            personnel: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    })
-
-    return successResponse(deals)
-  } catch (error) {
-    console.error("[DEALS_GET]", error)
-    return errorResponse("Failed to fetch deals", 500)
+    return NextResponse.json({ data: formattedDeals })
+  } catch (error: any) {
+    console.error("[v0] DEALS_GET error:", error)
+    return NextResponse.json({ error: "Failed to fetch deals", details: error.message }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    console.log("[v0] Creating new deal - start")
-
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      console.log("[v0] No session found")
-      return unauthorizedResponse()
+    const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("[v0] Session user:", session.user.id, session.user.role)
-
+    const sql = neon(process.env.DATABASE_URL!)
     const body = await request.json()
-    console.log("[v0] Request body:", JSON.stringify(body, null, 2))
 
-    const validation = dealSchema.safeParse(body)
-    if (!validation.success) {
-      console.log("[v0] Validation failed:", validation.error.errors)
-      return validationErrorResponse(validation.error.errors)
+    let franchiseeId = user.franchiseeId || body.franchiseeId
+
+    // If franchiseeId looks like a city name (not a UUID), try to find or create franchisee
+    if (franchiseeId && !franchiseeId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      const cityName = franchiseeId
+      // Try to find existing franchisee by city
+      const existingFranchisee = await sql`
+        SELECT id FROM "Franchisee" WHERE city = ${cityName} LIMIT 1
+      `
+
+      if (existingFranchisee.length > 0) {
+        franchiseeId = existingFranchisee[0].id
+      } else {
+        // Create new franchisee for this city
+        const newFranchiseeId = crypto.randomUUID()
+        const now = new Date().toISOString()
+        await sql`
+          INSERT INTO "Franchisee" (id, name, city, "createdAt", "updatedAt")
+          VALUES (${newFranchiseeId}, ${cityName}, ${cityName}, ${now}, ${now})
+        `
+        franchiseeId = newFranchiseeId
+      }
     }
 
-    console.log("[v0] Validation passed")
-
-    const franchiseeId = session.user.franchiseeId || body.franchiseeId
-    if (!franchiseeId) {
-      console.log("[v0] No franchiseeId found")
-      return errorResponse("Franchisee ID is required", 400)
+    // If still no valid franchiseeId, set to null
+    if (franchiseeId && !franchiseeId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      franchiseeId = null
     }
 
-    console.log("[v0] Creating deal with franchiseeId:", franchiseeId)
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
 
-    const deal = await prisma.deal.create({
-      data: {
-        clientName: validation.data.clientName,
-        clientPhone: validation.data.clientPhone || null,
-        clientTelegram: validation.data.clientTelegram || null,
-        clientWhatsapp: validation.data.clientWhatsapp || null,
-        gameType: validation.data.gameType || null,
-        location: validation.data.location || null,
-        gameDate: validation.data.gameDate ? new Date(validation.data.gameDate) : null,
-        participants: validation.data.participants || null,
-        packageType: validation.data.packageType || null,
-        price: validation.data.price || null,
-        stage: validation.data.stage || "NEW",
-        discount: validation.data.discount || null,
-        source: validation.data.source || null,
-        description: validation.data.description || null,
-        franchiseeId,
-        responsibleId: session.user.id,
-      },
-      include: {
-        responsible: { select: { id: true, name: true } },
-        franchisee: { select: { id: true, name: true, city: true } },
-      },
-    })
+    await sql`
+      INSERT INTO "Deal" (
+        id, "clientName", "clientPhone", "clientTelegram",
+        source, stage, participants, "gameDate", package,
+        price, responsible, "responsibleId", animator, host, dj,
+        notes, "franchiseeId", "createdAt", "updatedAt"
+      ) VALUES (
+        ${id}, ${body.clientName || null}, ${body.clientPhone || null}, 
+        ${body.clientTelegram || body.clientWhatsapp || null},
+        ${body.source || null}, ${body.stage || "Лиды"}, 
+        ${body.participants || null},
+        ${body.gameDate ? new Date(body.gameDate).toISOString() : null},
+        ${body.package || body.packageType || null},
+        ${body.price || null}, ${body.responsible || null}, ${user.id},
+        ${body.animator || null}, ${body.host || null}, ${body.dj || null},
+        ${body.notes || body.description || null},
+        ${franchiseeId || null}, ${now}, ${now}
+      )
+    `
 
-    console.log("[v0] Deal created successfully:", deal.id)
+    const [deal] = await sql`SELECT * FROM "Deal" WHERE id = ${id}`
 
     return NextResponse.json(deal, { status: 201 })
   } catch (error: any) {
     console.error("[v0] DEALS_POST error:", error)
-    return errorResponse(`Failed to create deal: ${error.message}`, 500)
+    return NextResponse.json({ error: "Failed to create deal", details: error.message }, { status: 500 })
   }
 }

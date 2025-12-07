@@ -16,9 +16,13 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json({ success: true, message: "Logged out successfully" })
+    const response = NextResponse.json({ success: true, message: "Logged out successfully" })
+
+    response.cookies.delete("auth-token")
+
+    return response
   } catch (error) {
-    console.error("[LOGOUT_POST]", error)
+    console.error("[v0] Logout error:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

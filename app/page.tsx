@@ -36,19 +36,19 @@ type View =
 
 export default function Dashboard() {
   const router = useRouter()
-  const { user, isLoading } = useAuth()
+  const { user, loading } = useAuth()
   const [view, setView] = useState<View>("dashboard")
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
-    if (isLoading) return
+    if (loading) return
 
     if (!user) {
       router.push("/login")
     }
-  }, [user, isLoading, router])
+  }, [user, loading, router])
 
-  if (isLoading || !user) {
+  if (loading || !user) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center">

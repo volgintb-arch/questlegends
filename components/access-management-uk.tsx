@@ -25,7 +25,7 @@ interface AccessUser {
 }
 
 export function AccessManagementUK() {
-  const { user: currentUser } = useAuth()
+  const { user: currentUser, getAuthHeaders } = useAuth()
   const [users, setUsers] = useState<AccessUser[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -36,7 +36,11 @@ export function AccessManagementUK() {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/permissions")
+      const response = await fetch("/api/permissions", {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      })
       if (!response.ok) throw new Error("Failed to fetch users")
       const data = await response.json()
 
@@ -78,7 +82,10 @@ export function AccessManagementUK() {
     try {
       const response = await fetch("/api/permissions", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({
           userId,
           permissions: {
@@ -104,7 +111,12 @@ export function AccessManagementUK() {
     if (!confirm("Вы уверены, что хотите удалить доступ этого пользователя?")) return
 
     try {
-      const response = await fetch(`/api/users/${userId}`, { method: "DELETE" })
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "DELETE",
+        headers: {
+          ...getAuthHeaders(),
+        },
+      })
       if (!response.ok) throw new Error("Failed to delete user")
 
       setUsers(users.filter((user) => user.id !== userId))

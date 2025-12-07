@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { KBFileManager } from "./kb-file-manager"
+import { useAuth } from "@/contexts/auth-context"
 
 interface KnowledgeArticle {
   id: string
@@ -51,6 +52,8 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
   const [selectedArticle, setSelectedArticle] = useState<KnowledgeArticle | null>(null)
 
+  const { getAuthHeaders } = useAuth()
+
   const categories = ["all", "Управление", "Продажи", "Финансы", "Поддержка", "Безопасность"]
 
   const getTypeIcon = (type: string) => {
@@ -77,19 +80,28 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
       if (selectedCategory !== "all") params.set("category", selectedCategory)
       if (searchQuery) params.set("search", searchQuery)
 
-      const response = await fetch(`/api/knowledge?${params}`)
+      const response = await fetch(`/api/knowledge?${params}`, {
+        headers: getAuthHeaders(),
+      })
       const data = await response.json()
 
       if (response.ok) {
         setArticles(
-          data.articles.map((a: any) => ({
+          (data.articles || []).map((a: any) => ({
             ...a,
-            date: new Date(a.createdAt).toLocaleDateString("ru-RU"),
+            date: a.createdAt
+              ? new Date(a.createdAt).toLocaleDateString("ru-RU")
+              : new Date().toLocaleDateString("ru-RU"),
+            tags: a.tags || [],
+            views: a.views || 0,
+            helpful: a.helpful || 0,
+            type: a.type || "article",
           })),
         )
       }
     } catch (error) {
       console.error("[v0] Error loading articles:", error)
+      setArticles([])
     } finally {
       setLoading(false)
     }
@@ -125,7 +137,10 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
       const response = await fetch(isNewArticle ? "/api/knowledge" : `/api/knowledge/${editingArticle.id}`, {
         method: isNewArticle ? "POST" : "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify(editingArticle),
       })
 
@@ -146,6 +161,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
     try {
       const response = await fetch(`/api/knowledge/${id}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       })
 
       if (response.ok) {

@@ -21,7 +21,7 @@ interface UserCreateModalProps {
 }
 
 export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalProps) {
-  const { user: currentUser, canCreateRole, getAccessibleFranchisees } = useAuth()
+  const { user: currentUser, canCreateRole, getAccessibleFranchisees, getAuthHeaders } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
@@ -80,7 +80,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
     if (
       ["admin", "animator", "host", "dj"].includes(formData.role) &&
       !formData.franchisee_id &&
-      !currentUser.franchiseeId
+      !currentUser?.franchiseeId
     ) {
       toast({
         title: "Ошибка",
@@ -99,6 +99,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           name: formData.name,
@@ -110,7 +111,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
           password: password,
           franchiseeId:
             formData.franchisee_id ||
-            (["admin", "animator", "host", "dj"].includes(formData.role) ? currentUser.franchiseeId : undefined),
+            (["admin", "animator", "host", "dj"].includes(formData.role) ? currentUser?.franchiseeId : undefined),
           city: formData.city || undefined,
         }),
       })

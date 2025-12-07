@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
+import { useAuth } from "@/contexts/auth-context"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { DashboardUK } from "@/components/dashboard-uk"
@@ -35,18 +35,18 @@ type View =
 
 export default function Dashboard() {
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { user, loading } = useAuth()
   const [view, setView] = useState<View>("dashboard")
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
-    if (status === "loading") return
-    if (!session) {
+    if (loading) return
+    if (!user) {
       router.push("/login")
     }
-  }, [session, status, router])
+  }, [user, loading, router])
 
-  if (status === "loading" || !session) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -55,13 +55,6 @@ export default function Dashboard() {
         </div>
       </div>
     )
-  }
-
-  const user = {
-    id: session.user.id,
-    name: session.user.name || "Пользователь",
-    role: session.user.role || "uk",
-    email: session.user.email || "",
   }
 
   const renderView = () => {

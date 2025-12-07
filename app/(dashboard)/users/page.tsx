@@ -28,7 +28,7 @@ interface User {
 }
 
 export default function UsersPage() {
-  const { user, hasPermission } = useAuth()
+  const { user, hasPermission, getAuthHeaders } = useAuth()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [users, setUsers] = useState<User[]>([])
@@ -41,7 +41,9 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch("/api/users")
+      const response = await fetch("/api/users", {
+        headers: getAuthHeaders(),
+      })
 
       if (!response.ok) {
         throw new Error("Failed to fetch users")
@@ -76,7 +78,7 @@ export default function UsersPage() {
     const query = searchQuery.toLowerCase()
     return (
       userItem.name.toLowerCase().includes(query) ||
-      userItem.phone.toLowerCase().includes(query) ||
+      userItem.phone?.toLowerCase().includes(query) ||
       userItem.franchisee?.city.toLowerCase().includes(query)
     )
   })
@@ -141,7 +143,7 @@ export default function UsersPage() {
                 <CardContent className="space-y-2">
                   <div className="flex items-center gap-2 text-sm">
                     <Phone className="w-4 h-4 text-muted-foreground" />
-                    <span>{userItem.phone}</span>
+                    <span>{userItem.phone || "Нет телефона"}</span>
                   </div>
                   {userItem.telegram && (
                     <div className="flex items-center gap-2 text-sm">

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Moon, Sun, Bell, User, LogOut, SettingsIcon, ChevronDown, Menu } from "lucide-react"
-import { signOut } from "next-auth/react"
+import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { ProfileSettingsModal } from "./profile-settings-modal"
 import { GlobalSearch } from "./global-search"
@@ -19,6 +19,7 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
   const [showNotifications, setShowNotifications] = useState(false)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [showProfileSettings, setShowProfileSettings] = useState(false)
+  const { logout } = useAuth()
   const router = useRouter()
 
   const toggleTheme = () => {
@@ -31,9 +32,7 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
   const handleLogout = async () => {
     console.log("[v0] Logging out user")
     try {
-      await signOut({ redirect: false })
-      router.push("/login")
-      router.refresh()
+      await logout()
     } catch (error) {
       console.error("[v0] Logout error:", error)
     }

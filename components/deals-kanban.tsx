@@ -30,7 +30,7 @@ interface Deal {
 type BoardData = Record<string, Deal[]>
 
 export function DealsKanban({ role }: DealsKanbanProps) {
-  const { user } = useAuth()
+  const { user, getAuthHeaders } = useAuth()
   const [loading, setLoading] = useState(true)
   const [filterOpen, setFilterOpen] = useState(false)
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null)
@@ -57,7 +57,9 @@ export function DealsKanban({ role }: DealsKanbanProps) {
           params.append("franchiseeId", user.franchiseeId)
         }
 
-        const response = await fetch(`/api/deals?${params.toString()}`)
+        const response = await fetch(`/api/deals?${params.toString()}`, {
+          headers: getAuthHeaders(),
+        })
         console.log("[v0] Response status:", response.status)
 
         if (!response.ok) {
@@ -113,7 +115,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
     if (user) {
       fetchDeals()
     }
-  }, [user, role, stages])
+  }, [user, role, stages, getAuthHeaders])
 
   const handleDragEnd = async (result: DropResult) => {
     const { source, destination, draggableId } = result
@@ -133,7 +135,10 @@ export function DealsKanban({ role }: DealsKanbanProps) {
     try {
       await fetch(`/api/deals/${draggableId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({ stage: destStage }),
       })
     } catch (error) {
@@ -148,7 +153,9 @@ export function DealsKanban({ role }: DealsKanbanProps) {
 
   const handleViewDeal = async (deal: Deal) => {
     try {
-      const response = await fetch(`/api/deals/${deal.id}`)
+      const response = await fetch(`/api/deals/${deal.id}`, {
+        headers: getAuthHeaders(),
+      })
       if (response.ok) {
         const fullDeal = await response.json()
         setViewingDeal({

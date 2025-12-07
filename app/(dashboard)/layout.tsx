@@ -3,15 +3,38 @@
 import type React from "react"
 
 import { useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
   const pathname = usePathname()
+  const router = useRouter()
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Загрузка...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    router.push("/login")
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <p className="text-muted-foreground">Перенаправление на страницу входа...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">

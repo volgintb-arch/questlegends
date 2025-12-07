@@ -2,15 +2,14 @@
 
 import type React from "react"
 import { useState } from "react"
-import { signIn } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function LoginPage() {
-  const router = useRouter()
+  const { login } = useAuth()
   const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -22,21 +21,10 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const result = await signIn("credentials", {
-        phone,
-        password,
-        redirect: false,
-      })
-
-      if (result?.error) {
-        setError("Неверный номер телефона или пароль")
-      } else if (result?.ok) {
-        router.push("/dashboard")
-        router.refresh()
-      }
-    } catch (err) {
+      await login(phone, password)
+    } catch (err: any) {
       console.error("[v0] Login error:", err)
-      setError("Ошибка при входе в систему")
+      setError(err.message || "Ошибка при входе в систему")
     } finally {
       setLoading(false)
     }

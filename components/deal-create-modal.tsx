@@ -33,7 +33,7 @@ interface DealCreateModalProps {
 }
 
 export function DealCreateModal({ isOpen, onClose, onCreate, role }: DealCreateModalProps) {
-  const { user, franchisees } = useAuth()
+  const { user, franchisees, getAuthHeaders } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -65,7 +65,10 @@ export function DealCreateModal({ isOpen, onClose, onCreate, role }: DealCreateM
     try {
       const response = await fetch("/api/deals", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({
           clientName: formData.title,
           clientPhone: formData.contactPhone,

@@ -1,6 +1,7 @@
 "use client"
 
-import { createContext, useContext, type ReactNode, useState } from "react"
+import { createContext, useContext, type ReactNode, useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 
 export type UserRole = "uk" | "uk_employee" | "franchisee" | "admin" | "employee"
 
@@ -52,11 +53,11 @@ export const ROLE_PERMISSIONS = {
     erp: false,
     finances: false,
     schedules: false,
-    kb: true, // Always has KB access
+    kb: true,
     users: false,
-    createUsers: ["employee"], // Can only create employee (animator/host/dj)
+    createUsers: ["employee"],
     viewOwnLocation: true,
-    cannotManageAccess: true, // Cannot delegate or manage access
+    cannotManageAccess: true,
     cannotCreateCustomRoles: true,
   },
   employee: {
@@ -79,9 +80,9 @@ export interface User {
   id: string
   name: string
   role: UserRole
-  email: string
+  email?: string
   phone?: string
-  franchiseeIds?: string[]
+  franchiseeId?: string
   franchiseeName?: string
   description?: string
   telegram_id?: string
@@ -89,94 +90,186 @@ export interface User {
 }
 
 interface AuthContextType {
-  user: User
+  user: User | null
+  token: string | null
   franchisees: Franchisee[]
-  setUser: (user: User) => void
+  loading: boolean
+  setUser: (user: User | null) => void
+  login: (phone: string, password: string) => Promise<void>
+  logout: () => Promise<void>
   canAccess: (requiredRole: UserRole[]) => boolean
   getAccessibleFranchisees: () => Franchisee[]
   hasPermission: (permission: string) => boolean
   canCreateRole: (role: UserRole) => boolean
+  getAuthHeaders: () => HeadersInit
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User>({
-    id: "user-1",
-    name: "Иван Петров",
-    role: "uk",
-    email: "ivan@questlegends.ru",
-  })
+const getStoredToken = () => {
+  if (typeof window === "undefined") return null
+  return localStorage.getItem("auth-token")
+}
 
-  const franchisees: Franchisee[] = [
-    {
-      id: "f1",
-      name: "QuestLegends Москва",
-      location: "Москва",
-      address: "ул. Тверская, 1",
-      manager: "Алексей Сидоров",
-    },
-    {
-      id: "f2",
-      name: "QuestLegends СПБ",
-      location: "Санкт-Петербург",
-      address: "Невский пр., 100",
-      manager: "Мария Иванова",
-    },
-    {
-      id: "f3",
-      name: "QuestLegends Казань",
-      location: "Казань",
-      address: "ул. Баумана, 50",
-      manager: "Дмитрий Никитин",
-    },
-    {
-      id: "f4",
-      name: "QuestLegends Новосибирск",
-      location: "Новосибирск",
-      address: "ул. Красный пр., 75",
-      manager: "Екатерина Волкова",
-    },
-  ]
+const setStoredToken = (token: string | null) => {
+  if (typeof window === "undefined") return
+  if (token) {
+    localStorage.setItem("auth-token", token)
+  } else {
+    localStorage.removeItem("auth-token")
+  }
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null)
+  const [token, setToken] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [franchisees, setFranchisees] = useState<Franchisee[]>([])
+  const router = useRouter()
+
+  const getAuthHeaders = (): HeadersInit => {
+    const currentToken = token || getStoredToken()
+    if (currentToken) {
+      return { Authorization: `Bearer ${currentToken}` }
+    }
+    return {}
+  }
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const storedToken = getStoredToken()
+        if (!storedToken) {
+          setLoading(false)
+          return
+        }
+
+        setToken(storedToken)
+
+        const response = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${storedToken}` },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setUser(data.user)
+
+          if (data.user.role === "uk") {
+            const franchiseesRes = await fetch("/api/franchisees", {
+              headers: { Authorization: `Bearer ${storedToken}` },
+            })
+            if (franchiseesRes.ok) {
+              const franchiseesData = await franchiseesRes.json()
+              setFranchisees(franchiseesData)
+            }
+          }
+        } else {
+          // Token invalid, clear it
+          setStoredToken(null)
+          setToken(null)
+        }
+      } catch (error) {
+        console.error("[v0] Failed to load user:", error)
+        setStoredToken(null)
+        setToken(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadUser()
+  }, [])
+
+  const login = async (phone: string, password: string) => {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone, password }),
+    })
+
+    if (!response.ok) {
+      const data = await response.json()
+      throw new Error(data.error || "Login failed")
+    }
+
+    const data = await response.json()
+
+    setStoredToken(data.token)
+    setToken(data.token)
+    setUser(data.user)
+
+    if (data.user.role === "uk") {
+      const franchiseesRes = await fetch("/api/franchisees", {
+        headers: { Authorization: `Bearer ${data.token}` },
+      })
+      if (franchiseesRes.ok) {
+        const franchiseesData = await franchiseesRes.json()
+        setFranchisees(franchiseesData)
+      }
+    }
+
+    router.push("/dashboard")
+  }
+
+  const logout = async () => {
+    setStoredToken(null)
+    setToken(null)
+    setUser(null)
+    setFranchisees([])
+    router.push("/login")
+  }
 
   const canAccess = (requiredRoles: UserRole[]): boolean => {
+    if (!user) return false
     return requiredRoles.includes(user.role)
   }
 
   const getAccessibleFranchisees = (): Franchisee[] => {
+    if (!user) return []
+
     if (user.role === "uk") {
       return franchisees
-    } else if (user.role === "franchisee" && user.franchiseeIds) {
-      return franchisees.filter((f) => user.franchiseeIds?.includes(f.id))
+    } else if (user.role === "franchisee" && user.franchiseeId) {
+      return franchisees.filter((f) => f.id === user.franchiseeId)
     }
     return []
   }
 
   const hasPermission = (permission: string): boolean => {
+    if (!user) return false
     const permissions = ROLE_PERMISSIONS[user.role] as Record<string, any>
     return !!permissions[permission]
   }
 
   const canCreateRole = (role: UserRole): boolean => {
+    if (!user) return false
     const permissions = ROLE_PERMISSIONS[user.role] as any
-    
-    if (user.role === "admin" && (role === "admin" || role === "franchisee" || role === "uk" || role === "uk_employee")) {
+
+    if (
+      user.role === "admin" &&
+      (role === "admin" || role === "franchisee" || role === "uk" || role === "uk_employee")
+    ) {
       return false
     }
-    
+
     const checkRole = ["animator", "host", "dj"].includes(role) ? "employee" : role
-    
+
     return permissions.createUsers?.includes(checkRole) || false
   }
 
   const value: AuthContextType = {
     user,
+    token,
     franchisees,
+    loading,
     setUser,
+    login,
+    logout,
     canAccess,
     getAccessibleFranchisees,
     hasPermission,
     canCreateRole,
+    getAuthHeaders,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
