@@ -24,6 +24,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 interface Activity {
   id: string
@@ -32,13 +33,15 @@ interface Activity {
   user: string
   content: string
   status?: "pending" | "completed"
+  assignedTo?: string
+  assignedTelegramId?: string
 }
 
 interface Contact {
   name: string
   phone: string
   email: string
-  company?: string
+  telegramId?: string
   socialLinks?: string[]
 }
 
@@ -48,7 +51,7 @@ interface DealData {
   stage: string
   amount: number
   source: string
-  createdAt: Date
+  createdAt: string
   participants: number
   package: string
   location: string
@@ -56,11 +59,24 @@ interface DealData {
   responsible: string
   activities: Activity[]
   tasks: Activity[]
-  checkPerPerson: number // Чек на человека (NEW)
-  animatorsCount: number // K_Аниматоров (manual input)
-  animatorRate: number // Ставка Аниматора (manual input)
-  hostRate: number // Ставка Ведущий (manual input)
-  djRate: number // Ставка DJ (manual input)
+  checkPerPerson: number
+  animatorsCount: number
+  animatorRate: number
+  hostRate: number
+  djRate: number
+  franchiseeId?: string
+}
+
+interface Franchisee {
+  id: string
+  name: string
+  city: string
+}
+
+interface UKEmployee {
+  id: string
+  name: string
+  telegramId?: string
 }
 
 interface DealCardFullProps {
@@ -73,26 +89,59 @@ interface DealCardFullProps {
 }
 
 export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }: DealCardFullProps) {
+  const { getAuthHeaders } = useAuth()
   const [dealData, setDealData] = useState<DealData>(deal)
   const [messageInput, setMessageInput] = useState("")
   const [isEditingField, setIsEditingField] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<Record<string, any>>({})
-  const [managers, setManagers] = useState<string[]>([])
+  const [managers, setManagers] = useState<UKEmployee[]>([])
+  const [franchisees, setFranchisees] = useState<Franchisee[]>([])
+  const [selectedFranchisees, setSelectedFranchisees] = useState<string[]>([])
 
   useEffect(() => {
     fetchManagers()
+    fetchFranchisees()
   }, [])
 
   const fetchManagers = async () => {
     try {
-      const response = await fetch("/api/users?role=uk,uk_employee,franchisee,admin")
+      const response = await fetch("/api/users?role=uk,uk_employee", {
+        headers: getAuthHeaders(),
+      })
       const data = await response.json()
 
-      if (data.success && Array.isArray(data.data)) {
-        setManagers(data.data.map((user: any) => user.name))
+      if (Array.isArray(data)) {
+        setManagers(
+          data.map((user: any) => ({
+            id: user.id,
+            name: user.name,
+            telegramId: user.telegramId || null,
+          })),
+        )
       }
     } catch (error) {
       console.error("[v0] Error fetching managers:", error)
+    }
+  }
+
+  const fetchFranchisees = async () => {
+    try {
+      const response = await fetch("/api/franchisees", {
+        headers: getAuthHeaders(),
+      })
+      const data = await response.json()
+
+      if (Array.isArray(data)) {
+        setFranchisees(
+          data.map((f: any) => ({
+            id: f.id,
+            name: f.name,
+            city: f.city,
+          })),
+        )
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching franchisees:", error)
     }
   }
 
@@ -124,7 +173,6 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
 
     if (newStage === "Игра проведена" || newStage === "Внесена предоплата (Бронь)") {
       console.log("[v0] Triggering webhook for stage:", newStage)
-      // Backend webhook call would go here
     }
   }
 
@@ -188,7 +236,9 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
     setMessageInput("")
   }
 
-  const handleAddTask = (taskContent: string) => {
+  const handleAddTask = (taskContent: string, assignedToId?: string) => {
+    const assignedEmployee = assignedToId ? managers.find((m) => m.id === assignedToId) : null
+
     const newTask: Activity = {
       id: Date.now().toString(),
       type: "task",
@@ -196,6 +246,8 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
       user: "Вы",
       content: taskContent,
       status: "pending",
+      assignedTo: assignedEmployee?.name,
+      assignedTelegramId: assignedEmployee?.telegramId,
     }
 
     setDealData({
@@ -213,10 +265,15 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
     setDealData({ ...dealData, tasks: updatedTasks })
   }
 
+  const handleFranchiseeToggle = (franchiseeId: string) => {
+    setSelectedFranchisees((prev) =>
+      prev.includes(franchiseeId) ? prev.filter((id) => id !== franchiseeId) : [...prev, franchiseeId],
+    )
+  }
+
   const totalRevenue = (dealData.participants || 0) * (dealData.checkPerPerson || 0)
   const fotCalculation =
     (dealData.animatorsCount || 0) * (dealData.animatorRate || 0) + (dealData.hostRate || 0) + (dealData.djRate || 0)
-
   const royaltyAmount = totalRevenue * 0.07
 
   return (
@@ -357,12 +414,13 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                   </div>
                 </div>
 
-                {/* Created Date */}
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground">Дата создания</label>
                   <div className="flex items-center gap-2">
                     <Calendar size={16} className="text-muted-foreground" />
-                    <span className="text-sm text-foreground">{dealData.createdAt.toLocaleDateString("ru-RU")}</span>
+                    <span className="text-sm text-foreground">
+                      {new Date(dealData.createdAt).toLocaleDateString("ru-RU")}
+                    </span>
                   </div>
                 </div>
 
@@ -397,40 +455,43 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Выбранный пакет</label>
-                  <div className="flex items-center gap-2">
-                    {isEditingField === "package" ? (
-                      <>
-                        <select
-                          value={editValues.package || dealData.package}
-                          onChange={(e) => setEditValues({ ...editValues, package: e.target.value })}
-                          className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                        >
-                          {packageOptions.map((pkg) => (
-                            <option key={pkg} value={pkg}>
-                              {pkg}
-                            </option>
-                          ))}
-                        </select>
-                        <button onClick={() => handleFieldSave("package")} className="text-primary">
-                          <Save size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <Package size={16} className="text-muted-foreground" />
-                        <span className="text-sm text-foreground">{dealData.package}</span>
-                        <button
-                          onClick={() => handleFieldEdit("package", dealData.package)}
-                          className="ml-auto text-muted-foreground hover:text-primary"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      </>
-                    )}
+                {role !== "uk" && (
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Выбранный пакет</label>
+                    <div className="flex items-center gap-2">
+                      {isEditingField === "package" ? (
+                        <>
+                          <select
+                            value={editValues.package || dealData.package || ""}
+                            onChange={(e) => setEditValues({ ...editValues, package: e.target.value })}
+                            className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
+                          >
+                            <option value="">Не выбран</option>
+                            {packageOptions.map((pkg) => (
+                              <option key={pkg} value={pkg}>
+                                {pkg}
+                              </option>
+                            ))}
+                          </select>
+                          <button onClick={() => handleFieldSave("package")} className="text-primary">
+                            <Save size={16} />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <Package size={16} className="text-muted-foreground" />
+                          <span className="text-sm text-foreground">{dealData.package || "Не выбран"}</span>
+                          <button
+                            onClick={() => handleFieldEdit("package", dealData.package)}
+                            className="ml-auto text-muted-foreground hover:text-primary"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground">Локация</label>
@@ -438,10 +499,11 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                     {isEditingField === "location" ? (
                       <>
                         <select
-                          value={editValues.location || dealData.location}
+                          value={editValues.location || dealData.location || ""}
                           onChange={(e) => setEditValues({ ...editValues, location: e.target.value })}
                           className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
                         >
+                          <option value="">Не выбрана</option>
                           {locations.map((loc) => (
                             <option key={loc} value={loc}>
                               {loc}
@@ -455,7 +517,7 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                     ) : (
                       <>
                         <MapPin size={16} className="text-muted-foreground" />
-                        <span className="text-sm text-foreground">{dealData.location}</span>
+                        <span className="text-sm text-foreground">{dealData.location || "Не выбрана"}</span>
                         <button
                           onClick={() => handleFieldEdit("location", dealData.location)}
                           className="ml-auto text-muted-foreground hover:text-primary"
@@ -468,18 +530,19 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Ответственный менеджер</label>
+                  <label className="text-xs text-muted-foreground">Ответственный менеджер (сотрудник УК)</label>
                   <div className="flex items-center gap-2">
                     {isEditingField === "responsible" ? (
                       <>
                         <select
-                          value={editValues.responsible || dealData.responsible}
+                          value={editValues.responsible || dealData.responsible || ""}
                           onChange={(e) => setEditValues({ ...editValues, responsible: e.target.value })}
                           className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
                         >
+                          <option value="">Не назначен</option>
                           {managers.map((mgr) => (
-                            <option key={mgr} value={mgr}>
-                              {mgr}
+                            <option key={mgr.id} value={mgr.name}>
+                              {mgr.name} {mgr.telegramId ? `(@${mgr.telegramId})` : ""}
                             </option>
                           ))}
                         </select>
@@ -490,42 +553,9 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                     ) : (
                       <>
                         <User size={16} className="text-muted-foreground" />
-                        <span className="text-sm text-foreground">{dealData.responsible}</span>
+                        <span className="text-sm text-foreground">{dealData.responsible || "Не назначен"}</span>
                         <button
                           onClick={() => handleFieldEdit("responsible", dealData.responsible)}
-                          className="ml-auto text-muted-foreground hover:text-primary"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Чек на человека (₽)</label>
-                  <div className="flex items-center gap-2">
-                    {isEditingField === "checkPerPerson" ? (
-                      <>
-                        <input
-                          type="number"
-                          value={editValues.checkPerPerson || dealData.checkPerPerson}
-                          onChange={(e) => setEditValues({ ...editValues, checkPerPerson: Number(e.target.value) })}
-                          className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                          min="0"
-                        />
-                        <button onClick={() => handleFieldSave("checkPerPerson")} className="text-primary">
-                          <Save size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <DollarSign size={16} className="text-primary" />
-                        <span className="text-sm font-medium text-foreground">
-                          {(dealData.checkPerPerson || 0).toLocaleString()} ₽
-                        </span>
-                        <button
-                          onClick={() => handleFieldEdit("checkPerPerson", dealData.checkPerPerson)}
                           className="ml-auto text-muted-foreground hover:text-primary"
                         >
                           <Edit2 size={14} />
@@ -666,38 +696,77 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                         )}
                       </div>
                     </div>
+
+                    <div className="pt-4 border-t border-border">
+                      <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-3">
+                        Расчетные Показатели
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground">Total Revenue:</span>
+                          <span className="text-sm font-bold text-green-500">{totalRevenue.toLocaleString()} ₽</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground">FOT Calculation:</span>
+                          <span className="text-sm font-bold text-purple-500">{fotCalculation.toLocaleString()} ₽</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground">Royalty (7%):</span>
+                          <span className="text-sm font-bold text-orange-500">{royaltyAmount.toLocaleString()} ₽</span>
+                        </div>
+                      </div>
+                    </div>
                   </>
                 )}
 
-                <div className="pt-4 border-t border-border">
-                  <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-3">
-                    Расчетные Показатели
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground">Total Revenue:</span>
-                      <span className="text-sm font-bold text-green-500">{totalRevenue.toLocaleString()} ₽</span>
+                {role === "uk" && (
+                  <div className="pt-4 border-t border-border space-y-3">
+                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                      Выбрать франчайзи ({selectedFranchisees.length}/{franchisees.length})
+                    </h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <button
+                        onClick={() => setSelectedFranchisees([])}
+                        className="text-xs text-muted-foreground hover:text-primary"
+                      >
+                        Снять все
+                      </button>
+                      <button
+                        onClick={() => setSelectedFranchisees(franchisees.map((f) => f.id))}
+                        className="text-xs text-muted-foreground hover:text-primary"
+                      >
+                        Выбрать все
+                      </button>
                     </div>
-                    {/* Only show fotCalculation for Franchisee and Admin */}
-                    {role !== "uk" && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-muted-foreground">FOT Calculation:</span>
-                        <span className="text-sm font-bold text-purple-500">{fotCalculation.toLocaleString()} ₽</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground">Royalty (7%):</span>
-                      <span className="text-sm font-bold text-orange-500">{royaltyAmount.toLocaleString()} ₽</span>
+                    <div className="max-h-48 overflow-y-auto space-y-2">
+                      {franchisees.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Нет доступных франшиз</p>
+                      ) : (
+                        franchisees.map((franchisee) => (
+                          <label
+                            key={franchisee.id}
+                            className="flex items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedFranchisees.includes(franchisee.id)}
+                              onChange={() => handleFranchiseeToggle(franchisee.id)}
+                              className="rounded border-border"
+                            />
+                            <span className="text-sm text-foreground">{franchisee.name}</span>
+                            <span className="text-xs text-muted-foreground">({franchisee.city})</span>
+                          </label>
+                        ))
+                      )}
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="space-y-4 pt-4 border-t border-border">
                 <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">Связанные Контакты</h3>
 
                 <div className="space-y-3">
-                  {/* Contact Name */}
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">Имя контакта</label>
                     <div className="flex items-center gap-2">
@@ -710,9 +779,7 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                             className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
                           />
                           <button
-                            onClick={() => {
-                              handleContactEdit("name", editValues["contact.name"])
-                            }}
+                            onClick={() => handleContactEdit("name", editValues["contact.name"])}
                             className="text-primary"
                           >
                             <Save size={16} />
@@ -733,7 +800,6 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                     </div>
                   </div>
 
-                  {/* Phone */}
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">Телефон</label>
                     <div className="flex items-center gap-2">
@@ -746,9 +812,7 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                             className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
                           />
                           <button
-                            onClick={() => {
-                              handleContactEdit("phone", editValues["contact.phone"])
-                            }}
+                            onClick={() => handleContactEdit("phone", editValues["contact.phone"])}
                             className="text-primary"
                           >
                             <Save size={16} />
@@ -771,7 +835,6 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                     </div>
                   </div>
 
-                  {/* Email */}
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">Email</label>
                     <div className="flex items-center gap-2">
@@ -784,9 +847,7 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                             className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
                           />
                           <button
-                            onClick={() => {
-                              handleContactEdit("email", editValues["contact.email"])
-                            }}
+                            onClick={() => handleContactEdit("email", editValues["contact.email"])}
                             className="text-primary"
                           >
                             <Save size={16} />
@@ -812,22 +873,20 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                     </div>
                   </div>
 
-                  {/* Company */}
                   <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Компания</label>
+                    <label className="text-xs text-muted-foreground">Telegram ID</label>
                     <div className="flex items-center gap-2">
-                      {isEditingField === "contact.company" ? (
+                      {isEditingField === "contact.telegramId" ? (
                         <>
                           <input
                             type="text"
-                            value={editValues["contact.company"] || dealData.contact.company || ""}
-                            onChange={(e) => setEditValues({ ...editValues, "contact.company": e.target.value })}
+                            value={editValues["contact.telegramId"] || dealData.contact.telegramId || ""}
+                            onChange={(e) => setEditValues({ ...editValues, "contact.telegramId": e.target.value })}
                             className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
+                            placeholder="@username"
                           />
                           <button
-                            onClick={() => {
-                              handleContactEdit("company", editValues["contact.company"])
-                            }}
+                            onClick={() => handleContactEdit("telegramId", editValues["contact.telegramId"])}
                             className="text-primary"
                           >
                             <Save size={16} />
@@ -835,9 +894,10 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                         </>
                       ) : (
                         <>
-                          <span className="text-sm text-foreground">{dealData.contact.company || "Не указано"}</span>
+                          <MessageCircle size={16} className="text-muted-foreground" />
+                          <span className="text-sm text-foreground">{dealData.contact.telegramId || "Не указан"}</span>
                           <button
-                            onClick={() => handleFieldEdit("contact.company", dealData.contact.company || "")}
+                            onClick={() => handleFieldEdit("contact.telegramId", dealData.contact.telegramId || "")}
                             className="ml-auto text-muted-foreground hover:text-primary"
                           >
                             <Edit2 size={14} />
@@ -847,7 +907,6 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                     </div>
                   </div>
 
-                  {/* Social Links */}
                   {dealData.contact.socialLinks && dealData.contact.socialLinks.length > 0 && (
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">Социальные сети</label>
@@ -874,7 +933,6 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
 
           {/* Center Block - 65% */}
           <div className="flex-1 flex flex-col">
-            {/* Activity Feed */}
             <div className="flex-1 overflow-y-auto p-6">
               <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-4">Лента Активности</h3>
 
@@ -912,10 +970,19 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-medium text-foreground">{activity.user}</span>
                         <span className="text-xs text-muted-foreground">
-                          {activity.timestamp.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                          {new Date(activity.timestamp).toLocaleTimeString("ru-RU", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </span>
                       </div>
                       <p className="text-sm text-foreground">{activity.content}</p>
+                      {activity.type === "task" && activity.assignedTo && (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Назначено: {activity.assignedTo}
+                          {activity.assignedTelegramId && ` (@${activity.assignedTelegramId})`}
+                        </div>
+                      )}
                       {activity.type === "task" && (
                         <button
                           onClick={() => toggleTaskStatus(activity.id)}
@@ -931,12 +998,23 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
             </div>
 
             <div className="border-t border-border p-4 space-y-3">
-              {/* Quick Actions */}
               <div className="flex gap-2">
                 <button
                   onClick={() => {
                     const taskContent = prompt("Введите описание задачи:")
-                    if (taskContent) handleAddTask(taskContent)
+                    if (taskContent) {
+                      const assigneeIndex =
+                        managers.length > 0
+                          ? prompt(
+                              `Выберите исполнителя (введите номер):\n${managers.map((m, i) => `${i + 1}. ${m.name}`).join("\n")}\n\nОставьте пустым для задачи без назначения`,
+                            )
+                          : null
+                      const assigneeId =
+                        assigneeIndex && !isNaN(Number(assigneeIndex))
+                          ? managers[Number(assigneeIndex) - 1]?.id
+                          : undefined
+                      handleAddTask(taskContent, assigneeId)
+                    }
                   }}
                   className="px-3 py-1.5 bg-muted hover:bg-muted/80 text-foreground rounded text-sm flex items-center gap-1.5"
                 >
@@ -953,7 +1031,6 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
                 </button>
               </div>
 
-              {/* Message Input */}
               <div className="flex gap-2">
                 <button className="p-2 text-muted-foreground hover:text-primary transition-colors">
                   <Paperclip size={20} />

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { TrendingUp, TrendingDown, DollarSign } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useAuth } from "@/contexts/auth-context"
 
 interface FranchiseFinance {
   id: string
@@ -23,6 +24,7 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
   const [sortBy, setSortBy] = useState<"revenue" | "profit">("revenue")
   const [franchiseData, setFranchiseData] = useState<FranchiseFinance[]>([])
   const [loading, setLoading] = useState(true)
+  const { getAuthHeaders } = useAuth()
 
   useEffect(() => {
     loadFranchiseFinancials()
@@ -31,10 +33,11 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
   const loadFranchiseFinancials = async () => {
     try {
       setLoading(true)
+      const headers = getAuthHeaders()
       const [franchisesRes, transactionsRes, expensesRes] = await Promise.all([
-        fetch("/api/franchisees"),
-        fetch("/api/transactions"),
-        fetch("/api/expenses"),
+        fetch("/api/franchisees", { headers }),
+        fetch("/api/transactions", { headers }),
+        fetch("/api/expenses", { headers }),
       ])
 
       if (!franchisesRes.ok || !transactionsRes.ok || !expensesRes.ok) {
@@ -42,22 +45,24 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
       }
 
       const franchises = await franchisesRes.json()
-      const transactions = await transactionsRes.json()
+      const transactionsData = await transactionsRes.json()
       const expenses = await expensesRes.json()
+
+      const transactions = Array.isArray(transactionsData) ? transactionsData : transactionsData.transactions || []
 
       const financialData = franchises.map((f: any) => {
         const franchiseeTransactions = transactions.filter((t: any) => t.franchiseeId === f.id)
         const franchiseeExpenses = expenses.filter((e: any) => e.franchiseeId === f.id)
 
         const revenue = franchiseeTransactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0)
-        const royalty = revenue * (f.royaltyPercent / 100)
+        const royalty = revenue * ((f.royaltyPercent || 10) / 100)
         const expensesTotal = franchiseeExpenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0)
         const profit = revenue - royalty - expensesTotal
 
         return {
           id: f.id,
           name: f.name,
-          location: f.city || f.location,
+          location: f.city || f.location || "",
           revenue,
           royalty,
           expenses: expensesTotal,

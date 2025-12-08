@@ -19,11 +19,10 @@ interface KanbanColumnProps {
   stage: string
   deals: Deal[]
   dealCount: number
-  onEditDeal: (deal: Deal) => void
   onViewDeal?: (deal: Deal) => void
 }
 
-export function KanbanColumn({ stage, deals, dealCount, onEditDeal, onViewDeal }: KanbanColumnProps) {
+export function KanbanColumn({ stage, deals, dealCount, onViewDeal }: KanbanColumnProps) {
   return (
     <Droppable droppableId={stage}>
       {(provided, snapshot) => (
@@ -46,7 +45,6 @@ export function KanbanColumn({ stage, deals, dealCount, onEditDeal, onViewDeal }
                 index={index}
                 {...deal}
                 status={stage.toLowerCase() as any}
-                onEdit={() => onEditDeal(deal)}
                 onView={onViewDeal ? () => onViewDeal(deal) : undefined}
               />
             ))}

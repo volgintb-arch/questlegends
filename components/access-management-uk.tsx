@@ -3,10 +3,16 @@
 import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Trash2, Shield } from "lucide-react"
+import { Trash2, Shield, Building2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/contexts/auth-context"
+
+interface Franchisee {
+  id: string
+  name: string
+  city: string
+}
 
 interface AccessUser {
   id: string
@@ -21,16 +27,19 @@ interface AccessUser {
     constants: boolean
     notifications: boolean
   }
+  assignedFranchisees: string[]
   status: "active" | "inactive"
 }
 
 export function AccessManagementUK() {
   const { user: currentUser, getAuthHeaders } = useAuth()
   const [users, setUsers] = useState<AccessUser[]>([])
+  const [franchisees, setFranchisees] = useState<Franchisee[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchUsers()
+    fetchFranchisees()
   }, [])
 
   const fetchUsers = async () => {
@@ -59,6 +68,7 @@ export function AccessManagementUK() {
             constants: u.userPermissions?.canManageConstants ?? false,
             notifications: u.userPermissions?.canViewNotifications ?? true,
           },
+          assignedFranchisees: u.assignedFranchisees || [],
           status: u.isActive ? "active" : "inactive",
         }))
 
@@ -67,6 +77,30 @@ export function AccessManagementUK() {
       console.error("[v0] Error fetching users:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchFranchisees = async () => {
+    try {
+      const response = await fetch("/api/franchisees", {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      })
+      if (!response.ok) throw new Error("Failed to fetch franchisees")
+      const data = await response.json()
+
+      if (Array.isArray(data)) {
+        setFranchisees(
+          data.map((f: any) => ({
+            id: f.id,
+            name: f.name,
+            city: f.city,
+          })),
+        )
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching franchisees:", error)
     }
   }
 
@@ -104,6 +138,36 @@ export function AccessManagementUK() {
     } catch (error) {
       console.error("[v0] Error updating permissions:", error)
       alert("Ошибка при обновлении прав доступа")
+    }
+  }
+
+  const handleToggleFranchisee = async (userId: string, franchiseeId: string) => {
+    const user = users.find((u) => u.id === userId)
+    if (!user) return
+
+    const newAssignedFranchisees = user.assignedFranchisees.includes(franchiseeId)
+      ? user.assignedFranchisees.filter((id) => id !== franchiseeId)
+      : [...user.assignedFranchisees, franchiseeId]
+
+    try {
+      const response = await fetch("/api/permissions", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          userId,
+          assignedFranchisees: newAssignedFranchisees,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to update franchisee assignment")
+
+      setUsers(users.map((u) => (u.id === userId ? { ...u, assignedFranchisees: newAssignedFranchisees } : u)))
+    } catch (error) {
+      console.error("[v0] Error updating franchisee assignment:", error)
+      alert("Ошибка при обновлении доступа к франшизам")
     }
   }
 
@@ -168,7 +232,7 @@ export function AccessManagementUK() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 mb-4">
                     <p className="text-sm font-medium">Права доступа:</p>
                     <div className="flex flex-wrap gap-3">
                       <div className="flex items-center gap-2">
@@ -207,6 +271,32 @@ export function AccessManagementUK() {
                         <Label className="text-sm">Уведомления</Label>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="space-y-2 pt-4 border-t border-border">
+                    <div className="flex items-center gap-2">
+                      <Building2 size={16} className="text-muted-foreground" />
+                      <p className="text-sm font-medium">
+                        Доступ к франшизам ({user.assignedFranchisees.length}/{franchisees.length}):
+                      </p>
+                    </div>
+                    {franchisees.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Нет зарегистрированных франшиз</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                        {franchisees.map((franchisee) => (
+                          <div key={franchisee.id} className="flex items-center gap-2">
+                            <Checkbox
+                              checked={user.assignedFranchisees.includes(franchisee.id)}
+                              onCheckedChange={() => handleToggleFranchisee(user.id, franchisee.id)}
+                            />
+                            <Label className="text-sm cursor-pointer">
+                              {franchisee.name} <span className="text-muted-foreground">({franchisee.city})</span>
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

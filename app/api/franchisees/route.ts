@@ -1,69 +1,108 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from "@/lib/utils/response"
+import { NextResponse } from "next/server"
+import { neon } from "@neondatabase/serverless"
+import { jwtVerify } from "jose"
+
+async function getCurrentUser(request: Request) {
+  const authHeader = request.headers.get("authorization")
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null
+  }
+
+  const token = authHeader.substring(7)
+  try {
+    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
+    const { payload } = await jwtVerify(token, secret)
+    return {
+      id: payload.userId as string,
+      role: payload.role as string,
+      franchiseeId: payload.franchiseeId as string | null,
+    }
+  } catch {
+    return null
+  }
+}
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return unauthorizedResponse()
+    const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Only UK can view all franchisees
-    if (session.user.role !== "UK") {
-      return forbiddenResponse()
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json([])
     }
 
-    const franchisees = await prisma.franchisee.findMany({
-      include: {
-        _count: {
-          select: {
-            deals: true,
-            transactions: true,
-            expenses: true,
-            personnel: true,
-            users: true,
-          },
-        },
-      },
-      orderBy: { name: "asc" },
-    })
+    const sql = neon(process.env.DATABASE_URL)
 
-    return successResponse(franchisees)
+    // UK can view all franchisees, others see only their own
+    let franchisees
+    if (user.role === "uk" || user.role === "UK") {
+      franchisees = await sql`
+        SELECT f.*, 
+          (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
+          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount"
+        FROM "Franchisee" f
+        ORDER BY f.name ASC
+      `
+    } else if (user.franchiseeId) {
+      franchisees = await sql`
+        SELECT f.*,
+          (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
+          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount"
+        FROM "Franchisee" f
+        WHERE f.id = ${user.franchiseeId}
+      `
+    } else {
+      franchisees = []
+    }
+
+    return NextResponse.json(franchisees)
   } catch (error) {
-    console.error("[FRANCHISEES_GET]", error)
-    return errorResponse("Failed to fetch franchisees", 500)
+    console.error("[v0] FRANCHISEES_GET error:", error)
+    return NextResponse.json([])
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return unauthorizedResponse()
+    const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Only UK can create franchisees
-    if (session.user.role !== "UK") {
-      return forbiddenResponse()
+    if (user.role !== "uk" && user.role !== "UK") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
     const body = await request.json()
 
-    const franchisee = await prisma.franchisee.create({
-      data: {
-        name: body.name,
-        city: body.city,
-        address: body.address,
-        phone: body.phone,
-        email: body.email,
-      },
-    })
+    const result = await sql`
+      INSERT INTO "Franchisee" (
+        id, name, city, address, phone, email, "royaltyPercent", "createdAt", "updatedAt"
+      ) VALUES (
+        gen_random_uuid(),
+        ${body.name || ""},
+        ${body.city || ""},
+        ${body.address || ""},
+        ${body.phone || ""},
+        ${body.email || ""},
+        ${body.royaltyPercent || 10},
+        NOW(),
+        NOW()
+      )
+      RETURNING *
+    `
 
-    return successResponse(franchisee, 201)
+    return NextResponse.json(result[0], { status: 201 })
   } catch (error) {
-    console.error("[FRANCHISEES_POST]", error)
-    return errorResponse("Failed to create franchisee", 500)
+    console.error("[v0] FRANCHISEES_POST error:", error)
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

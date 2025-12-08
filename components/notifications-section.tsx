@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { AlertTriangle, AlertCircle, CheckCircle, Info, Bell, Trash2, MessageSquare } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { NotificationDetailModal } from "./notification-detail-modal"
+import { useAuth } from "@/contexts/auth-context"
 
 interface Notification {
   id: string
@@ -31,6 +32,7 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({})
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const { getAuthHeaders } = useAuth()
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -88,7 +90,10 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
     try {
       await fetch(`/api/notifications/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({ isRead: true }),
       })
       setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)))
@@ -101,6 +106,7 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
     try {
       await fetch(`/api/notifications/${id}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       })
       setNotifications(notifications.filter((n) => n.id !== id))
     } catch (error) {
@@ -115,13 +121,19 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
     try {
       await fetch(`/api/notifications/${id}/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({ text: comment }),
       })
 
       await fetch(`/api/notifications/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({ isArchived: true }),
       })
 
@@ -148,7 +160,16 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
     const fetchNotifications = async () => {
       try {
         setLoading(true)
-        const response = await fetch(`/api/notifications?type=${filterType}&read=${filterRead}`)
+        const response = await fetch(`/api/notifications?type=${filterType}&read=${filterRead}`, {
+          headers: getAuthHeaders(),
+        })
+
+        if (!response.ok) {
+          console.error("[v0] Error fetching notifications:", response.status)
+          setNotifications([])
+          return
+        }
+
         const data = await response.json()
 
         if (data.success && data.data?.notifications) {
@@ -162,21 +183,24 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
             read: n.isRead,
             location: n.location,
             dealId: n.deal?.id,
-            comments: n.comments.map((c: any) => c.text),
+            comments: n.comments?.map((c: any) => c.text) || [],
             archived: n.isArchived,
             sender: n.sender?.name,
           }))
           setNotifications(transformed)
+        } else {
+          setNotifications([])
         }
       } catch (error) {
         console.error("[v0] Error fetching notifications:", error)
+        setNotifications([])
       } finally {
         setLoading(false)
       }
     }
 
     fetchNotifications()
-  }, [filterType, filterRead])
+  }, [filterType, filterRead, getAuthHeaders])
 
   if (loading) {
     return (

@@ -40,7 +40,7 @@ interface TransactionsERPProps {
 }
 
 export function TransactionsERP({ role }: TransactionsERPProps) {
-  const { user } = useAuth()
+  const { user, getAuthHeaders } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [filters, setFilters] = useState<FilterConfig>({})
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionERP | null>(null)
@@ -65,7 +65,9 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
     try {
       setLoading(true)
       const queryParams = user?.franchiseeId ? `?franchiseeId=${user.franchiseeId}` : ""
-      const response = await fetch(`/api/transactions${queryParams}`)
+      const response = await fetch(`/api/transactions${queryParams}`, {
+        headers: getAuthHeaders(),
+      })
       if (!response.ok) throw new Error("Failed to fetch transactions")
 
       const data = await response.json()
@@ -80,7 +82,9 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
   const loadLocations = async () => {
     try {
-      const response = await fetch("/api/franchisees")
+      const response = await fetch("/api/franchisees", {
+        headers: getAuthHeaders(),
+      })
       if (response.ok) {
         const franchisees = await response.json()
         const locs = franchisees.map((f: any) => ({

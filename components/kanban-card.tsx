@@ -1,7 +1,7 @@
 "use client"
 
 import { Draggable } from "@hello-pangea/dnd"
-import { Grip, Clock, AlertCircle, Edit2, User, Eye } from "lucide-react"
+import { Grip, Clock, AlertCircle, User, Eye } from "lucide-react"
 
 interface KanbanCardProps {
   id: string
@@ -59,18 +59,13 @@ export function KanbanCard({
                   <Eye size={14} />
                 </button>
               )}
-              {onEdit && (
-                <button onClick={onEdit} className="p-1 text-muted-foreground hover:text-primary" title="Редактировать">
-                  <Edit2 size={14} />
-                </button>
-              )}
             </div>
           </div>
 
           <div className="space-y-2 mb-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-primary">{amount}</span>
-              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">{id}</span>
+              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">{id.slice(0, 8)}</span>
             </div>
 
             <div className="flex items-center gap-1 text-xs text-muted-foreground">

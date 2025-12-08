@@ -1,104 +1,119 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { neon } from "@neondatabase/serverless"
+import { jwtVerify } from "jose"
+
+async function getCurrentUser(request: Request) {
+  const authHeader = request.headers.get("authorization")
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null
+  }
+
+  const token = authHeader.substring(7)
+  try {
+    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
+    const { payload } = await jwtVerify(token, secret)
+    return {
+      id: payload.userId as string,
+      role: payload.role as string,
+      franchiseeId: payload.franchiseeId as string | null,
+    }
+  } catch {
+    return null
+  }
+}
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await getCurrentUser(request)
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json([])
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
 
-    const where: any = {}
+    let expenses
 
-    if (session.user.role === "admin") {
-      // Admin can only see expenses for their own franchisee
-      where.franchiseeId = session.user.franchiseeId
-    } else if (session.user.role === "franchisee") {
-      // Franchisee can see their own expenses
-      if (session.user.franchiseeId) {
-        where.franchiseeId = session.user.franchiseeId
-      } else if (session.user.franchiseeIds && session.user.franchiseeIds.length > 0) {
-        where.franchiseeId = { in: session.user.franchiseeIds }
-      }
-    } else if (session.user.role === "uk") {
-      // UK can see all or specific franchisee
+    if (user.role === "uk" || user.role === "UK") {
+      // UK can see all or filter by franchiseeId
       if (franchiseeId) {
-        where.franchiseeId = franchiseeId
+        expenses = await sql`
+          SELECT e.*
+          FROM "Expense" e
+          WHERE e."franchiseeId" = ${franchiseeId}
+          ORDER BY e.date DESC
+        `
+      } else {
+        expenses = await sql`
+          SELECT e.*
+          FROM "Expense" e
+          ORDER BY e.date DESC
+        `
       }
+    } else if (user.franchiseeId) {
+      // Others see only their franchisee expenses
+      expenses = await sql`
+        SELECT e.*
+        FROM "Expense" e
+        WHERE e."franchiseeId" = ${user.franchiseeId}
+        ORDER BY e.date DESC
+      `
     } else {
-      // Other roles don't have access
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
+      expenses = []
     }
-
-    const expenses = await prisma.expense.findMany({
-      where,
-      include: {
-        createdBy: {
-          select: { id: true, name: true },
-        },
-      },
-      orderBy: { date: "desc" },
-    })
 
     return NextResponse.json(expenses)
   } catch (error) {
-    console.error("[EXPENSES_GET]", error)
-    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+    console.error("[v0] EXPENSES_GET error:", error)
+    return NextResponse.json([])
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await getCurrentUser(request)
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (session.user.role !== "franchisee" && session.user.role !== "admin" && session.user.role !== "uk") {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
     }
 
+    const sql = neon(process.env.DATABASE_URL)
     const body = await request.json()
 
-    let targetFranchiseeId = session.user.franchiseeId
-
-    if (session.user.role === "franchisee" && session.user.franchiseeIds && session.user.franchiseeIds.length > 0) {
-      targetFranchiseeId = session.user.franchiseeIds[0]
-    }
-
-    if (session.user.role === "uk" && body.franchiseeId) {
-      targetFranchiseeId = body.franchiseeId
-    }
+    const targetFranchiseeId = body.franchiseeId || user.franchiseeId
 
     if (!targetFranchiseeId) {
       return NextResponse.json({ error: "Franchisee ID is required" }, { status: 400 })
     }
 
-    const expense = await prisma.expense.create({
-      data: {
-        category: body.category,
-        amount: body.amount,
-        date: new Date(body.date),
-        description: body.description,
-        fileUrl: body.fileUrl,
-        franchiseeId: targetFranchiseeId,
-        createdById: session.user.id,
-      },
-      include: {
-        createdBy: {
-          select: { id: true, name: true },
-        },
-      },
-    })
+    // Insert new expense
+    const result = await sql`
+      INSERT INTO "Expense" (
+        id, category, amount, date, description, "fileUrl", "franchiseeId", "createdAt"
+      ) VALUES (
+        gen_random_uuid(),
+        ${body.category || "other"},
+        ${body.amount || 0},
+        ${body.date ? new Date(body.date).toISOString() : new Date().toISOString()},
+        ${body.description || ""},
+        ${body.fileUrl || null},
+        ${targetFranchiseeId},
+        NOW()
+      )
+      RETURNING *
+    `
 
-    return NextResponse.json(expense)
+    return NextResponse.json(result[0])
   } catch (error) {
-    console.error("[EXPENSES_POST]", error)
+    console.error("[v0] EXPENSES_POST error:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

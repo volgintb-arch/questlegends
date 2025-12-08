@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from "react"
 import { Plus, Filter } from "lucide-react"
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
 import { KanbanColumn } from "./kanban-column"
-import { DealEditModal } from "./deal-edit-modal"
 import { DealCardFull } from "./deal-card-full"
 import { DealCreateModal } from "./deal-create-modal"
 import { useAuth } from "@/contexts/auth-context"
@@ -33,8 +32,6 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   const { user, getAuthHeaders } = useAuth()
   const [loading, setLoading] = useState(true)
   const [filterOpen, setFilterOpen] = useState(false)
-  const [editingDeal, setEditingDeal] = useState<Deal | null>(null)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [viewingDeal, setViewingDeal] = useState<any | null>(null)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -146,18 +143,16 @@ export function DealsKanban({ role }: DealsKanbanProps) {
     }
   }
 
-  const handleEditDeal = (deal: Deal) => {
-    setEditingDeal(deal)
-    setIsEditModalOpen(true)
-  }
-
   const handleViewDeal = async (deal: Deal) => {
     try {
+      console.log("[v0] Loading deal details for:", deal.id)
       const response = await fetch(`/api/deals/${deal.id}`, {
         headers: getAuthHeaders(),
       })
       if (response.ok) {
-        const fullDeal = await response.json()
+        const data = await response.json()
+        const fullDeal = data.success ? data : data
+        console.log("[v0] Deal details loaded:", fullDeal)
         setViewingDeal({
           ...fullDeal,
           amount: fullDeal.price || 0,
@@ -173,18 +168,12 @@ export function DealsKanban({ role }: DealsKanbanProps) {
           tasks: fullDeal.tasks || [],
         })
         setIsViewModalOpen(true)
+      } else {
+        console.error("[v0] Failed to load deal details:", response.status)
       }
     } catch (error) {
       console.error("[v0] Error loading deal details:", error)
     }
-  }
-
-  const handleSaveDeal = (updatedDeal: Deal) => {
-    const newBoardData = { ...boardData }
-    Object.keys(newBoardData).forEach((stage) => {
-      newBoardData[stage] = newBoardData[stage].map((d) => (d.id === updatedDeal.id ? updatedDeal : d))
-    })
-    setBoardData(newBoardData)
   }
 
   const handleCreateDeal = async (newDealData: any) => {
@@ -238,7 +227,6 @@ export function DealsKanban({ role }: DealsKanbanProps) {
                 stage={stage}
                 deals={boardData[stage] || []}
                 dealCount={(boardData[stage] || []).length}
-                onEditDeal={handleEditDeal}
                 onViewDeal={handleViewDeal}
               />
             ))}
@@ -284,17 +272,6 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         </div>
       </div>
 
-      <DealEditModal
-        deal={editingDeal}
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false)
-          setEditingDeal(null)
-        }}
-        onSave={handleSaveDeal}
-        role={role}
-      />
-
       {viewingDeal && (
         <DealCardFull
           deal={viewingDeal}
@@ -305,6 +282,12 @@ export function DealsKanban({ role }: DealsKanbanProps) {
           }}
           onUpdate={(updatedDeal) => {
             console.log("[v0] Deal updated:", updatedDeal)
+            window.location.reload()
+          }}
+          onDelete={() => {
+            setIsViewModalOpen(false)
+            setViewingDeal(null)
+            window.location.reload()
           }}
           role={role}
         />
