@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     const users = await sql`
       SELECT 
-        u.id, u.phone, u.name, u.role, u."passwordHash", u."isActive", u."franchiseeId",
+        u.id, u.phone, u.name, u.role, u."passwordHash", u.password, u."isActive", u."franchiseeId",
         f.name as "franchiseeName", f.city as "franchiseeCity"
       FROM "User" u
       LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
@@ -37,7 +37,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Account is inactive" }, { status: 401 })
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash)
+    const storedPassword = user.passwordHash || user.password
+    if (!storedPassword) {
+      console.log("[v0] No password stored for user")
+      return NextResponse.json({ error: "Invalid phone or password" }, { status: 401 })
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, storedPassword)
 
     console.log("[v0] Password check:", isPasswordValid ? "Valid" : "Invalid")
 
@@ -63,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      token, // Include token in response body
+      token,
       user: {
         id: user.id,
         phone: user.phone,

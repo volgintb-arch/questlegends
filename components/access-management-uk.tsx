@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Trash2, Shield, Building2 } from "lucide-react"
+import { Shield, Building2, User } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/contexts/auth-context"
@@ -20,6 +19,9 @@ interface AccessUser {
   email: string
   phone: string
   role: string
+  roleDisplay: string
+  franchiseeId?: string
+  franchiseeName?: string
   permissions: {
     dashboard: boolean
     deals: boolean
@@ -32,7 +34,7 @@ interface AccessUser {
 }
 
 export function AccessManagementUK() {
-  const { user: currentUser, getAuthHeaders } = useAuth()
+  const { getAuthHeaders, user: currentUser } = useAuth()
   const [users, setUsers] = useState<AccessUser[]>([])
   const [franchisees, setFranchisees] = useState<Franchisee[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,13 +56,16 @@ export function AccessManagementUK() {
       const data = await response.json()
 
       const formattedUsers = data.users
-        .filter((u: any) => u.role === "uk_employee" || u.role === "uk")
+        .filter((u: any) => u.role === "uk_employee" || u.role === "uk" || u.role === "franchisee")
         .map((u: any) => ({
           id: u.id,
           name: u.name,
           email: u.telegram || u.phone,
           phone: u.phone,
-          role: u.description || "Сотрудник УК",
+          role: u.role,
+          roleDisplay: u.role === "uk" ? "Директор УК" : u.role === "uk_employee" ? "Сотрудник УК" : "Франчайзи",
+          franchiseeId: u.franchiseeId,
+          franchiseeName: u.franchiseeName,
           permissions: {
             dashboard: u.userPermissions?.canViewDashboard ?? true,
             deals: u.userPermissions?.canViewDeals ?? false,
@@ -72,6 +77,7 @@ export function AccessManagementUK() {
           status: u.isActive ? "active" : "inactive",
         }))
 
+      console.log("[v0] Fetched UK users and franchisees:", formattedUsers.length)
       setUsers(formattedUsers)
     } catch (error) {
       console.error("[v0] Error fetching users:", error)
@@ -171,147 +177,242 @@ export function AccessManagementUK() {
     }
   }
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Вы уверены, что хотите удалить доступ этого пользователя?")) return
+  const canEdit = currentUser?.role === "super_admin" || currentUser?.role === "uk"
 
-    try {
-      const response = await fetch(`/api/users/${userId}`, {
-        method: "DELETE",
-        headers: {
-          ...getAuthHeaders(),
-        },
-      })
-      if (!response.ok) throw new Error("Failed to delete user")
-
-      setUsers(users.filter((user) => user.id !== userId))
-    } catch (error) {
-      console.error("[v0] Error deleting user:", error)
-      alert("Ошибка при удалении пользователя")
-    }
-  }
+  const ukUsers = users.filter((u) => u.role === "uk" || u.role === "uk_employee")
+  const franchiseeUsers = users.filter((u) => u.role === "franchisee")
 
   if (loading) {
     return <div className="p-6 text-center">Загрузка...</div>
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Управление Доступом УК</h1>
-        <p className="text-muted-foreground mt-1">Управление правами доступа сотрудников управляющей компании</p>
+        <h1 className="text-xl font-bold text-foreground">Управление Доступом</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Управление правами доступа сотрудников УК и франчайзи
+          {!canEdit && " (только просмотр)"}
+        </p>
       </div>
 
-      <div className="grid gap-4">
-        {users.length === 0 ? (
-          <Card className="p-8 text-center">
-            <Shield size={48} className="mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">Нет сотрудников УК</h3>
-            <p className="text-muted-foreground">В системе пока нет зарегистрированных сотрудников УК</p>
-          </Card>
-        ) : (
-          users.map((user) => (
-            <Card key={user.id} className="p-6">
-              <div className="flex items-start justify-between">
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Shield className="text-primary" size={16} />
+          Сотрудники УК ({ukUsers.length})
+        </h2>
+
+        <div className="grid gap-3">
+          {ukUsers.length === 0 ? (
+            <Card className="p-4 text-center">
+              <Shield size={32} className="mx-auto mb-2 text-muted-foreground" />
+              <h3 className="text-sm font-semibold mb-1">Нет сотрудников УК</h3>
+              <p className="text-xs text-muted-foreground">В системе пока нет зарегистрированных сотрудников УК</p>
+            </Card>
+          ) : (
+            ukUsers.map((user) => (
+              <Card key={user.id} className="p-3">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Shield className="text-primary" size={20} />
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Shield className="text-primary" size={14} />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-lg">{user.name}</h3>
-                      <p className="text-sm text-muted-foreground">{user.role}</p>
+                      <h3 className="font-semibold text-sm">{user.name}</h3>
+                      <p className="text-[10px] text-muted-foreground">{user.roleDisplay}</p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
                     <div>
                       <span className="text-muted-foreground">Email:</span> {user.email}
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Телефон:</span> {user.phone}
+                      <span className="text-muted-foreground">Тел:</span> {user.phone}
                     </div>
                   </div>
 
-                  <div className="space-y-2 mb-4">
-                    <p className="text-sm font-medium">Права доступа:</p>
-                    <div className="flex flex-wrap gap-3">
-                      <div className="flex items-center gap-2">
+                  <div className="space-y-1 mb-2">
+                    <p className="text-xs font-medium">Права доступа:</p>
+                    <div className="flex flex-wrap gap-2">
+                      <div className="flex items-center gap-1">
                         <Checkbox
+                          className="h-3 w-3"
                           checked={user.permissions.dashboard}
                           onCheckedChange={() => handleTogglePermission(user.id, "dashboard")}
+                          disabled={!canEdit}
                         />
-                        <Label className="text-sm">Дашборд</Label>
+                        <Label className="text-[10px]">Дашборд</Label>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Checkbox
+                          className="h-3 w-3"
                           checked={user.permissions.deals}
                           onCheckedChange={() => handleTogglePermission(user.id, "deals")}
+                          disabled={!canEdit}
                         />
-                        <Label className="text-sm">CRM</Label>
+                        <Label className="text-[10px]">CRM</Label>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Checkbox
+                          className="h-3 w-3"
                           checked={user.permissions.finances}
                           onCheckedChange={() => handleTogglePermission(user.id, "finances")}
+                          disabled={!canEdit}
                         />
-                        <Label className="text-sm">Финансы</Label>
+                        <Label className="text-[10px]">Финансы</Label>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Checkbox
+                          className="h-3 w-3"
                           checked={user.permissions.constants}
                           onCheckedChange={() => handleTogglePermission(user.id, "constants")}
+                          disabled={!canEdit}
                         />
-                        <Label className="text-sm">Константы</Label>
+                        <Label className="text-[10px]">Константы</Label>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Checkbox
+                          className="h-3 w-3"
                           checked={user.permissions.notifications}
                           onCheckedChange={() => handleTogglePermission(user.id, "notifications")}
+                          disabled={!canEdit}
                         />
-                        <Label className="text-sm">Уведомления</Label>
+                        <Label className="text-[10px]">Уведомления</Label>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2 pt-4 border-t border-border">
-                    <div className="flex items-center gap-2">
-                      <Building2 size={16} className="text-muted-foreground" />
-                      <p className="text-sm font-medium">
-                        Доступ к франшизам ({user.assignedFranchisees.length}/{franchisees.length}):
+                  <div className="space-y-1 pt-2 border-t border-border">
+                    <div className="flex items-center gap-1">
+                      <Building2 size={12} className="text-muted-foreground" />
+                      <p className="text-xs font-medium">
+                        Франшизы ({user.assignedFranchisees.length}/{franchisees.length}):
                       </p>
                     </div>
                     {franchisees.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Нет зарегистрированных франшиз</p>
+                      <p className="text-[10px] text-muted-foreground">Нет франшиз</p>
                     ) : (
-                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                      <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
                         {franchisees.map((franchisee) => (
-                          <div key={franchisee.id} className="flex items-center gap-2">
+                          <div key={franchisee.id} className="flex items-center gap-1">
                             <Checkbox
+                              className="h-3 w-3"
                               checked={user.assignedFranchisees.includes(franchisee.id)}
                               onCheckedChange={() => handleToggleFranchisee(user.id, franchisee.id)}
+                              disabled={!canEdit}
                             />
-                            <Label className="text-sm cursor-pointer">
-                              {franchisee.name} <span className="text-muted-foreground">({franchisee.city})</span>
-                            </Label>
+                            <Label className="text-[10px] cursor-pointer">{franchisee.name}</Label>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
                 </div>
+              </Card>
+            ))
+          )}
+        </div>
+      </div>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDeleteUser(user.id)}
-                  className="text-destructive"
-                >
-                  <Trash2 size={18} />
-                </Button>
-              </div>
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5">
+          <Building2 className="text-orange-500" size={16} />
+          Франчайзи ({franchiseeUsers.length})
+        </h2>
+
+        <div className="grid gap-3">
+          {franchiseeUsers.length === 0 ? (
+            <Card className="p-4 text-center">
+              <Building2 size={32} className="mx-auto mb-2 text-muted-foreground" />
+              <h3 className="text-sm font-semibold mb-1">Нет франчайзи</h3>
+              <p className="text-xs text-muted-foreground">В системе пока нет зарегистрированных франчайзи</p>
             </Card>
-          ))
-        )}
+          ) : (
+            franchiseeUsers.map((user) => (
+              <Card key={user.id} className="p-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-7 h-7 rounded-full bg-orange-500/10 flex items-center justify-center">
+                      <User className="text-orange-500" size={14} />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-sm">{user.name}</h3>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[10px] text-muted-foreground">{user.roleDisplay}</p>
+                        {user.franchiseeName && (
+                          <span className="text-[9px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded">
+                            {user.franchiseeName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                    <div>
+                      <span className="text-muted-foreground">Email:</span> {user.email}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Тел:</span> {user.phone}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium">Права доступа:</p>
+                    <div className="flex flex-wrap gap-2">
+                      <div className="flex items-center gap-1">
+                        <Checkbox
+                          className="h-3 w-3"
+                          checked={user.permissions.dashboard}
+                          onCheckedChange={() => handleTogglePermission(user.id, "dashboard")}
+                          disabled={!canEdit}
+                        />
+                        <Label className="text-[10px]">Дашборд</Label>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Checkbox
+                          className="h-3 w-3"
+                          checked={user.permissions.deals}
+                          onCheckedChange={() => handleTogglePermission(user.id, "deals")}
+                          disabled={!canEdit}
+                        />
+                        <Label className="text-[10px]">CRM</Label>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Checkbox
+                          className="h-3 w-3"
+                          checked={user.permissions.finances}
+                          onCheckedChange={() => handleTogglePermission(user.id, "finances")}
+                          disabled={!canEdit}
+                        />
+                        <Label className="text-[10px]">Финансы</Label>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Checkbox
+                          className="h-3 w-3"
+                          checked={user.permissions.constants}
+                          onCheckedChange={() => handleTogglePermission(user.id, "constants")}
+                          disabled={!canEdit}
+                        />
+                        <Label className="text-[10px]">Константы</Label>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Checkbox
+                          className="h-3 w-3"
+                          checked={user.permissions.notifications}
+                          onCheckedChange={() => handleTogglePermission(user.id, "notifications")}
+                          disabled={!canEdit}
+                        />
+                        <Label className="text-[10px]">Уведомления</Label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
       </div>
     </div>
   )

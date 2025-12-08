@@ -13,14 +13,10 @@ import {
   Users,
   Calendar,
   Send,
-  Paperclip,
   CheckCircle,
   AlertCircle,
   MessageCircle,
-  ChevronDown,
-  Edit2,
   Save,
-  ExternalLink,
   Plus,
   Trash2,
 } from "lucide-react"
@@ -67,12 +63,6 @@ interface DealData {
   franchiseeId?: string
 }
 
-interface Franchisee {
-  id: string
-  name: string
-  city: string
-}
-
 interface UKEmployee {
   id: string
   name: string
@@ -85,7 +75,7 @@ interface DealCardFullProps {
   onClose: () => void
   onUpdate: (deal: DealData) => void
   onDelete: () => void
-  role: "uk" | "franchisee" | "admin"
+  role: "uk" | "franchisee" | "admin" | "super_admin"
 }
 
 export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }: DealCardFullProps) {
@@ -95,961 +85,565 @@ export function DealCardFull({ deal, isOpen, onClose, onUpdate, onDelete, role }
   const [isEditingField, setIsEditingField] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<Record<string, any>>({})
   const [managers, setManagers] = useState<UKEmployee[]>([])
-  const [franchisees, setFranchisees] = useState<Franchisee[]>([])
-  const [selectedFranchisees, setSelectedFranchisees] = useState<string[]>([])
+  const [isMounted, setIsMounted] = useState(false)
+
+  const [newTask, setNewTask] = useState({
+    content: "",
+    assignedTo: "",
+    assignedTelegramId: "",
+  })
+
+  const stages = ["NEW", "Лиды", "Переговоры", "КП", "Договор", "Оплата", "Выполнено"]
 
   useEffect(() => {
-    fetchManagers()
-    fetchFranchisees()
+    setIsMounted(true)
+    return () => setIsMounted(false)
   }, [])
 
-  const fetchManagers = async () => {
-    try {
-      const response = await fetch("/api/users?role=uk,uk_employee", {
-        headers: getAuthHeaders(),
-      })
-      const data = await response.json()
+  const authHeaders = getAuthHeaders()
 
-      if (Array.isArray(data)) {
-        setManagers(
-          data.map((user: any) => ({
-            id: user.id,
-            name: user.name,
-            telegramId: user.telegramId || null,
-          })),
-        )
-      }
-    } catch (error) {
-      console.error("[v0] Error fetching managers:", error)
+  // Fetch UK managers for assignment
+  useEffect(() => {
+    if (!isMounted) return
+    if ((role === "uk" || role === "super_admin") && isOpen) {
+      console.log("[v0] Fetching UK employees for managers list")
+      fetch("/api/users?role=uk", {
+        headers: authHeaders,
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!isMounted) return
+          console.log("[v0] UK employees response:", JSON.stringify(data).slice(0, 200))
+          const users = data.data || data || []
+          if (Array.isArray(users)) {
+            setManagers(
+              users.map((u: any) => ({
+                id: u.id,
+                name: u.name,
+                telegramId: u.telegramId || u.telegram || u.phone,
+              })),
+            )
+            console.log("[v0] Loaded managers:", users.length)
+          }
+        })
+        .catch((err) => {
+          console.error("[v0] Error loading UK employees:", err)
+        })
     }
+  }, [role, isOpen, isMounted]) // Removed getAuthHeaders from deps
+
+  const dealId = deal.id
+  useEffect(() => {
+    if (!isMounted) return
+    if (isOpen && dealId) {
+      fetch(`/api/deals/${dealId}`, {
+        headers: authHeaders,
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!isMounted) return
+          if (data && !data.error) {
+            setDealData({
+              ...deal,
+              ...data,
+              title: data.clientName || deal.title,
+              amount: data.price || deal.amount,
+              location: data.franchiseeCity || data.notes?.match(/Город: ([^\n]+)/)?.[1] || deal.location,
+              contact: {
+                name: data.clientName || deal.contact?.name || "",
+                phone: data.clientPhone || deal.contact?.phone || "",
+                email: deal.contact?.email || "",
+                telegramId: data.clientTelegram || deal.contact?.telegramId || "",
+              },
+              responsible: data.responsibleName || data.responsible || deal.responsible,
+              activities: deal.activities || [],
+              tasks: deal.tasks || [],
+            })
+          }
+        })
+        .catch((err) => console.error("[v0] Error fetching deal details:", err))
+    }
+  }, [isOpen, dealId, isMounted])
+
+  if (!isOpen) return null
+
+  const getStageColor = (stage: string) => {
+    const colors: Record<string, string> = {
+      NEW: "bg-blue-500",
+      Лиды: "bg-cyan-500",
+      Переговоры: "bg-yellow-500",
+      КП: "bg-orange-500",
+      Договор: "bg-purple-500",
+      Оплата: "bg-green-500",
+      Выполнено: "bg-emerald-500",
+    }
+    return colors[stage] || "bg-gray-500"
   }
 
-  const fetchFranchisees = async () => {
+  const handleStageChange = async (newStage: string) => {
     try {
-      const response = await fetch("/api/franchisees", {
-        headers: getAuthHeaders(),
+      console.log("[v0] Changing stage to:", newStage)
+      const response = await fetch(`/api/deals/${dealData.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ stage: newStage }),
       })
-      const data = await response.json()
 
-      if (Array.isArray(data)) {
-        setFranchisees(
-          data.map((f: any) => ({
-            id: f.id,
-            name: f.name,
-            city: f.city,
-          })),
-        )
+      const result = await response.json()
+      console.log("[v0] Stage change response:", result)
+
+      if (response.ok && result.success) {
+        const updatedDeal = { ...dealData, stage: newStage }
+        setDealData(updatedDeal)
+        onUpdate(updatedDeal)
+      } else {
+        console.error("[v0] Failed to update stage:", result.error)
+        alert(`Ошибка при смене этапа: ${result.error || "Неизвестная ошибка"}`)
       }
     } catch (error) {
-      console.error("[v0] Error fetching franchisees:", error)
-    }
-  }
-
-  const stageOptions =
-    role === "uk"
-      ? ["Лиды", "Переговоры", "Предложение", "Подписано"]
-      : ["Лиды", "Переговоры", "Внесена предоплата (Бронь)", "Игра проведена"]
-
-  const leadSources = ["Instagram", "VK", "Сайт", "Рекомендация", "Реклама", "Другое"]
-  const packageOptions = ["Стандарт", "Премиум", "VIP", "Корпоратив"]
-  const locations = ["Москва", "Санкт-Петербург", "Казань", "Новосибирск"]
-
-  const handleStageChange = (newStage: string) => {
-    const updatedDeal = { ...dealData, stage: newStage }
-    setDealData(updatedDeal)
-    onUpdate(updatedDeal)
-
-    const newActivity: Activity = {
-      id: Date.now().toString(),
-      type: "event",
-      timestamp: new Date(),
-      user: "Система",
-      content: `Сделка перешла на стадию "${newStage}"`,
-    }
-    setDealData({
-      ...updatedDeal,
-      activities: [newActivity, ...updatedDeal.activities],
-    })
-
-    if (newStage === "Игра проведена" || newStage === "Внесена предоплата (Бронь)") {
-      console.log("[v0] Triggering webhook for stage:", newStage)
+      console.error("[v0] Failed to update stage:", error)
+      alert("Ошибка при смене этапа сделки")
     }
   }
 
   const handleFieldEdit = (field: string, value: any) => {
-    setIsEditingField(field)
     setEditValues({ ...editValues, [field]: value })
   }
 
-  const handleFieldSave = async (field: keyof DealData) => {
-    const newValue = editValues[field]
+  const handleFieldSave = async (field: string) => {
+    try {
+      const response = await fetch(`/api/deals/${dealData.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ [field]: editValues[field] }),
+      })
 
-    setDealData((prev) => ({
-      ...prev,
-      [field]: newValue,
-    }))
-
-    if (["animatorsCount", "animatorRate", "hostRate", "djRate"].includes(field)) {
-      console.log("[v0] FOT field changed, recalculating...")
+      if (response.ok) {
+        const updatedDeal = { ...dealData, [field]: editValues[field] }
+        setDealData(updatedDeal)
+        onUpdate(updatedDeal)
+        setIsEditingField(null)
+      }
+    } catch (error) {
+      console.error("Failed to update field:", error)
     }
-
-    setIsEditingField(null)
-    setEditValues({})
-    onUpdate({ ...dealData, [field]: newValue })
   }
 
-  const handleContactEdit = (contactField: keyof Contact, value: string) => {
-    const updatedContact = { ...dealData.contact, [contactField]: value }
-    const updatedDeal = { ...dealData, contact: updatedContact }
-    setDealData(updatedDeal)
-    onUpdate(updatedDeal)
-    setIsEditingField(null)
-
-    const newActivity: Activity = {
+  const handleAddTask = () => {
+    if (!newTask.content) return
+    const task: Activity = {
       id: Date.now().toString(),
-      type: "event",
+      type: "task",
       timestamp: new Date(),
-      user: "Вы",
-      content: `Контактная информация обновлена`,
+      user: "Текущий пользователь",
+      content: newTask.content,
+      status: "pending",
+      assignedTo: newTask.assignedTo,
+      assignedTelegramId: newTask.assignedTelegramId,
     }
     setDealData({
-      ...updatedDeal,
-      activities: [newActivity, ...updatedDeal.activities],
+      ...dealData,
+      tasks: [...(dealData.tasks || []), task],
+    })
+    setNewTask({ content: "", assignedTo: "", assignedTelegramId: "" })
+  }
+
+  const handleToggleTaskStatus = (taskId: string) => {
+    setDealData({
+      ...dealData,
+      tasks: dealData.tasks.map((task) =>
+        task.id === taskId ? { ...task, status: task.status === "completed" ? "pending" : "completed" } : task,
+      ),
+    })
+  }
+
+  const handleDeleteTask = (taskId: string) => {
+    setDealData({
+      ...dealData,
+      tasks: dealData.tasks.filter((task) => task.id !== taskId),
     })
   }
 
   const handleSendMessage = () => {
     if (!messageInput.trim()) return
-
-    const newMessage: Activity = {
+    const newActivity: Activity = {
       id: Date.now().toString(),
-      type: "message",
+      type: "comment",
       timestamp: new Date(),
-      user: "Вы",
+      user: "Текущий пользователь",
       content: messageInput,
     }
-
     setDealData({
       ...dealData,
-      activities: [newMessage, ...dealData.activities],
+      activities: [...(dealData.activities || []), newActivity],
     })
     setMessageInput("")
   }
 
-  const handleAddTask = (taskContent: string, assignedToId?: string) => {
-    const assignedEmployee = assignedToId ? managers.find((m) => m.id === assignedToId) : null
-
-    const newTask: Activity = {
-      id: Date.now().toString(),
-      type: "task",
-      timestamp: new Date(),
-      user: "Вы",
-      content: taskContent,
-      status: "pending",
-      assignedTo: assignedEmployee?.name,
-      assignedTelegramId: assignedEmployee?.telegramId,
-    }
-
-    setDealData({
-      ...dealData,
-      tasks: [...dealData.tasks, newTask],
-      activities: [newTask, ...dealData.activities],
-    })
-  }
-
-  const toggleTaskStatus = (taskId: string) => {
-    const updatedTasks = dealData.tasks.map((task) =>
-      task.id === taskId ? { ...task, status: task.status === "completed" ? "pending" : "completed" } : task,
-    ) as Activity[]
-
-    setDealData({ ...dealData, tasks: updatedTasks })
-  }
-
-  const handleFranchiseeToggle = (franchiseeId: string) => {
-    setSelectedFranchisees((prev) =>
-      prev.includes(franchiseeId) ? prev.filter((id) => id !== franchiseeId) : [...prev, franchiseeId],
-    )
-  }
-
-  const totalRevenue = (dealData.participants || 0) * (dealData.checkPerPerson || 0)
-  const fotCalculation =
-    (dealData.animatorsCount || 0) * (dealData.animatorRate || 0) + (dealData.hostRate || 0) + (dealData.djRate || 0)
-  const royaltyAmount = totalRevenue * 0.07
+  // Calculate indicators (only for franchisee/admin)
+  const totalRevenue = dealData.amount || 0
+  const royalty = totalRevenue * 0.07
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 z-50">
-      <div className="bg-background border border-border rounded-lg w-full max-w-7xl h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-background border border-border rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
+        <div className="flex items-center justify-between p-6 border-b border-border shrink-0">
           <div className="flex items-center gap-4">
-            {isEditingField === "title" ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={editValues.title || dealData.title}
-                  onChange={(e) => setEditValues({ ...editValues, title: e.target.value })}
-                  className="text-xl font-bold bg-background border border-border rounded px-2 py-1"
-                  autoFocus
-                />
-                <button onClick={() => handleFieldSave("title")} className="text-primary">
-                  <Save size={20} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-foreground">{dealData.title}</h2>
-                <button
-                  onClick={() => handleFieldEdit("title", dealData.title)}
-                  className="text-muted-foreground hover:text-primary"
-                >
-                  <Edit2 size={16} />
-                </button>
-              </div>
-            )}
-
-            <div className="relative">
-              <select
-                value={dealData.stage}
-                onChange={(e) => handleStageChange(e.target.value)}
-                className="bg-primary/20 text-primary px-3 py-1 rounded-lg text-sm font-medium border border-primary/30 outline-none cursor-pointer appearance-none pr-8"
-              >
-                {stageOptions.map((stage) => (
-                  <option key={stage} value={stage}>
-                    {stage}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={16}
-                className="text-primary absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
-              />
+            <div className={`w-3 h-3 rounded-full ${getStageColor(dealData.stage)}`} />
+            <div>
+              <h2 className="text-xl font-bold text-foreground">{dealData.title || "Без названия"}</h2>
+              <p className="text-sm text-muted-foreground">ID: {dealData.id?.slice(0, 8)}...</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {(role === "franchisee" || role === "uk") && (
-              <button
-                onClick={onDelete}
-                className="flex items-center gap-2 text-red-500 hover:text-red-600 transition-colors"
-              >
-                <Trash2 size={16} />
-                <span>Удалить сделку</span>
-              </button>
-            )}
+            <button
+              onClick={onDelete}
+              className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
+              title="Удалить сделку"
+            >
+              <Trash2 size={20} />
+            </button>
             <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition-colors">
               <X size={20} className="text-muted-foreground" />
             </button>
           </div>
         </div>
 
-        {/* Main Content - Three Columns */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left Block - 35% */}
-          <div className="w-[35%] border-r border-border overflow-y-auto">
-            <div className="p-6 space-y-6">
-              {/* Deal Fields Section */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">Поля Сделки</h3>
-
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Сумма сделки</label>
-                  <div className="flex items-center gap-2">
-                    {isEditingField === "amount" ? (
-                      <>
-                        <input
-                          type="number"
-                          value={editValues.amount || dealData.amount}
-                          onChange={(e) => setEditValues({ ...editValues, amount: Number(e.target.value) })}
-                          className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                        />
-                        <button onClick={() => handleFieldSave("amount")} className="text-primary">
-                          <Save size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <DollarSign size={16} className="text-primary" />
-                        <span className="text-lg font-bold text-primary">{dealData.amount.toLocaleString()} ₽</span>
-                        <button
-                          onClick={() => handleFieldEdit("amount", dealData.amount)}
-                          className="ml-auto text-muted-foreground hover:text-primary"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Main Info */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Stage Selector */}
+              <div className="bg-card border border-border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-foreground mb-3">Этап сделки</h3>
+                <div className="flex flex-wrap gap-2">
+                  {stages.map((stage) => (
+                    <button
+                      key={stage}
+                      onClick={() => handleStageChange(stage)}
+                      className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                        dealData.stage === stage
+                          ? `${getStageColor(stage)} text-white`
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      {stage}
+                    </button>
+                  ))}
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Источник лида</label>
-                  <div className="flex items-center gap-2">
-                    {isEditingField === "source" ? (
-                      <>
-                        <select
-                          value={editValues.source || dealData.source}
-                          onChange={(e) => setEditValues({ ...editValues, source: e.target.value })}
-                          className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                        >
-                          {leadSources.map((src) => (
-                            <option key={src} value={src}>
-                              {src}
-                            </option>
-                          ))}
-                        </select>
-                        <button onClick={() => handleFieldSave("source")} className="text-primary">
-                          <Save size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-sm text-foreground">{dealData.source}</span>
-                        <button
-                          onClick={() => handleFieldEdit("source", dealData.source)}
-                          className="ml-auto text-muted-foreground hover:text-primary"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Дата создания</label>
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} className="text-muted-foreground" />
-                    <span className="text-sm text-foreground">
-                      {new Date(dealData.createdAt).toLocaleDateString("ru-RU")}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Количество участников (N)</label>
-                  <div className="flex items-center gap-2">
-                    {isEditingField === "participants" ? (
-                      <>
-                        <input
-                          type="number"
-                          value={editValues.participants || dealData.participants}
-                          onChange={(e) => setEditValues({ ...editValues, participants: Number(e.target.value) })}
-                          className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                          min="1"
-                        />
-                        <button onClick={() => handleFieldSave("participants")} className="text-primary">
-                          <Save size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <Users size={16} className="text-muted-foreground" />
-                        <span className="text-sm font-medium text-foreground">{dealData.participants}</span>
-                        <button
-                          onClick={() => handleFieldEdit("participants", dealData.participants)}
-                          className="ml-auto text-muted-foreground hover:text-primary"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {role !== "uk" && (
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Выбранный пакет</label>
-                    <div className="flex items-center gap-2">
-                      {isEditingField === "package" ? (
-                        <>
-                          <select
-                            value={editValues.package || dealData.package || ""}
-                            onChange={(e) => setEditValues({ ...editValues, package: e.target.value })}
-                            className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                          >
-                            <option value="">Не выбран</option>
-                            {packageOptions.map((pkg) => (
-                              <option key={pkg} value={pkg}>
-                                {pkg}
-                              </option>
-                            ))}
-                          </select>
-                          <button onClick={() => handleFieldSave("package")} className="text-primary">
-                            <Save size={16} />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <Package size={16} className="text-muted-foreground" />
-                          <span className="text-sm text-foreground">{dealData.package || "Не выбран"}</span>
-                          <button
-                            onClick={() => handleFieldEdit("package", dealData.package)}
-                            className="ml-auto text-muted-foreground hover:text-primary"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Локация</label>
-                  <div className="flex items-center gap-2">
-                    {isEditingField === "location" ? (
-                      <>
-                        <select
-                          value={editValues.location || dealData.location || ""}
-                          onChange={(e) => setEditValues({ ...editValues, location: e.target.value })}
-                          className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                        >
-                          <option value="">Не выбрана</option>
-                          {locations.map((loc) => (
-                            <option key={loc} value={loc}>
-                              {loc}
-                            </option>
-                          ))}
-                        </select>
-                        <button onClick={() => handleFieldSave("location")} className="text-primary">
-                          <Save size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <MapPin size={16} className="text-muted-foreground" />
-                        <span className="text-sm text-foreground">{dealData.location || "Не выбрана"}</span>
-                        <button
-                          onClick={() => handleFieldEdit("location", dealData.location)}
-                          className="ml-auto text-muted-foreground hover:text-primary"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Ответственный менеджер (сотрудник УК)</label>
-                  <div className="flex items-center gap-2">
-                    {isEditingField === "responsible" ? (
-                      <>
-                        <select
-                          value={editValues.responsible || dealData.responsible || ""}
-                          onChange={(e) => setEditValues({ ...editValues, responsible: e.target.value })}
-                          className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                        >
-                          <option value="">Не назначен</option>
-                          {managers.map((mgr) => (
-                            <option key={mgr.id} value={mgr.name}>
-                              {mgr.name} {mgr.telegramId ? `(@${mgr.telegramId})` : ""}
-                            </option>
-                          ))}
-                        </select>
-                        <button onClick={() => handleFieldSave("responsible")} className="text-primary">
-                          <Save size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <User size={16} className="text-muted-foreground" />
-                        <span className="text-sm text-foreground">{dealData.responsible || "Не назначен"}</span>
-                        <button
-                          onClick={() => handleFieldEdit("responsible", dealData.responsible)}
-                          className="ml-auto text-muted-foreground hover:text-primary"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {role !== "uk" && (
-                  <>
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Кол-во Аниматоров (K)</label>
-                      <div className="flex items-center gap-2">
-                        {isEditingField === "animatorsCount" ? (
-                          <>
-                            <input
-                              type="number"
-                              value={editValues.animatorsCount || dealData.animatorsCount}
-                              onChange={(e) => setEditValues({ ...editValues, animatorsCount: Number(e.target.value) })}
-                              className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                              min="1"
-                            />
-                            <button onClick={() => handleFieldSave("animatorsCount")} className="text-primary">
-                              <Save size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <Users size={16} className="text-muted-foreground" />
-                            <span className="text-sm font-medium text-foreground">{dealData.animatorsCount}</span>
-                            <button
-                              onClick={() => handleFieldEdit("animatorsCount", dealData.animatorsCount)}
-                              className="ml-auto text-muted-foreground hover:text-primary"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Ставка Аниматора (₽)</label>
-                      <div className="flex items-center gap-2">
-                        {isEditingField === "animatorRate" ? (
-                          <>
-                            <input
-                              type="number"
-                              value={editValues.animatorRate || dealData.animatorRate}
-                              onChange={(e) => setEditValues({ ...editValues, animatorRate: Number(e.target.value) })}
-                              className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                              min="0"
-                            />
-                            <button onClick={() => handleFieldSave("animatorRate")} className="text-primary">
-                              <Save size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <DollarSign size={16} className="text-muted-foreground" />
-                            <span className="text-sm font-medium text-foreground">
-                              {(dealData.animatorRate || 0).toLocaleString()} ₽
-                            </span>
-                            <button
-                              onClick={() => handleFieldEdit("animatorRate", dealData.animatorRate)}
-                              className="ml-auto text-muted-foreground hover:text-primary"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Ставка Ведущий (₽)</label>
-                      <div className="flex items-center gap-2">
-                        {isEditingField === "hostRate" ? (
-                          <>
-                            <input
-                              type="number"
-                              value={editValues.hostRate || dealData.hostRate}
-                              onChange={(e) => setEditValues({ ...editValues, hostRate: Number(e.target.value) })}
-                              className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                              min="0"
-                            />
-                            <button onClick={() => handleFieldSave("hostRate")} className="text-primary">
-                              <Save size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <DollarSign size={16} className="text-muted-foreground" />
-                            <span className="text-sm font-medium text-foreground">
-                              {(dealData.hostRate || 0).toLocaleString()} ₽
-                            </span>
-                            <button
-                              onClick={() => handleFieldEdit("hostRate", dealData.hostRate)}
-                              className="ml-auto text-muted-foreground hover:text-primary"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Ставка DJ (₽)</label>
-                      <div className="flex items-center gap-2">
-                        {isEditingField === "djRate" ? (
-                          <>
-                            <input
-                              type="number"
-                              value={editValues.djRate || dealData.djRate}
-                              onChange={(e) => setEditValues({ ...editValues, djRate: Number(e.target.value) })}
-                              className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                              min="0"
-                            />
-                            <button onClick={() => handleFieldSave("djRate")} className="text-primary">
-                              <Save size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <DollarSign size={16} className="text-muted-foreground" />
-                            <span className="text-sm font-medium text-foreground">
-                              {(dealData.djRate || 0).toLocaleString()} ₽
-                            </span>
-                            <button
-                              onClick={() => handleFieldEdit("djRate", dealData.djRate)}
-                              className="ml-auto text-muted-foreground hover:text-primary"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-border">
-                      <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-3">
-                        Расчетные Показатели
-                      </h4>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-muted-foreground">Total Revenue:</span>
-                          <span className="text-sm font-bold text-green-500">{totalRevenue.toLocaleString()} ₽</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-muted-foreground">FOT Calculation:</span>
-                          <span className="text-sm font-bold text-purple-500">{fotCalculation.toLocaleString()} ₽</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-muted-foreground">Royalty (7%):</span>
-                          <span className="text-sm font-bold text-orange-500">{royaltyAmount.toLocaleString()} ₽</span>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {role === "uk" && (
-                  <div className="pt-4 border-t border-border space-y-3">
-                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
-                      Выбрать франчайзи ({selectedFranchisees.length}/{franchisees.length})
-                    </h4>
-                    <div className="flex items-center justify-between mb-2">
-                      <button
-                        onClick={() => setSelectedFranchisees([])}
-                        className="text-xs text-muted-foreground hover:text-primary"
-                      >
-                        Снять все
-                      </button>
-                      <button
-                        onClick={() => setSelectedFranchisees(franchisees.map((f) => f.id))}
-                        className="text-xs text-muted-foreground hover:text-primary"
-                      >
-                        Выбрать все
-                      </button>
-                    </div>
-                    <div className="max-h-48 overflow-y-auto space-y-2">
-                      {franchisees.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">Нет доступных франшиз</p>
-                      ) : (
-                        franchisees.map((franchisee) => (
-                          <label
-                            key={franchisee.id}
-                            className="flex items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedFranchisees.includes(franchisee.id)}
-                              onChange={() => handleFranchiseeToggle(franchisee.id)}
-                              className="rounded border-border"
-                            />
-                            <span className="text-sm text-foreground">{franchisee.name}</span>
-                            <span className="text-xs text-muted-foreground">({franchisee.city})</span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
 
-              <div className="space-y-4 pt-4 border-t border-border">
-                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">Связанные Контакты</h3>
-
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Имя контакта</label>
-                    <div className="flex items-center gap-2">
-                      {isEditingField === "contact.name" ? (
-                        <>
-                          <input
-                            type="text"
-                            value={editValues["contact.name"] || dealData.contact.name}
-                            onChange={(e) => setEditValues({ ...editValues, "contact.name": e.target.value })}
-                            className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                          />
-                          <button
-                            onClick={() => handleContactEdit("name", editValues["contact.name"])}
-                            className="text-primary"
-                          >
-                            <Save size={16} />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <User size={16} className="text-muted-foreground" />
-                          <span className="text-sm text-foreground">{dealData.contact.name}</span>
-                          <button
-                            onClick={() => handleFieldEdit("contact.name", dealData.contact.name)}
-                            className="ml-auto text-muted-foreground hover:text-primary"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                        </>
-                      )}
+              {/* Deal Details */}
+              <div className="bg-card border border-border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-foreground mb-4">Детали сделки</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center gap-3">
+                    <DollarSign size={18} className="text-green-500" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Сумма</p>
+                      <p className="text-sm font-medium text-foreground">{(dealData.amount || 0).toLocaleString()} ₽</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <MapPin size={18} className="text-blue-500" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">{role === "uk" ? "Целевой город" : "Локация"}</p>
+                      <p className="text-sm font-medium text-foreground">{dealData.location || "Не указана"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Clock size={18} className="text-orange-500" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Источник</p>
+                      <p className="text-sm font-medium text-foreground">{dealData.source || "Не указан"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Calendar size={18} className="text-purple-500" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Создана</p>
+                      <p className="text-sm font-medium text-foreground">
+                        {dealData.createdAt ? new Date(dealData.createdAt).toLocaleDateString("ru-RU") : "Неизвестно"}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Телефон</label>
-                    <div className="flex items-center gap-2">
-                      {isEditingField === "contact.phone" ? (
-                        <>
-                          <input
-                            type="tel"
-                            value={editValues["contact.phone"] || dealData.contact.phone}
-                            onChange={(e) => setEditValues({ ...editValues, "contact.phone": e.target.value })}
-                            className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                          />
-                          <button
-                            onClick={() => handleContactEdit("phone", editValues["contact.phone"])}
-                            className="text-primary"
-                          >
-                            <Save size={16} />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <Phone size={16} className="text-primary" />
-                          <a href={`tel:${dealData.contact.phone}`} className="text-sm text-primary hover:underline">
-                            {dealData.contact.phone}
-                          </a>
-                          <button
-                            onClick={() => handleFieldEdit("contact.phone", dealData.contact.phone)}
-                            className="ml-auto text-muted-foreground hover:text-primary"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Email</label>
-                    <div className="flex items-center gap-2">
-                      {isEditingField === "contact.email" ? (
-                        <>
-                          <input
-                            type="email"
-                            value={editValues["contact.email"] || dealData.contact.email}
-                            onChange={(e) => setEditValues({ ...editValues, "contact.email": e.target.value })}
-                            className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                          />
-                          <button
-                            onClick={() => handleContactEdit("email", editValues["contact.email"])}
-                            className="text-primary"
-                          >
-                            <Save size={16} />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <Mail size={16} className="text-muted-foreground" />
-                          <a
-                            href={`mailto:${dealData.contact.email}`}
-                            className="text-sm text-foreground hover:underline"
-                          >
-                            {dealData.contact.email}
-                          </a>
-                          <button
-                            onClick={() => handleFieldEdit("contact.email", dealData.contact.email)}
-                            className="ml-auto text-muted-foreground hover:text-primary"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Telegram ID</label>
-                    <div className="flex items-center gap-2">
-                      {isEditingField === "contact.telegramId" ? (
-                        <>
-                          <input
-                            type="text"
-                            value={editValues["contact.telegramId"] || dealData.contact.telegramId || ""}
-                            onChange={(e) => setEditValues({ ...editValues, "contact.telegramId": e.target.value })}
-                            className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm"
-                            placeholder="@username"
-                          />
-                          <button
-                            onClick={() => handleContactEdit("telegramId", editValues["contact.telegramId"])}
-                            className="text-primary"
-                          >
-                            <Save size={16} />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <MessageCircle size={16} className="text-muted-foreground" />
-                          <span className="text-sm text-foreground">{dealData.contact.telegramId || "Не указан"}</span>
-                          <button
-                            onClick={() => handleFieldEdit("contact.telegramId", dealData.contact.telegramId || "")}
-                            className="ml-auto text-muted-foreground hover:text-primary"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {dealData.contact.socialLinks && dealData.contact.socialLinks.length > 0 && (
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Социальные сети</label>
-                      <div className="space-y-1">
-                        {dealData.contact.socialLinks.map((link, idx) => (
-                          <a
-                            key={idx}
-                            href={link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-sm text-primary hover:underline"
-                          >
-                            <ExternalLink size={14} />
-                            {link}
-                          </a>
-                        ))}
+                  {role !== "uk" && (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <Users size={18} className="text-cyan-500" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Участники</p>
+                          <p className="text-sm font-medium text-foreground">{dealData.participants || 0} чел.</p>
+                        </div>
                       </div>
-                    </div>
+                      <div className="flex items-center gap-3">
+                        <Package size={18} className="text-pink-500" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Пакет</p>
+                          {isEditingField === "package" ? (
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={editValues.package || dealData.package || ""}
+                                onChange={(e) => handleFieldEdit("package", e.target.value)}
+                                className="bg-background border border-border rounded px-2 py-1 text-sm"
+                              >
+                                <option value="">Не выбран</option>
+                                <option value="Стандарт">Стандарт</option>
+                                <option value="Премиум">Премиум</option>
+                                <option value="VIP">VIP</option>
+                              </select>
+                              <button onClick={() => handleFieldSave("package")} className="text-primary">
+                                <Save size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <p
+                              className="text-sm font-medium text-foreground cursor-pointer hover:text-primary"
+                              onClick={() => setIsEditingField("package")}
+                            >
+                              {dealData.package || "Не выбран"}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Center Block - 65% */}
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1 overflow-y-auto p-6">
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-4">Лента Активности</h3>
-
-              <div className="space-y-4">
-                {dealData.activities.map((activity) => (
-                  <div key={activity.id} className="flex gap-3">
-                    <div className="flex-shrink-0 mt-1">
-                      {activity.type === "event" && (
-                        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                          <Clock size={14} className="text-primary" />
-                        </div>
-                      )}
-                      {activity.type === "comment" && (
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                          <MessageCircle size={14} className="text-foreground" />
-                        </div>
-                      )}
-                      {activity.type === "message" && (
-                        <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
-                          <Mail size={14} className="text-accent" />
-                        </div>
-                      )}
-                      {activity.type === "task" && (
-                        <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                          {activity.status === "completed" ? (
-                            <CheckCircle size={14} className="text-green-500" />
-                          ) : (
-                            <AlertCircle size={14} className="text-yellow-500" />
-                          )}
-                        </div>
-                      )}
+              {role !== "uk" && (
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-foreground mb-4">Расчетные Показатели</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total Revenue:</p>
+                      <p className="text-lg font-bold text-green-500">{totalRevenue.toLocaleString()} ₽</p>
                     </div>
-
-                    <div className="flex-1 bg-card border border-border rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-foreground">{activity.user}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(activity.timestamp).toLocaleTimeString("ru-RU", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                      <p className="text-sm text-foreground">{activity.content}</p>
-                      {activity.type === "task" && activity.assignedTo && (
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Назначено: {activity.assignedTo}
-                          {activity.assignedTelegramId && ` (@${activity.assignedTelegramId})`}
-                        </div>
-                      )}
-                      {activity.type === "task" && (
-                        <button
-                          onClick={() => toggleTaskStatus(activity.id)}
-                          className="mt-2 text-xs text-primary hover:underline"
-                        >
-                          {activity.status === "completed" ? "Отменить выполнение" : "Отметить выполненной"}
-                        </button>
-                      )}
+                    <div>
+                      <p className="text-xs text-muted-foreground">Royalty (7%):</p>
+                      <p className="text-lg font-bold text-blue-500">{royalty.toLocaleString()} ₽</p>
                     </div>
                   </div>
-                ))}
+                </div>
+              )}
+
+              {/* Tasks Section */}
+              <div className="bg-card border border-border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-foreground mb-4">Задачи</h3>
+
+                {/* Add new task */}
+                <div className="flex flex-col gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={newTask.content}
+                    onChange={(e) => setNewTask({ ...newTask, content: e.target.value })}
+                    placeholder="Новая задача..."
+                    className="w-full bg-background border border-border rounded-lg px-4 py-2 text-sm outline-none focus:border-primary"
+                  />
+                  {role === "uk" && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={newTask.assignedTo}
+                        onChange={(e) => {
+                          const manager = managers.find((m) => m.id === e.target.value)
+                          setNewTask({
+                            ...newTask,
+                            assignedTo: e.target.value,
+                            assignedTelegramId: manager?.telegramId || "",
+                          })
+                        }}
+                        className="bg-background border border-border rounded-lg px-3 py-2 text-sm"
+                      >
+                        <option value="">Назначить сотруднику УК</option>
+                        {managers.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={newTask.assignedTelegramId}
+                        onChange={(e) => setNewTask({ ...newTask, assignedTelegramId: e.target.value })}
+                        placeholder="Telegram ID"
+                        className="bg-background border border-border rounded-lg px-3 py-2 text-sm"
+                      />
+                    </div>
+                  )}
+                  <button
+                    onClick={handleAddTask}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 flex items-center justify-center gap-2"
+                  >
+                    <Plus size={16} />
+                    Добавить задачу
+                  </button>
+                </div>
+
+                {/* Task list */}
+                <div className="space-y-2">
+                  {(dealData.tasks || []).map((task) => (
+                    <div
+                      key={task.id}
+                      className={`flex items-center justify-between p-3 rounded-lg border ${
+                        task.status === "completed" ? "bg-muted/50 border-border" : "bg-background border-border"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleToggleTaskStatus(task.id)}
+                          className={`p-1 rounded ${
+                            task.status === "completed" ? "text-green-500" : "text-muted-foreground"
+                          }`}
+                        >
+                          {task.status === "completed" ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+                        </button>
+                        <div>
+                          <p
+                            className={`text-sm ${
+                              task.status === "completed" ? "line-through text-muted-foreground" : "text-foreground"
+                            }`}
+                          >
+                            {task.content}
+                          </p>
+                          {task.assignedTo && (
+                            <p className="text-xs text-muted-foreground">
+                              Назначено: {managers.find((m) => m.id === task.assignedTo)?.name || task.assignedTo}
+                              {task.assignedTelegramId && ` (@${task.assignedTelegramId})`}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTask(task.id)}
+                        className="p-1 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                  {(!dealData.tasks || dealData.tasks.length === 0) && (
+                    <p className="text-sm text-muted-foreground text-center py-4">Нет задач</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Activity / Comments */}
+              <div className="bg-card border border-border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-foreground mb-4">Активность</h3>
+
+                <div className="space-y-3 max-h-48 overflow-y-auto mb-4">
+                  {(dealData.activities || []).map((activity) => (
+                    <div key={activity.id} className="flex gap-3">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                          activity.type === "comment" ? "bg-blue-500/20" : "bg-green-500/20"
+                        }`}
+                      >
+                        {activity.type === "comment" ? (
+                          <MessageCircle size={14} className="text-blue-500" />
+                        ) : (
+                          <CheckCircle size={14} className="text-green-500" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm text-foreground">{activity.content}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {activity.user} • {new Date(activity.timestamp).toLocaleString("ru-RU")}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {(!dealData.activities || dealData.activities.length === 0) && (
+                    <p className="text-sm text-muted-foreground text-center py-4">Нет активности</p>
+                  )}
+                </div>
+
+                {/* Message Input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                    placeholder="Написать комментарий..."
+                    className="flex-1 bg-background border border-border rounded-lg px-4 py-2 text-sm outline-none focus:border-primary"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+                  >
+                    <Send size={18} />
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="border-t border-border p-4 space-y-3">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const taskContent = prompt("Введите описание задачи:")
-                    if (taskContent) {
-                      const assigneeIndex =
-                        managers.length > 0
-                          ? prompt(
-                              `Выберите исполнителя (введите номер):\n${managers.map((m, i) => `${i + 1}. ${m.name}`).join("\n")}\n\nОставьте пустым для задачи без назначения`,
-                            )
-                          : null
-                      const assigneeId =
-                        assigneeIndex && !isNaN(Number(assigneeIndex))
-                          ? managers[Number(assigneeIndex) - 1]?.id
-                          : undefined
-                      handleAddTask(taskContent, assigneeId)
-                    }
-                  }}
-                  className="px-3 py-1.5 bg-muted hover:bg-muted/80 text-foreground rounded text-sm flex items-center gap-1.5"
-                >
-                  <Plus size={14} />
-                  Задача
-                </button>
-                <button className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded text-sm flex items-center gap-1.5">
-                  <Phone size={14} />
-                  Позвонить
-                </button>
-                <button className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded text-sm flex items-center gap-1.5">
-                  <Mail size={14} />
-                  Email
-                </button>
+            {/* Right Column - Contact & Responsible */}
+            <div className="space-y-6">
+              {/* Contact Info */}
+              <div className="bg-card border border-border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-foreground mb-4">Контакт</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <User size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-foreground">{dealData.contact?.name || dealData.title || "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Phone size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-foreground">{dealData.contact?.phone || "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Mail size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-foreground">{dealData.contact?.email || "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Send size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-foreground">
+                      {dealData.contact?.telegramId ? `@${dealData.contact.telegramId}` : "—"}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex gap-2">
-                <button className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                  <Paperclip size={20} />
-                </button>
-                <input
-                  type="text"
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                  placeholder="Написать сообщение или комментарий..."
-                  className="flex-1 bg-background border border-border rounded-lg px-4 py-2 text-sm outline-none focus:border-primary"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
-                >
-                  <Send size={16} />
-                  <span className="text-sm">Отправить</span>
-                </button>
+              {/* Responsible Manager */}
+              <div className="bg-card border border-border rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-foreground mb-4">Ответственный менеджер</h3>
+                {role === "uk" || role === "super_admin" ? (
+                  <select
+                    value={editValues.responsibleId || ""}
+                    onChange={(e) => {
+                      handleFieldEdit("responsibleId", e.target.value)
+                      handleFieldSave("responsibleId")
+                    }}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">Не назначен</option>
+                    {managers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} {m.telegramId && `(@${m.telegramId})`}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                      <User size={20} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{dealData.responsible || "Не назначен"}</p>
+                      <p className="text-xs text-muted-foreground">Менеджер</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

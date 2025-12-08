@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { jwtVerify } from "jose"
-
-const sql = neon(process.env.DATABASE_URL!)
+import crypto from "crypto"
 
 async function getCurrentUser(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
@@ -17,6 +16,7 @@ async function getCurrentUser(request: NextRequest) {
     return {
       id: payload.userId as string,
       role: payload.role as string,
+      name: payload.name as string,
       franchiseeId: payload.franchiseeId as string | null,
     }
   } catch {
@@ -32,8 +32,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const { id } = await params
-    console.log("[v0] Fetching deal by id:", id)
 
+    const sql = neon(process.env.DATABASE_URL!)
     const deals = await sql`
       SELECT 
         d.*,
@@ -49,7 +49,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const deal = deals[0]
-    console.log("[v0] Found deal:", deal.clientName)
 
     return NextResponse.json({
       success: true,
@@ -75,62 +74,77 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const { id } = await params
     const body = await request.json()
-    console.log("[v0] Updating deal:", id, body)
 
-    const updates: string[] = []
-    const values: any[] = []
+    const sql = neon(process.env.DATABASE_URL!)
 
     if (body.stage !== undefined) {
-      updates.push(`"stage" = $${values.length + 1}`)
-      values.push(body.stage)
+      if (body.stageId) {
+        await sql`
+          UPDATE "Deal" 
+          SET "stage" = ${body.stage}, "stageId" = ${body.stageId}::uuid, "updatedAt" = NOW() 
+          WHERE id = ${id}
+        `
+      } else {
+        await sql`UPDATE "Deal" SET "stage" = ${body.stage}, "updatedAt" = NOW() WHERE id = ${id}`
+      }
+
+      const updated = await sql`SELECT * FROM "Deal" WHERE id = ${id}`
+      if (updated.length === 0) {
+        return NextResponse.json({ success: false, error: "Deal not found" }, { status: 404 })
+      }
+
+      return NextResponse.json({ success: true, data: updated[0] })
     }
+
+    // Handle other fields
     if (body.clientName !== undefined) {
-      updates.push(`"clientName" = $${values.length + 1}`)
-      values.push(body.clientName)
+      await sql`UPDATE "Deal" SET "clientName" = ${body.clientName}, "updatedAt" = NOW() WHERE id = ${id}`
     }
     if (body.clientPhone !== undefined) {
-      updates.push(`"clientPhone" = $${values.length + 1}`)
-      values.push(body.clientPhone)
-    }
-    if (body.clientEmail !== undefined) {
-      updates.push(`"clientEmail" = $${values.length + 1}`)
-      values.push(body.clientEmail)
+      await sql`UPDATE "Deal" SET "clientPhone" = ${body.clientPhone}, "updatedAt" = NOW() WHERE id = ${id}`
     }
     if (body.price !== undefined) {
-      updates.push(`"price" = $${values.length + 1}`)
-      values.push(body.price)
+      await sql`UPDATE "Deal" SET "price" = ${body.price}, "updatedAt" = NOW() WHERE id = ${id}`
     }
     if (body.participants !== undefined) {
-      updates.push(`"participants" = $${values.length + 1}`)
-      values.push(body.participants)
+      await sql`UPDATE "Deal" SET "participants" = ${body.participants}, "updatedAt" = NOW() WHERE id = ${id}`
     }
     if (body.notes !== undefined) {
-      updates.push(`"notes" = $${values.length + 1}`)
-      values.push(body.notes)
+      await sql`UPDATE "Deal" SET "notes" = ${body.notes}, "updatedAt" = NOW() WHERE id = ${id}`
     }
-    if (body.responsibleManager !== undefined) {
-      updates.push(`"responsibleManager" = $${values.length + 1}`)
-      values.push(body.responsibleManager)
+    if (body.pipelineId !== undefined) {
+      await sql`UPDATE "Deal" SET "pipelineId" = ${body.pipelineId}::uuid, "updatedAt" = NOW() WHERE id = ${id}`
     }
 
-    if (updates.length === 0) {
-      return NextResponse.json({ success: false, error: "No fields to update" }, { status: 400 })
+    if (body.responsible !== undefined) {
+      await sql`UPDATE "Deal" SET "responsible" = ${body.responsible}, "updatedAt" = NOW() WHERE id = ${id}`
+
+      if (body.responsible && body.responsibleId) {
+        const notifId = crypto.randomUUID()
+        const now = new Date().toISOString()
+
+        const deals = await sql`SELECT "clientName" FROM "Deal" WHERE id = ${id}`
+        const dealName = deals[0]?.clientName || "Сделка"
+
+        await sql`
+          INSERT INTO "Notification" (
+            id, type, title, message, "senderId", "recipientId", 
+            "relatedDealId", "isRead", "isArchived", "createdAt", "updatedAt"
+          ) VALUES (
+            ${notifId}, 'deal', 'Назначение ответственным', 
+            ${`Вы назначены ответственным по сделке "${dealName}"`},
+            ${user.id}, ${body.responsibleId}, ${id}, false, false, ${now}, ${now}
+          )
+        `
+      }
     }
 
-    // Add updatedAt
-    updates.push(`"updatedAt" = NOW()`)
-
-    // Use sql.query for dynamic query
-    const query = `UPDATE "Deal" SET ${updates.join(", ")} WHERE id = $${values.length + 1} RETURNING *`
-    values.push(id)
-
-    const result = await sql.query(query, values)
+    const result = await sql`SELECT * FROM "Deal" WHERE id = ${id}`
 
     if (result.length === 0) {
       return NextResponse.json({ success: false, error: "Deal not found" }, { status: 404 })
     }
 
-    console.log("[v0] Deal updated successfully")
     return NextResponse.json({ success: true, data: result[0] })
   } catch (error) {
     console.error("[v0] DEAL_PATCH error:", error)
@@ -145,17 +159,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     }
 
-    // Only UK can delete deals
-    if (user.role !== "uk") {
+    if (user.role !== "uk" && user.role !== "super_admin") {
       return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 })
     }
 
     const { id } = await params
-    console.log("[v0] Deleting deal:", id)
 
+    const sql = neon(process.env.DATABASE_URL!)
     await sql`DELETE FROM "Deal" WHERE id = ${id}`
 
-    console.log("[v0] Deal deleted successfully")
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("[v0] DEAL_DELETE error:", error)

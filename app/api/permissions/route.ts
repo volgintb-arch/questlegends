@@ -41,26 +41,37 @@ export async function GET(request: Request) {
     if (franchiseeId) {
       users = await sql`
         SELECT u.id, u.name, u.phone, u.role, u.telegram, u."isActive", u.description,
+               u."franchiseeId",
                up."canViewDashboard", up."canViewDeals", up."canViewFinances", 
-               up."canManageConstants", up."canViewNotifications"
+               up."canManageConstants", up."canViewNotifications",
+               f.name as "franchiseeName"
         FROM "User" u
         LEFT JOIN "UserPermission" up ON u.id = up."userId"
+        LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
         WHERE u."franchiseeId" = ${franchiseeId}
           AND u.role IN ('admin', 'employee', 'animator', 'host', 'dj')
           AND u."isActive" = true
         ORDER BY u."createdAt" DESC
       `
     } else {
-      // For UK - get UK employees only
       users = await sql`
         SELECT u.id, u.name, u.phone, u.role, u.telegram, u."isActive", u.description,
+               u."franchiseeId",
                up."canViewDashboard", up."canViewDeals", up."canViewFinances", 
-               up."canManageConstants", up."canViewNotifications"
+               up."canManageConstants", up."canViewNotifications",
+               f.name as "franchiseeName"
         FROM "User" u
         LEFT JOIN "UserPermission" up ON u.id = up."userId"
-        WHERE u.role IN ('uk', 'uk_employee')
+        LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+        WHERE u.role IN ('uk', 'uk_employee', 'franchisee')
           AND u."isActive" = true
-        ORDER BY u."createdAt" DESC
+        ORDER BY 
+          CASE u.role 
+            WHEN 'uk' THEN 1 
+            WHEN 'uk_employee' THEN 2 
+            WHEN 'franchisee' THEN 3 
+          END,
+          u."createdAt" DESC
       `
     }
 
@@ -72,6 +83,8 @@ export async function GET(request: Request) {
       telegram: u.telegram,
       isActive: u.isActive,
       description: u.description,
+      franchiseeId: u.franchiseeId,
+      franchiseeName: u.franchiseeName,
       userPermissions: {
         canViewDashboard: u.canViewDashboard ?? true,
         canViewDeals: u.canViewDeals ?? false,

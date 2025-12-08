@@ -50,7 +50,11 @@ export default function UsersPage() {
       }
 
       const data = await response.json()
-      setUsers(data)
+      const allUsers = Array.isArray(data) ? data : data.data || []
+
+      const ukCreatedUsers = allUsers.filter((u: User) => u.role === "uk_employee" || u.role === "franchisee")
+
+      setUsers(ukCreatedUsers)
     } catch (error) {
       console.error("[v0] Error fetching users:", error)
       toast({

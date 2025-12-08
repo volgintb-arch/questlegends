@@ -36,6 +36,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     )
   }
 
+  const getRoleDisplayName = (role: string) => {
+    const roleLabels: Record<string, string> = {
+      super_admin: "Супер Администратор",
+      uk: "Управляющая Компания",
+      uk_employee: "Сотрудник УК",
+      franchisee: "Франчайзи",
+      admin: "Администратор",
+      employee: "Сотрудник",
+      animator: "Аниматор",
+      host: "Ведущий",
+      dj: "DJ",
+    }
+    return roleLabels[role] || role
+  }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar
@@ -48,15 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header
           userName={user.name}
-          role={
-            user.role === "uk"
-              ? "Управляющая Компания"
-              : user.role === "admin"
-                ? "Администратор"
-                : user.role === "employee"
-                  ? "Сотрудник"
-                  : "Франчайзи"
-          }
+          role={getRoleDisplayName(user.role)}
           onMobileMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
         />
 

@@ -3,9 +3,26 @@
 import { createContext, useContext, type ReactNode, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 
-export type UserRole = "uk" | "uk_employee" | "franchisee" | "admin" | "employee"
+export type UserRole = "super_admin" | "uk" | "uk_employee" | "franchisee" | "admin" | "employee"
 
 export const ROLE_PERMISSIONS = {
+  super_admin: {
+    dashboard: true,
+    crm: true,
+    b2bCrm: true,
+    erp: true,
+    finances: true,
+    personnel: true,
+    schedules: true,
+    access: true,
+    kb: true,
+    analytics: true,
+    createFranchisee: true,
+    createUsers: ["franchisee", "uk_employee", "uk", "admin", "employee"],
+    viewAllLocations: true,
+    canManageKPI: true,
+    canManageAll: true,
+  },
   uk: {
     dashboard: true,
     crm: true,
@@ -25,6 +42,7 @@ export const ROLE_PERMISSIONS = {
   uk_employee: {
     dashboard: true,
     b2bCrm: true,
+    crm: true,
     kb: true,
     analytics: false,
     viewOwnTasks: true,
@@ -49,12 +67,12 @@ export const ROLE_PERMISSIONS = {
   },
   admin: {
     dashboard: true,
-    crm: false,
+    crm: true,
     erp: false,
-    finances: false,
-    schedules: false,
+    finances: true,
+    schedules: true,
     kb: true,
-    users: false,
+    users: true,
     createUsers: ["employee"],
     viewOwnLocation: true,
     cannotManageAccess: true,
@@ -71,9 +89,10 @@ export const ROLE_PERMISSIONS = {
 export interface Franchisee {
   id: string
   name: string
-  location: string
-  address: string
-  manager: string
+  city: string
+  location?: string
+  address?: string
+  manager?: string
 }
 
 export interface User {
@@ -84,6 +103,7 @@ export interface User {
   phone?: string
   franchiseeId?: string
   franchiseeName?: string
+  franchiseeCity?: string
   description?: string
   telegram_id?: string
   whatsapp?: string
@@ -94,6 +114,7 @@ interface AuthContextType {
   token: string | null
   franchisees: Franchisee[]
   loading: boolean
+  isLoading: boolean
   setUser: (user: User | null) => void
   login: (phone: string, password: string) => Promise<void>
   logout: () => Promise<void>
@@ -154,17 +175,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const data = await response.json()
           setUser(data.user)
 
-          if (data.user.role === "uk") {
+          if (data.user.role === "uk" || data.user.role === "super_admin") {
             const franchiseesRes = await fetch("/api/franchisees", {
               headers: { Authorization: `Bearer ${storedToken}` },
             })
             if (franchiseesRes.ok) {
               const franchiseesData = await franchiseesRes.json()
-              setFranchisees(franchiseesData)
+              setFranchisees(Array.isArray(franchiseesData) ? franchiseesData : franchiseesData.data || [])
             }
           }
         } else {
-          // Token invalid, clear it
           setStoredToken(null)
           setToken(null)
         }
@@ -198,17 +218,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(data.token)
     setUser(data.user)
 
-    if (data.user.role === "uk") {
+    if (data.user.role === "uk" || data.user.role === "super_admin") {
       const franchiseesRes = await fetch("/api/franchisees", {
         headers: { Authorization: `Bearer ${data.token}` },
       })
       if (franchiseesRes.ok) {
         const franchiseesData = await franchiseesRes.json()
-        setFranchisees(franchiseesData)
+        setFranchisees(Array.isArray(franchiseesData) ? franchiseesData : franchiseesData.data || [])
       }
     }
 
-    router.push("/dashboard")
+    router.push("/")
   }
 
   const logout = async () => {
@@ -221,15 +241,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const canAccess = (requiredRoles: UserRole[]): boolean => {
     if (!user) return false
+    if (user.role === "super_admin") return true
     return requiredRoles.includes(user.role)
   }
 
   const getAccessibleFranchisees = (): Franchisee[] => {
     if (!user) return []
 
-    if (user.role === "uk") {
+    if (user.role === "uk" || user.role === "super_admin") {
       return franchisees
-    } else if (user.role === "franchisee" && user.franchiseeId) {
+    } else if ((user.role === "franchisee" || user.role === "admin") && user.franchiseeId) {
       return franchisees.filter((f) => f.id === user.franchiseeId)
     }
     return []
@@ -237,17 +258,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasPermission = (permission: string): boolean => {
     if (!user) return false
+    if (user.role === "super_admin") return true
     const permissions = ROLE_PERMISSIONS[user.role] as Record<string, any>
     return !!permissions[permission]
   }
 
   const canCreateRole = (role: UserRole): boolean => {
     if (!user) return false
+    if (user.role === "super_admin") return true
+
     const permissions = ROLE_PERMISSIONS[user.role] as any
 
     if (
       user.role === "admin" &&
-      (role === "admin" || role === "franchisee" || role === "uk" || role === "uk_employee")
+      (role === "admin" || role === "franchisee" || role === "uk" || role === "uk_employee" || role === "super_admin")
     ) {
       return false
     }
@@ -262,6 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     token,
     franchisees,
     loading,
+    isLoading: loading,
     setUser,
     login,
     logout,

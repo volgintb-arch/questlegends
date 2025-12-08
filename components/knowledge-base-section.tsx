@@ -14,6 +14,7 @@ import {
   Video,
   BookOpen,
   HelpCircle,
+  ArrowLeft,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -159,16 +160,33 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
     if (!confirm("Вы уверены, что хотите удалить эту статью?")) return
 
     try {
+      console.log("[v0] Deleting article:", id)
       const response = await fetch(`/api/knowledge/${id}`, {
         method: "DELETE",
-        headers: getAuthHeaders(),
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
       })
 
       if (response.ok) {
-        await loadArticles()
+        const result = await response.json()
+        console.log("[v0] Delete response:", result)
+        if (result.success) {
+          console.log("[v0] Article deleted successfully")
+          await loadArticles()
+        } else {
+          console.error("[v0] Delete failed:", result.error)
+          alert(`Ошибка при удалении: ${result.error || "Неизвестная ошибка"}`)
+        }
+      } else {
+        const errorText = await response.text()
+        console.error("[v0] Delete HTTP error:", response.status, errorText)
+        alert(`Ошибка при удалении: ${response.status}`)
       }
     } catch (error) {
       console.error("[v0] Error deleting article:", error)
+      alert("Ошибка при удалении статьи")
     }
   }
 
@@ -205,7 +223,77 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
     ...Object.fromEntries(categories.slice(1).map((cat) => [cat, articles.filter((a) => a.category === cat).length])),
   }
 
-  const canManageArticles = role === "uk"
+  const canManageArticles = role === "uk" || role === "super_admin"
+
+  // Article detail view
+  if (selectedArticle) {
+    return (
+      <div className="space-y-6">
+        <Button
+          onClick={() => setSelectedArticle(null)}
+          variant="ghost"
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft size={18} />
+          Назад к списку
+        </Button>
+
+        <div className="bg-card border border-border rounded-lg p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              {getTypeIcon(selectedArticle.type)}
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">{selectedArticle.title}</h1>
+                <div className="flex items-center gap-3 mt-2">
+                  <Badge variant="secondary">{selectedArticle.category}</Badge>
+                  <span className="text-sm text-muted-foreground">{selectedArticle.date}</span>
+                  <span className="text-sm text-muted-foreground">{selectedArticle.author}</span>
+                </div>
+              </div>
+            </div>
+            {canManageArticles && (
+              <div className="flex gap-2">
+                <Button onClick={() => handleEditArticle(selectedArticle)} variant="outline" size="sm">
+                  <Edit2 size={16} className="mr-2" />
+                  Редактировать
+                </Button>
+                <Button
+                  onClick={() => {
+                    handleDeleteArticle(selectedArticle.id)
+                    setSelectedArticle(null)
+                  }}
+                  variant="destructive"
+                  size="sm"
+                >
+                  <Trash2 size={16} className="mr-2" />
+                  Удалить
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <p className="text-foreground whitespace-pre-wrap">{selectedArticle.content}</p>
+          </div>
+
+          {selectedArticle.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-6 pt-6 border-t border-border">
+              {selectedArticle.tags.map((tag) => (
+                <span key={tag} className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-4 mt-6 pt-6 border-t border-border text-sm text-muted-foreground">
+            <span>{selectedArticle.views} просмотров</span>
+            <span>{selectedArticle.helpful} нашли полезным</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -241,83 +329,26 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
           <Button
             key={category}
             onClick={() => setSelectedCategory(category)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              selectedCategory === category
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
+            variant={selectedCategory === category ? "default" : "secondary"}
+            size="sm"
           >
             {category === "all" ? "Все" : category}
-            <span className="ml-2 text-xs opacity-75">({categoryCounts[category as keyof typeof categoryCounts]})</span>
+            <span className="ml-2 text-xs opacity-75">
+              ({categoryCounts[category as keyof typeof categoryCounts] || 0})
+            </span>
           </Button>
         ))}
       </div>
 
-      {/* Featured Articles */}
-      {filteredArticles.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Популярные статьи</h3>
-          <div className="space-y-2">
-            {filteredArticles.slice(0, 3).map((article) => (
-              <div
-                key={article.id}
-                onClick={() => handleViewArticle(article)}
-                className="bg-card border border-border rounded-lg p-4 hover:border-primary/50 transition-colors group cursor-pointer"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      {getTypeIcon(article.type)}
-                      <h4 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                        {article.title}
-                      </h4>
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">{article.content}</p>
-                    <div className="flex items-center gap-3 mt-3 flex-wrap">
-                      <span className="text-xs text-muted-foreground">{article.views} просмотров</span>
-                      <span className="text-xs text-green-500">{article.helpful} полезных голосов</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {canManageArticles && (
-                      <>
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleEditArticle(article)
-                          }}
-                          className="p-1 text-muted-foreground hover:text-primary transition-colors"
-                          title="Редактировать"
-                        >
-                          <Edit2 size={16} />
-                        </Button>
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDeleteArticle(article.id)
-                          }}
-                          className="p-1 text-muted-foreground hover:text-accent transition-colors"
-                          title="Удалить"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                      </>
-                    )}
-                    <ChevronRight
-                      size={20}
-                      className="text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0"
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Loading state */}
+      {loading && (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Загрузка статей...</p>
         </div>
       )}
 
-      {/* All Articles Grid */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Все статьи</h3>
+      {/* Articles Grid */}
+      {!loading && filteredArticles.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredArticles.map((article) => (
             <div
@@ -345,8 +376,9 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                         e.stopPropagation()
                         handleEditArticle(article)
                       }}
-                      className="p-1 text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
-                      title="Редактировать"
+                      variant="ghost"
+                      size="sm"
+                      className="opacity-0 group-hover:opacity-100"
                     >
                       <Edit2 size={16} />
                     </Button>
@@ -355,8 +387,9 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                         e.stopPropagation()
                         handleDeleteArticle(article.id)
                       }}
-                      className="p-1 text-muted-foreground hover:text-accent transition-colors opacity-0 group-hover:opacity-100"
-                      title="Удалить"
+                      variant="ghost"
+                      size="sm"
+                      className="opacity-0 group-hover:opacity-100 text-destructive"
                     >
                       <Trash2 size={16} />
                     </Button>
@@ -366,47 +399,51 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
               <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{article.content}</p>
 
-              <div className="flex flex-wrap gap-2 mb-4">
-                {article.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
+              {article.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {article.tags.slice(0, 3).map((tag) => (
+                    <span key={tag} className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border pt-3">
                 <div className="flex gap-3">
                   <span>{article.views} просмотров</span>
                   <span>{article.helpful} полезных</span>
                 </div>
-                <span>{article.author}</span>
+                <ChevronRight size={16} className="group-hover:text-primary transition-colors" />
               </div>
             </div>
           ))}
         </div>
-      </div>
+      )}
 
-      {filteredArticles.length === 0 && (
+      {!loading && filteredArticles.length === 0 && (
         <div className="text-center py-12 bg-card border border-border rounded-lg">
           <AlertCircle size={32} className="mx-auto text-muted-foreground mb-2" />
-          <p className="text-muted-foreground">Нет статей по данному поиску</p>
+          <p className="text-muted-foreground">Нет статей по данному запросу</p>
         </div>
       )}
 
-      {showEditModal && editingArticle && canManageArticles && (
+      {/* Edit Modal */}
+      {(showEditModal || showAddModal) && editingArticle && canManageArticles && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-card border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-foreground">Редактировать статью</h2>
+              <h2 className="text-lg font-bold text-foreground">
+                {showAddModal ? "Новая статья" : "Редактировать статью"}
+              </h2>
               <Button
                 onClick={() => {
                   setShowEditModal(false)
+                  setShowAddModal(false)
                   setEditingArticle(null)
                 }}
-                className="text-muted-foreground hover:text-foreground transition-colors"
+                variant="ghost"
+                size="sm"
               >
                 <X size={20} />
               </Button>
@@ -419,7 +456,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                   type="text"
                   value={editingArticle.title}
                   onChange={(e) => setEditingArticle({ ...editingArticle, title: e.target.value })}
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
+                  placeholder="Введите название статьи"
                 />
               </div>
 
@@ -431,308 +468,85 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                     onChange={(e) => setEditingArticle({ ...editingArticle, category: e.target.value })}
                     className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
                   >
-                    <option>Управление</option>
-                    <option>Продажи</option>
-                    <option>Финансы</option>
-                    <option>Поддержка</option>
-                    <option>Безопасность</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Тип</label>
-                  <select
-                    value={editingArticle.type}
-                    onChange={(e) =>
-                      setEditingArticle({
-                        ...editingArticle,
-                        type: e.target.value as any,
-                      })
-                    }
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                  >
-                    <option value="article">Статья</option>
-                    <option value="guide">Руководство</option>
-                    <option value="video">Видео</option>
-                    <option value="faq">FAQ</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Содержание</label>
-                <Textarea
-                  value={editingArticle.content}
-                  onChange={(e) => setEditingArticle({ ...editingArticle, content: e.target.value })}
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary h-32 resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Теги (через запятую)</label>
-                <Input
-                  type="text"
-                  value={editingArticle.tags.join(", ")}
-                  onChange={(e) =>
-                    setEditingArticle({
-                      ...editingArticle,
-                      tags: e.target.value.split(",").map((t) => t.trim()),
-                    })
-                  }
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                />
-              </div>
-
-              <KBFileManager
-                articleId={editingArticle.id}
-                files={editingArticle.files || []}
-                onFileAdd={handleFileAdd}
-                onFileDelete={handleFileDelete}
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  setShowEditModal(false)
-                  setEditingArticle(null)
-                }}
-                className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
-              >
-                Отмена
-              </Button>
-              <Button
-                onClick={handleSaveArticle}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
-              >
-                <Save size={16} />
-                Сохранить
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showAddModal && editingArticle && canManageArticles && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-foreground">Создать новую статью</h2>
-              <Button
-                onClick={() => {
-                  setShowAddModal(false)
-                  setEditingArticle(null)
-                }}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X size={20} />
-              </Button>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Название</label>
-                <Input
-                  type="text"
-                  value={editingArticle.title}
-                  onChange={(e) => setEditingArticle({ ...editingArticle, title: e.target.value })}
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Категория</label>
-                  <select
-                    value={editingArticle.category}
-                    onChange={(e) => setEditingArticle({ ...editingArticle, category: e.target.value })}
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                  >
-                    <option>Управление</option>
-                    <option>Продажи</option>
-                    <option>Финансы</option>
-                    <option>Поддержка</option>
-                    <option>Безопасность</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Тип</label>
-                  <select
-                    value={editingArticle.type}
-                    onChange={(e) =>
-                      setEditingArticle({
-                        ...editingArticle,
-                        type: e.target.value as any,
-                      })
-                    }
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                  >
-                    <option value="article">Статья</option>
-                    <option value="guide">Руководство</option>
-                    <option value="video">Видео</option>
-                    <option value="faq">FAQ</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Содержание</label>
-                <Textarea
-                  value={editingArticle.content}
-                  onChange={(e) => setEditingArticle({ ...editingArticle, content: e.target.value })}
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary h-32 resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Теги (через запятую)</label>
-                <Input
-                  type="text"
-                  value={editingArticle.tags.join(", ")}
-                  onChange={(e) =>
-                    setEditingArticle({
-                      ...editingArticle,
-                      tags: e.target.value.split(",").map((t) => t.trim()),
-                    })
-                  }
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                />
-              </div>
-
-              <KBFileManager
-                articleId={editingArticle.id}
-                files={editingArticle.files || []}
-                onFileAdd={handleFileAdd}
-                onFileDelete={handleFileDelete}
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  setShowAddModal(false)
-                  setEditingArticle(null)
-                }}
-                className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
-              >
-                Отмена
-              </Button>
-              <Button
-                onClick={handleSaveArticle}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
-              >
-                <Save size={16} />
-                Сохранить
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {selectedArticle && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  {getTypeIcon(selectedArticle.type)}
-                  <h2 className="text-2xl font-bold text-foreground">{selectedArticle.title}</h2>
-                </div>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                  <span>{selectedArticle.author}</span>
-                  <span>{selectedArticle.date}</span>
-                  <Badge variant="secondary">{selectedArticle.category}</Badge>
-                </div>
-              </div>
-              <Button
-                onClick={() => setSelectedArticle(null)}
-                className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-              >
-                <X size={24} />
-              </Button>
-            </div>
-
-            <div className="space-y-6">
-              {/* Content */}
-              <div className="prose prose-invert max-w-none">
-                <p className="text-foreground leading-relaxed whitespace-pre-wrap">{selectedArticle.content}</p>
-              </div>
-
-              {/* Tags */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Теги</h3>
-                <div className="flex flex-wrap gap-2">
-                  {selectedArticle.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="text-xs px-3 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Files */}
-              {selectedArticle.files && selectedArticle.files.length > 0 && (
-                <div className="space-y-2 border-t border-border pt-6">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Файлы</h3>
-                  <div className="space-y-2">
-                    {selectedArticle.files.map((file) => (
-                      <div
-                        key={file.id}
-                        className="flex items-center justify-between bg-background border border-border rounded-lg p-3 hover:border-primary/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <FileText size={18} className="text-primary flex-shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {file.size} • {file.uploadedAt}
-                            </p>
-                          </div>
-                        </div>
-                        <a
-                          href="#"
-                          className="text-xs px-2 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded transition-colors flex-shrink-0"
-                        >
-                          Скачать
-                        </a>
-                      </div>
+                    {categories.slice(1).map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
-              )}
 
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 border-t border-border pt-6">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-foreground">{selectedArticle.views}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Просмотров</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-green-500">{selectedArticle.helpful}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Полезных голосов</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-foreground">
-                    {selectedArticle.helpful > 0 && selectedArticle.views > 0
-                      ? Math.round((selectedArticle.helpful / selectedArticle.views) * 100)
-                      : 0}
-                    %
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">Полезность</p>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Тип</label>
+                  <select
+                    value={editingArticle.type}
+                    onChange={(e) =>
+                      setEditingArticle({
+                        ...editingArticle,
+                        type: e.target.value as any,
+                      })
+                    }
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
+                  >
+                    <option value="article">Статья</option>
+                    <option value="guide">Руководство</option>
+                    <option value="video">Видео</option>
+                    <option value="faq">FAQ</option>
+                  </select>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Содержание</label>
+                <Textarea
+                  value={editingArticle.content}
+                  onChange={(e) => setEditingArticle({ ...editingArticle, content: e.target.value })}
+                  placeholder="Введите содержание статьи"
+                  className="min-h-[200px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Теги (через запятую)</label>
+                <Input
+                  type="text"
+                  value={editingArticle.tags.join(", ")}
+                  onChange={(e) =>
+                    setEditingArticle({
+                      ...editingArticle,
+                      tags: e.target.value
+                        .split(",")
+                        .map((t) => t.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                  placeholder="тег1, тег2, тег3"
+                />
+              </div>
+
+              <KBFileManager
+                articleId={editingArticle.id}
+                files={editingArticle.files || []}
+                onFileAdd={handleFileAdd}
+                onFileDelete={handleFileDelete}
+              />
             </div>
 
-            <div className="flex gap-2 mt-8 border-t border-border pt-6">
+            <div className="flex gap-2">
               <Button
-                onClick={() => setSelectedArticle(null)}
-                className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
+                onClick={() => {
+                  setShowEditModal(false)
+                  setShowAddModal(false)
+                  setEditingArticle(null)
+                }}
+                variant="outline"
+                className="flex-1"
               >
-                Закрыть
+                Отмена
+              </Button>
+              <Button onClick={handleSaveArticle} className="flex-1">
+                <Save size={16} className="mr-2" />
+                Сохранить
               </Button>
             </div>
           </div>

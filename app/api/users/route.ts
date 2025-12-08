@@ -45,12 +45,24 @@ export async function GET(request: Request) {
     const sql = neon(process.env.DATABASE_URL!)
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
+    const roleFilter = searchParams.get("role")
 
-    console.log("[v0] User role:", user.role, "franchiseeId:", user.franchiseeId)
+    console.log("[v0] User role:", user.role, "franchiseeId:", user.franchiseeId, "roleFilter:", roleFilter)
 
     let users
 
-    if (user.role === "franchisee" || user.role === "admin") {
+    if (roleFilter === "uk") {
+      users = await sql`
+        SELECT 
+          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
+          u."telegramId", u.description, u."isActive", u."createdAt",
+          f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+        FROM "User" u
+        LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+        WHERE u.role IN ('uk', 'uk_employee')
+        ORDER BY u."createdAt" DESC
+      `
+    } else if (user.role === "franchisee" || user.role === "admin") {
       users = await sql`
         SELECT 
           u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
@@ -106,7 +118,7 @@ export async function GET(request: Request) {
         : null,
     }))
 
-    return NextResponse.json(formattedUsers)
+    return NextResponse.json({ data: formattedUsers })
   } catch (error: any) {
     console.error("[v0] USERS_GET error:", error.message)
     return NextResponse.json({ error: "Internal error", details: error.message }, { status: 500 })
@@ -178,6 +190,10 @@ export async function POST(request: Request) {
       }
     }
 
+    if (user.role === "super_admin") {
+      // No restrictions for super_admin
+    }
+
     const sql = neon(process.env.DATABASE_URL!)
 
     const userEmail =
@@ -191,7 +207,7 @@ export async function POST(request: Request) {
 
     let userFranchiseeId = franchiseeId || user.franchiseeId
 
-    if (role === "franchisee" && city && user.role === "uk") {
+    if (role === "franchisee" && city && (user.role === "uk" || user.role === "super_admin")) {
       console.log("[v0] Creating franchisee record for city:", city)
 
       const franchiseeName = `${city} - ${name}`
@@ -207,7 +223,7 @@ export async function POST(request: Request) {
       userFranchiseeId = newFranchisee[0].id
     }
 
-    if (user.role === "uk" && role === "uk_employee") {
+    if ((user.role === "uk" || user.role === "super_admin") && role === "uk_employee") {
       userFranchiseeId = null
     }
 
@@ -216,8 +232,8 @@ export async function POST(request: Request) {
     console.log("[v0] Creating user with role:", finalRole, "email:", userEmail, "franchiseeId:", userFranchiseeId)
 
     const newUser = await sql`
-      INSERT INTO "User" (phone, email, "passwordHash", name, role, telegram, whatsapp, "telegramId", description, "franchiseeId")
-      VALUES (${phone || null}, ${userEmail}, ${passwordHash}, ${name}, ${finalRole}, ${telegram || null}, ${whatsapp || null}, ${telegramId || null}, ${description || null}, ${userFranchiseeId})
+      INSERT INTO "User" (phone, email, "passwordHash", password, name, role, telegram, whatsapp, "telegramId", description, "franchiseeId")
+      VALUES (${phone || null}, ${userEmail}, ${passwordHash}, ${passwordHash}, ${name}, ${finalRole}, ${telegram || null}, ${whatsapp || null}, ${telegramId || null}, ${description || null}, ${userFranchiseeId})
       RETURNING id, phone, email, name, role, telegram, whatsapp, "telegramId"
     `
 
@@ -234,7 +250,7 @@ export async function POST(request: Request) {
 
     if (role === "admin" && permissions) {
       await sql`
-        INSERT INTO "UserPermission" ("userId", "canViewDeals", "canEditDeals", "canViewFinances", "canViewMarketing", "canViewKb", "canViewSchedule", "canViewPersonnel")
+        INSERT INTO "UserPermission" ("userId", "canViewDeals", "canEditDeals", "canViewFinances", "canViewMarketing", "canViewKnowledgeBase", "canManageSchedule", "canManagePersonnel")
         VALUES (${newUser[0].id}, ${permissions.canViewDeals || false}, ${permissions.canEditDeals || false}, ${permissions.canViewFinances || false}, ${permissions.canViewMarketing || false}, ${permissions.canViewKb || false}, ${permissions.canViewSchedule || false}, ${permissions.canViewPersonnel || false})
       `
     }

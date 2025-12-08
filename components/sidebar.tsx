@@ -13,10 +13,12 @@ import {
   DollarSign,
   Shield,
   UserCog,
+  MessageSquare,
+  Settings,
 } from "lucide-react"
 
 interface SidebarProps {
-  role: "uk" | "franchisee" | "admin" | "animator" | "host" | "dj"
+  role: string
   currentPath: string
   isMobileOpen?: boolean
   onMobileToggle?: (open: boolean) => void
@@ -28,13 +30,35 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
   const getMenuItems = () => {
     const commonItems = [{ id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/" }]
 
-    const ukItems = [
+    const superAdminItems = [
       ...commonItems,
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
+      { id: "crm-settings", label: "Настройки CRM", icon: Settings, path: "/crm/settings" },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp" },
+      { id: "messages", label: "Сообщения", icon: MessageSquare, path: "/messages" },
       { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
       { id: "users", label: "Пользователи", icon: UserCog, path: "/users" },
       { id: "access", label: "Доступ", icon: Users, path: "/access" },
+      { id: "notifications", label: "Уведомления", icon: Bell, path: "/notifications" },
+    ]
+
+    const ukItems = [
+      ...commonItems,
+      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
+      { id: "crm-settings", label: "Настройки CRM", icon: Settings, path: "/crm/settings" },
+      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp" },
+      { id: "messages", label: "Сообщения", icon: MessageSquare, path: "/messages" },
+      { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
+      { id: "users", label: "Пользователи", icon: UserCog, path: "/users" },
+      { id: "access", label: "Доступ", icon: Users, path: "/access" },
+      { id: "notifications", label: "Уведомления", icon: Bell, path: "/notifications" },
+    ]
+
+    const ukEmployeeItems = [
+      ...commonItems,
+      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
+      { id: "messages", label: "Сообщения", icon: MessageSquare, path: "/messages" },
+      { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
       { id: "notifications", label: "Уведомления", icon: Bell, path: "/notifications" },
     ]
 
@@ -42,6 +66,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       ...commonItems,
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp" },
+      { id: "messages", label: "Сообщения", icon: MessageSquare, path: "/messages" },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel" },
       { id: "finances", label: "Расходы", icon: DollarSign, path: "/finances" },
       { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
@@ -65,10 +90,12 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
     ]
 
+    if (role === "super_admin") return superAdminItems
     if (role === "uk") return ukItems
+    if (role === "uk_employee") return ukEmployeeItems
     if (role === "franchisee") return franchiseeItems
     if (role === "admin") return adminItems
-    if (role === "animator" || role === "host" || role === "dj") return personnelItems
+    if (role === "employee" || role === "animator" || role === "host" || role === "dj") return personnelItems
     return commonItems
   }
 
@@ -90,10 +117,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
   }
 
   const getRoleLabel = () => {
-    const roleLabels = {
+    const roleLabels: Record<string, string> = {
+      super_admin: "Супер Администратор",
       uk: "Управляющая Компания",
+      uk_employee: "Сотрудник УК",
       franchisee: "Франчайзи",
       admin: "Администратор",
+      employee: "Сотрудник",
       animator: "Аниматор",
       host: "Ведущий",
       dj: "DJ",
@@ -108,18 +138,18 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       )}
 
       <aside
-        className={`fixed md:static left-0 top-0 h-screen bg-sidebar border-r border-sidebar-border transition-transform duration-300 z-40 w-64 ${
+        className={`fixed md:static left-0 top-0 h-screen bg-sidebar border-r border-sidebar-border transition-transform duration-300 z-40 w-52 ${
           isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
-        <div className="h-full flex flex-col p-4 sm:p-6">
-          <div className="mb-6 sm:mb-8">
-            <h1 className="text-xl sm:text-2xl font-bold text-sidebar-primary mb-1">QuestLegends</h1>
-            <p className="text-xs text-sidebar-primary-foreground/60 uppercase tracking-wider">OS 2.0</p>
-            <p className="text-xs text-sidebar-primary-foreground/50 mt-2">{getRoleLabel()}</p>
+        <div className="h-full flex flex-col p-3 sm:p-4">
+          <div className="mb-4 sm:mb-6">
+            <h1 className="text-base sm:text-lg font-bold text-sidebar-primary mb-0.5">QuestLegends</h1>
+            <p className="text-[10px] text-sidebar-primary-foreground/60 uppercase tracking-wider">OS 2.0</p>
+            <p className="text-[10px] text-sidebar-primary-foreground/50 mt-1">{getRoleLabel()}</p>
           </div>
 
-          <nav className="flex-1 space-y-1 sm:space-y-2 overflow-y-auto">
+          <nav className="flex-1 space-y-0.5 sm:space-y-1 overflow-y-auto">
             {menuItems.map((item) => {
               const Icon = item.icon
               const isActive = currentPath === item.path
@@ -128,20 +158,20 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
                 <button
                   key={item.id}
                   onClick={() => handleNavigation(item.path)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 sm:px-4 sm:py-3 rounded-lg transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-md transition-all text-left ${
                     isActive
                       ? "bg-sidebar-primary text-sidebar-primary-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/30"
                   }`}
                 >
-                  <Icon size={18} className="flex-shrink-0" />
-                  <span className="text-sm font-medium truncate">{item.label}</span>
+                  <Icon size={14} className="flex-shrink-0" />
+                  <span className="text-xs font-medium truncate">{item.label}</span>
                 </button>
               )
             })}
           </nav>
 
-          <div className="border-t border-sidebar-border pt-3 sm:pt-4 text-xs text-sidebar-primary-foreground/60">
+          <div className="border-t border-sidebar-border pt-2 sm:pt-3 text-[10px] text-sidebar-primary-foreground/60">
             <p>QuestLegends OS 2.0</p>
             <p>Version 2.0.1</p>
           </div>
