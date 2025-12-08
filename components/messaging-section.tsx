@@ -93,19 +93,37 @@ export function MessagingSection() {
 
   const fetchAvailableUsers = async () => {
     try {
-      // UK can message franchisees, franchisees can message UK
       const response = await fetch("/api/users", {
         headers: getAuthHeaders(),
       })
       const data = await response.json()
       const users = Array.isArray(data) ? data : data.data || []
 
-      // Filter users based on role - UK sees franchisees, franchisees see UK users
       const filtered = users.filter((u: any) => {
-        if (user?.role === "uk" || user?.role === "super_admin" || user?.role === "uk_employee") {
-          return u.role === "franchisee"
+        if (u.id === user?.id) return false // Exclude self
+
+        if (user?.role === "super_admin") {
+          // Super admin can message everyone
+          return true
+        } else if (user?.role === "uk" || user?.role === "uk_employee") {
+          // UK can message: their own UK employees, and all franchisees
+          return u.role === "uk" || u.role === "uk_employee" || u.role === "franchisee"
         } else if (user?.role === "franchisee") {
-          return u.role === "uk" || u.role === "uk_employee" || u.role === "super_admin"
+          // Franchisee can message: UK users and their own employees
+          return (
+            u.role === "uk" ||
+            u.role === "uk_employee" ||
+            u.role === "super_admin" ||
+            (u.franchiseeId === user.franchiseeId && ["admin", "employee", "animator", "host", "dj"].includes(u.role))
+          )
+        } else if (user?.role === "admin") {
+          // Admin can message: their franchise colleagues and UK
+          return (
+            u.role === "uk" ||
+            u.role === "uk_employee" ||
+            u.role === "super_admin" ||
+            u.franchiseeId === user.franchiseeId
+          )
         }
         return false
       })
@@ -148,7 +166,6 @@ export function MessagingSection() {
     const file = e.target.files?.[0]
     if (!file || !selectedPartner) return
 
-    // For now, just send file name as message (file upload would need Blob storage)
     setIsLoading(true)
     try {
       const response = await fetch("/api/messages", {
@@ -189,8 +206,21 @@ export function MessagingSection() {
       uk_employee: { label: "Сотрудник УК", variant: "secondary" },
       super_admin: { label: "Супер-админ", variant: "default" },
       franchisee: { label: "Франчайзи", variant: "outline" },
+      admin: { label: "Админ", variant: "secondary" },
+      employee: { label: "Сотрудник", variant: "outline" },
+      animator: { label: "Аниматор", variant: "outline" },
+      host: { label: "Ведущий", variant: "outline" },
+      dj: { label: "DJ", variant: "outline" },
     }
     return roleMap[role] || { label: role, variant: "outline" as const }
+  }
+
+  const groupedUsers = {
+    ukTeam: availableUsers.filter((u) => ["uk", "uk_employee", "super_admin"].includes(u.role)),
+    franchisees: availableUsers.filter((u) => u.role === "franchisee"),
+    myTeam: availableUsers.filter(
+      (u) => u.franchiseeId === user?.franchiseeId && ["admin", "employee", "animator", "host", "dj"].includes(u.role),
+    ),
   }
 
   const filteredUsers = availableUsers.filter(
@@ -259,33 +289,93 @@ export function MessagingSection() {
             </div>
           )}
 
-          {/* Available users to message */}
-          <div className="p-2">
-            <p className="text-[10px] text-muted-foreground px-2 mb-1">
-              {user?.role === "franchisee" ? "Управляющая компания" : "Франчайзи"}
-            </p>
-            {filteredUsers.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => startNewConversation(u)}
-                className={`w-full p-2 rounded-lg text-left hover:bg-accent transition-colors ${
-                  selectedPartner?.id === u.id ? "bg-accent" : ""
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-[10px]">{u.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-medium truncate block">{u.name}</span>
-                    <Badge {...getRoleBadge(u.role)} className="text-[9px] h-4">
-                      {getRoleBadge(u.role).label}
-                    </Badge>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
+          {groupedUsers.ukTeam.length > 0 && (
+            <div className="p-2">
+              <p className="text-[10px] text-muted-foreground px-2 mb-1">Управляющая компания</p>
+              {groupedUsers.ukTeam
+                .filter((u) => !searchQuery || u.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => startNewConversation(u)}
+                    className={`w-full p-2 rounded-lg text-left hover:bg-accent transition-colors ${
+                      selectedPartner?.id === u.id ? "bg-accent" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-[10px]">{u.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-medium truncate block">{u.name}</span>
+                        <Badge {...getRoleBadge(u.role)} className="text-[9px] h-4">
+                          {getRoleBadge(u.role).label}
+                        </Badge>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {groupedUsers.franchisees.length > 0 &&
+            (user?.role === "uk" || user?.role === "uk_employee" || user?.role === "super_admin") && (
+              <div className="p-2">
+                <p className="text-[10px] text-muted-foreground px-2 mb-1">Франчайзи</p>
+                {groupedUsers.franchisees
+                  .filter((u) => !searchQuery || u.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => startNewConversation(u)}
+                      className={`w-full p-2 rounded-lg text-left hover:bg-accent transition-colors ${
+                        selectedPartner?.id === u.id ? "bg-accent" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-[10px]">{u.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-medium truncate block">{u.name}</span>
+                          <Badge variant="outline" className="text-[9px] h-4">
+                            Франчайзи
+                          </Badge>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            )}
+
+          {groupedUsers.myTeam.length > 0 && (user?.role === "franchisee" || user?.role === "admin") && (
+            <div className="p-2">
+              <p className="text-[10px] text-muted-foreground px-2 mb-1">Моя команда</p>
+              {groupedUsers.myTeam
+                .filter((u) => !searchQuery || u.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => startNewConversation(u)}
+                    className={`w-full p-2 rounded-lg text-left hover:bg-accent transition-colors ${
+                      selectedPartner?.id === u.id ? "bg-accent" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-[10px]">{u.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-medium truncate block">{u.name}</span>
+                        <Badge {...getRoleBadge(u.role)} className="text-[9px] h-4">
+                          {getRoleBadge(u.role).label}
+                        </Badge>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
         </ScrollArea>
       </div>
 

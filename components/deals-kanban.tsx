@@ -2,12 +2,20 @@
 
 import { useState, useEffect } from "react"
 import { Plus, Settings } from "lucide-react"
-import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
-import { KanbanColumn } from "./kanban-column"
+import dynamic from "next/dynamic"
 import { DealCardAmoCRM } from "./deal-card-amocrm"
 import { DealCreateModal } from "./deal-create-modal"
+import { PipelineSettings } from "./pipeline-settings"
 import { useAuth } from "@/contexts/auth-context"
-import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+
+const KanbanBoard = dynamic(() => import("./kanban-board").then((mod) => mod.KanbanBoard), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Загрузка доски...</div>
+  ),
+})
 
 interface DealsKanbanProps {
   role: "uk" | "franchisee" | "admin" | "super_admin"
@@ -52,6 +60,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   const [viewingDeal, setViewingDeal] = useState<any | null>(null)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [selectedPipeline, setSelectedPipeline] = useState<Pipeline | null>(null)
@@ -60,15 +69,20 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   useEffect(() => {
     const fetchPipelines = async () => {
       try {
+        console.log("[v0] Fetching pipelines...")
         const res = await fetch("/api/pipelines", { headers: getAuthHeaders() })
         const data = await res.json()
+        console.log("[v0] Pipelines response:", data)
         if (data.data && data.data.length > 0) {
           setPipelines(data.data)
           const defaultPipeline = data.data.find((p: Pipeline) => p.isDefault) || data.data[0]
           setSelectedPipeline(defaultPipeline)
+        } else {
+          setLoading(false)
         }
       } catch (error) {
         console.error("[v0] Error fetching pipelines:", error)
+        setLoading(false)
       }
     }
 
@@ -98,28 +112,22 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         }
 
         const responseData = await response.json()
-        const deals = responseData.data || responseData
+        const deals = responseData.data || []
 
-        // Group deals by stage
         const grouped: BoardData = {}
         selectedPipeline.stages.forEach((stage) => {
-          grouped[stage.name] = []
+          grouped[stage.id] = []
         })
 
         deals.forEach((deal: any) => {
-          const stageName =
-            selectedPipeline.stages.find((s) => s.id === deal.stageId || s.name === deal.stage)?.name ||
-            selectedPipeline.stages[0]?.name
-
-          if (grouped[stageName]) {
-            grouped[stageName].push({
+          const stageId = deal.stageId || selectedPipeline.stages[0]?.id
+          if (grouped[stageId]) {
+            grouped[stageId].push({
               id: deal.id,
-              title: deal.clientName || "Без названия",
-              location: deal.franchisee?.city || user?.franchiseeName || "",
-              amount: deal.price ? `${deal.price.toLocaleString()} ₽` : "0 ₽",
+              title: deal.clientName || deal.title || "Без названия",
+              location: deal.city || deal.location || "",
+              amount: deal.budget ? `${Number(deal.budget).toLocaleString()} ₽` : "0 ₽",
               daysOpen: Math.floor((Date.now() - new Date(deal.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
-              participants: deal.participants || 0,
-              package: deal.packageType || "",
               clientName: deal.clientName,
               clientPhone: deal.clientPhone,
               clientEmail: deal.clientEmail,
@@ -132,47 +140,41 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         setBoardData(grouped)
       } catch (error) {
         console.error("[v0] Error fetching deals:", error)
-        const emptyBoard: BoardData = {}
-        selectedPipeline.stages.forEach((stage) => {
-          emptyBoard[stage.name] = []
-        })
-        setBoardData(emptyBoard)
       } finally {
         setLoading(false)
       }
     }
 
-    if (user && selectedPipeline) {
+    if (selectedPipeline) {
       fetchDeals()
     }
-  }, [user, role, selectedPipeline, getAuthHeaders])
+  }, [selectedPipeline, user, role, getAuthHeaders])
 
-  const handleDragEnd = async (result: DropResult) => {
-    const { source, destination, draggableId } = result
-
-    if (!destination || !selectedPipeline) return
-    if (source.droppableId === destination.droppableId && source.index === destination.index) return
-
-    const sourceStage = source.droppableId
-    const destStage = destination.droppableId
-    const destStageObj = selectedPipeline.stages.find((s) => s.name === destStage)
+  const handleDragEnd = async (
+    sourceId: string,
+    destId: string,
+    dealId: string,
+    sourceIndex: number,
+    destIndex: number,
+  ) => {
+    if (!selectedPipeline) return
 
     const newBoardData = { ...boardData }
-    const [movedDeal] = newBoardData[sourceStage].splice(source.index, 1)
-    newBoardData[destStage].splice(destination.index, 0, movedDeal)
-
+    const [movedDeal] = newBoardData[sourceId].splice(sourceIndex, 1)
+    movedDeal.stageId = destId
+    newBoardData[destId].splice(destIndex, 0, movedDeal)
     setBoardData(newBoardData)
 
     try {
-      await fetch(`/api/deals/${draggableId}`, {
+      await fetch(`/api/deals/${dealId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           ...getAuthHeaders(),
         },
         body: JSON.stringify({
-          stage: destStage,
-          stageId: destStageObj?.id,
+          stageId: destId,
+          stage: selectedPipeline.stages.find((s) => s.id === destId)?.name,
         }),
       })
     } catch (error) {
@@ -180,255 +182,152 @@ export function DealsKanban({ role }: DealsKanbanProps) {
     }
   }
 
-  const handleViewDeal = async (deal: Deal) => {
+  const handleViewDeal = async (dealId: string) => {
     try {
-      const response = await fetch(`/api/deals/${deal.id}`, {
+      console.log("[v0] Opening deal card for dealId:", dealId)
+      const response = await fetch(`/api/deals/${dealId}`, {
         headers: getAuthHeaders(),
       })
       if (response.ok) {
         const data = await response.json()
-        const fullDeal = data.success ? data : data
-
-        setViewingDeal({
-          id: fullDeal.id,
-          title: fullDeal.clientName || "Новая сделка",
-          budget: fullDeal.price || 0,
-          stage: fullDeal.stage || selectedPipeline?.stages[0]?.name,
-          stageId: fullDeal.stageId,
-          pipelineId: fullDeal.pipelineId || selectedPipeline?.id,
-          responsible: {
-            id: fullDeal.responsibleId || user?.id || "",
-            name: fullDeal.responsibleManager || user?.name || "Менеджер",
-            avatar: undefined,
-          },
-          closeDate: fullDeal.closeDate ? new Date(fullDeal.closeDate) : undefined,
-          contact: fullDeal.clientName
-            ? {
-                id: `contact-${fullDeal.id}`,
-                name: fullDeal.clientName,
-                phone: fullDeal.clientPhone || "",
-                email: fullDeal.clientEmail || "",
-                position: fullDeal.clientPosition || "",
-              }
-            : undefined,
-          customFields: [
-            {
-              id: "source",
-              name: "Источник",
-              type: "select",
-              value: fullDeal.source || "",
-              options: ["Сайт", "Telegram", "Звонок", "Рекомендация", "Реклама"],
-            },
-            { id: "discount", name: "Скидка %", type: "number", value: fullDeal.discount || 0 },
-            {
-              id: "priority",
-              name: "Приоритет",
-              type: "select",
-              value: fullDeal.priority || "normal",
-              options: ["low", "normal", "high"],
-            },
-          ],
-          stats: {
-            totalDeals: 1,
-            totalAmount: fullDeal.price || 0,
-            ltv: fullDeal.price || 0,
-          },
-          feed: [],
-          createdAt: new Date(fullDeal.createdAt || Date.now()),
-          pipelineStages: selectedPipeline?.stages || [],
-        })
+        console.log("[v0] Deal data loaded:", data)
+        setViewingDeal(data.success ? data : data)
         setIsViewModalOpen(true)
+      } else {
+        console.log("[v0] Failed to fetch deal:", response.status)
       }
     } catch (error) {
-      console.error("[v0] Error loading deal details:", error)
+      console.error("[v0] Error fetching deal:", error)
     }
   }
 
-  const handleCreateDeal = async (newDealData: any) => {
-    if (!selectedPipeline) return
+  const handleDealCreated = async (deal: any) => {
+    console.log("[v0] Deal created, opening card:", deal)
+    setIsCreateModalOpen(false)
 
-    try {
-      const params = new URLSearchParams()
-      if (user?.franchiseeId && role !== "uk" && role !== "super_admin") {
-        params.append("franchiseeId", user.franchiseeId)
+    if (selectedPipeline && deal) {
+      const stageId = deal.stageId || selectedPipeline.stages[0]?.id
+      const newDeal = {
+        id: deal.id,
+        title: deal.clientName || "Без названия",
+        location: deal.city || "",
+        amount: deal.budget ? `${Number(deal.budget).toLocaleString()} ₽` : "0 ₽",
+        daysOpen: 0,
+        clientName: deal.clientName,
+        clientPhone: deal.clientPhone,
+        stage: deal.stage,
+        stageId: deal.stageId,
       }
 
-      // Add pipeline info to new deal
-      const dealWithPipeline = {
-        ...newDealData,
-        pipelineId: selectedPipeline.id,
-        stageId: selectedPipeline.stages[0]?.id,
-        stage: selectedPipeline.stages[0]?.name,
-      }
+      setBoardData((prev) => ({
+        ...prev,
+        [stageId]: [...(prev[stageId] || []), newDeal],
+      }))
 
-      const response = await fetch(`/api/deals?${params.toString()}`, {
-        headers: getAuthHeaders(),
-      })
-
-      if (response.ok) {
-        const responseData = await response.json()
-        const deals = responseData.data || responseData
-
-        const grouped: BoardData = {}
-        selectedPipeline.stages.forEach((stage) => {
-          grouped[stage.name] = []
-        })
-
-        deals.forEach((deal: any) => {
-          const stageName =
-            selectedPipeline.stages.find((s) => s.id === deal.stageId || s.name === deal.stage)?.name ||
-            selectedPipeline.stages[0]?.name
-
-          if (grouped[stageName]) {
-            grouped[stageName].push({
-              id: deal.id,
-              title: deal.clientName || "Без названия",
-              location: deal.franchisee?.city || user?.franchiseeName || "",
-              amount: deal.price ? `${deal.price.toLocaleString()} ₽` : "0 ₽",
-              daysOpen: Math.floor((Date.now() - new Date(deal.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
-              participants: deal.participants || 0,
-              package: deal.packageType || "",
-              clientName: deal.clientName,
-              clientPhone: deal.clientPhone,
-              clientEmail: deal.clientEmail,
-              stage: deal.stage,
-              stageId: deal.stageId,
-            })
-          }
-        })
-
-        setBoardData(grouped)
-      }
-    } catch (error) {
-      console.error("[v0] Error refreshing deals:", error)
+      setViewingDeal(deal)
+      setIsViewModalOpen(true)
     }
   }
 
-  const getRoleTitle = () => {
-    if (role === "uk" || role === "super_admin") return "Управление франчайзи и сделками"
-    if (role === "franchisee") return "Ваши активные клиенты"
-    return `Клиенты ${user?.franchiseeName || ""}`
+  const handleDealUpdated = () => {
+    window.location.reload()
   }
 
-  if (loading && !selectedPipeline) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground text-xs">Загрузка...</div>
-      </div>
-    )
+  const canManageSettings = user?.role === "super_admin" || user?.role === "uk"
+
+  const hasValidStages =
+    selectedPipeline &&
+    selectedPipeline.stages &&
+    selectedPipeline.stages.length > 0 &&
+    selectedPipeline.stages.every((s) => s.id)
+
+  if (loading && pipelines.length === 0) {
+    return <div className="p-4 text-xs text-muted-foreground">Загрузка...</div>
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <h1 className="text-base font-semibold text-foreground">Сделки / CRM</h1>
-          <p className="text-[10px] text-muted-foreground">{getRoleTitle()}</p>
-        </div>
-
-        <div className="flex gap-2">
-          {pipelines.length > 1 && (
-            <select
-              value={selectedPipeline?.id || ""}
-              onChange={(e) => {
-                const pipeline = pipelines.find((p) => p.id === e.target.value)
-                if (pipeline) setSelectedPipeline(pipeline)
-              }}
-              className="h-7 text-xs px-2 rounded border bg-background"
-            >
-              {pipelines.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {(role === "uk" || role === "super_admin") && (
-            <Link href="/crm/settings">
-              <button className="flex items-center gap-1 px-2 py-1.5 bg-muted/50 hover:bg-muted text-foreground rounded transition-colors">
-                <Settings className="w-3 h-3" />
-                <span className="text-[10px]">Настройки</span>
-              </button>
-            </Link>
-          )}
-
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-1 px-2 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded transition-colors"
-          >
-            <Plus className="w-3 h-3" />
-            <span className="text-[10px]">Новая сделка</span>
-          </button>
-        </div>
-      </div>
-
-      {selectedPipeline && (
+    <div className="h-full flex flex-col">
+      <div className="flex items-center justify-between p-3 border-b shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: selectedPipeline.color }} />
-          <span className="text-xs font-medium">{selectedPipeline.name}</span>
-          <span className="text-[10px] text-muted-foreground">({selectedPipeline.stages?.length || 0} этапов)</span>
-        </div>
-      )}
-
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="overflow-x-auto pb-4 -mx-3 px-3 sm:mx-0 sm:px-0">
-          <div className="flex gap-2 min-w-max">
-            {selectedPipeline?.stages?.map((stage) => (
-              <KanbanColumn
-                key={stage.id}
-                stage={stage.name}
-                deals={boardData[stage.name] || []}
-                dealCount={(boardData[stage.name] || []).length}
-                onViewDeal={handleViewDeal}
-                stageColor={stage.color}
-              />
+          <h1 className="text-sm font-semibold">CRM</h1>
+          <div className="flex gap-1">
+            {pipelines.map((pipeline) => (
+              <button
+                key={pipeline.id}
+                onClick={() => setSelectedPipeline(pipeline)}
+                className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                  selectedPipeline?.id === pipeline.id
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted hover:bg-muted/80"
+                }`}
+              >
+                {pipeline.name}
+              </button>
             ))}
           </div>
         </div>
-      </DragDropContext>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-border">
-        <div className="text-center">
-          <p className="text-[10px] text-muted-foreground mb-0.5">Всего сделок</p>
-          <p className="text-base font-bold text-foreground">{Object.values(boardData).flat().length}</p>
-        </div>
-        <div className="text-center">
-          <p className="text-[10px] text-muted-foreground mb-0.5">Высокие приоритеты</p>
-          <p className="text-base font-bold text-accent">
-            {
-              Object.values(boardData)
-                .flat()
-                .filter((d) => d.priority === "high").length
-            }
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-[10px] text-muted-foreground mb-0.5">Сумма в работе</p>
-          <p className="text-sm font-bold text-primary">
-            {Object.values(boardData)
-              .flat()
-              .reduce((sum, d) => sum + Number.parseInt(d.amount.replace(/[^\d]/g, "") || "0"), 0)
-              .toLocaleString()}{" "}
-            ₽
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-[10px] text-muted-foreground mb-0.5">Конверсия</p>
-          <p className="text-base font-bold text-green-500">
-            {Object.values(boardData).flat().length > 0 && selectedPipeline?.stages?.length
-              ? Math.round(
-                  ((boardData[selectedPipeline.stages[selectedPipeline.stages.length - 1]?.name]?.length || 0) /
-                    Object.values(boardData).flat().length) *
-                    100,
-                )
-              : 0}
-            %
-          </p>
+        <div className="flex items-center gap-2">
+          {canManageSettings && (
+            <Sheet open={showSettings} onOpenChange={setShowSettings}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-xs bg-transparent">
+                  <Settings className="h-3 w-3 mr-1" />
+                  Настройки
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle className="text-sm">Настройки CRM</SheetTitle>
+                </SheetHeader>
+                <div className="mt-4">
+                  <PipelineSettings />
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
+          <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="h-7 text-xs">
+            <Plus className="h-3 w-3 mr-1" />
+            Новая сделка
+          </Button>
         </div>
       </div>
 
-      {viewingDeal && (
+      {hasValidStages ? (
+        <KanbanBoard
+          stages={selectedPipeline!.stages}
+          boardData={boardData}
+          onDragEnd={handleDragEnd}
+          onViewDeal={handleViewDeal}
+        />
+      ) : (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-muted-foreground">
+            <p className="text-xs">Нет доступных воронок</p>
+            {canManageSettings && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 h-7 text-xs bg-transparent"
+                onClick={() => setShowSettings(true)}
+              >
+                Создать воронку
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {selectedPipeline && (
+        <DealCreateModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreated={handleDealCreated}
+          pipeline={selectedPipeline}
+          role={role}
+        />
+      )}
+
+      {viewingDeal && selectedPipeline && (
         <DealCardAmoCRM
           deal={viewingDeal}
           isOpen={isViewModalOpen}
@@ -436,21 +335,10 @@ export function DealsKanban({ role }: DealsKanbanProps) {
             setIsViewModalOpen(false)
             setViewingDeal(null)
           }}
-          onUpdate={(updatedDeal) => {
-            handleCreateDeal(updatedDeal)
-          }}
+          onUpdate={handleDealUpdated}
+          stages={selectedPipeline.stages || []}
         />
       )}
-
-      <DealCreateModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onCreate={handleCreateDeal}
-        role={role}
-        pipelineId={selectedPipeline?.id}
-        initialStage={selectedPipeline?.stages?.[0]?.name}
-        initialStageId={selectedPipeline?.stages?.[0]?.id}
-      />
     </div>
   )
 }

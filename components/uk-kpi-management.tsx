@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Target, Users, TrendingUp, Settings, CheckCircle2 } from "lucide-react"
 import { KPIManagementModal } from "./kpi-management-modal"
+import { useAuth } from "@/contexts/auth-context"
 
 interface Franchisee {
   id: string
@@ -20,6 +21,7 @@ interface BulkKPI {
 }
 
 export function UKKPIManagement() {
+  const { getAuthHeaders } = useAuth()
   const [franchisees, setFranchisees] = useState<Franchisee[]>([])
   const [selectedFranchisee, setSelectedFranchisee] = useState<Franchisee | null>(null)
   const [showKPIModal, setShowKPIModal] = useState(false)
@@ -32,10 +34,12 @@ export function UKKPIManagement() {
 
   const loadFranchisees = async () => {
     try {
-      const response = await fetch("/api/franchisees")
+      const response = await fetch("/api/franchisees", {
+        headers: getAuthHeaders(),
+      })
       if (response.ok) {
         const data = await response.json()
-        setFranchisees(data)
+        setFranchisees(Array.isArray(data) ? data : data.data || [])
       }
     } catch (error) {
       console.error("[v0] Failed to load franchisees:", error)

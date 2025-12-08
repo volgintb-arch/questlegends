@@ -14,7 +14,7 @@ import {
   Shield,
   UserCog,
   MessageSquare,
-  Settings,
+  Target,
 } from "lucide-react"
 
 interface SidebarProps {
@@ -33,8 +33,8 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     const superAdminItems = [
       ...commonItems,
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
-      { id: "crm-settings", label: "Настройки CRM", icon: Settings, path: "/crm/settings" },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp" },
+      { id: "kpi", label: "KPI", icon: Target, path: "/kpi" },
       { id: "messages", label: "Сообщения", icon: MessageSquare, path: "/messages" },
       { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
       { id: "users", label: "Пользователи", icon: UserCog, path: "/users" },
@@ -45,8 +45,8 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     const ukItems = [
       ...commonItems,
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
-      { id: "crm-settings", label: "Настройки CRM", icon: Settings, path: "/crm/settings" },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp" },
+      { id: "kpi", label: "KPI", icon: Target, path: "/kpi" },
       { id: "messages", label: "Сообщения", icon: MessageSquare, path: "/messages" },
       { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
       { id: "users", label: "Пользователи", icon: UserCog, path: "/users" },

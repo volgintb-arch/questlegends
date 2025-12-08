@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
-import { Shield, Building2, User } from "lucide-react"
+import { Shield, Building2, User, Loader2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/contexts/auth-context"
@@ -34,53 +34,74 @@ interface AccessUser {
 }
 
 export function AccessManagementUK() {
-  const { getAuthHeaders, user: currentUser } = useAuth()
+  const { getAuthHeaders, user: currentUser, loading: authLoading } = useAuth()
   const [users, setUsers] = useState<AccessUser[]>([])
   const [franchisees, setFranchisees] = useState<Franchisee[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!currentUser) {
+      setError("Не авторизован")
+      setLoading(false)
+      return
+    }
+
     fetchUsers()
     fetchFranchisees()
-  }, [])
+  }, [authLoading, currentUser])
 
   const fetchUsers = async () => {
     try {
       setLoading(true)
+      setError(null)
+      console.log("[v0] AccessManagement: Fetching permissions...")
+
+      const headers = getAuthHeaders()
+      console.log("[v0] AccessManagement: Auth headers:", Object.keys(headers))
+
       const response = await fetch("/api/permissions", {
-        headers: {
-          ...getAuthHeaders(),
-        },
+        headers,
       })
-      if (!response.ok) throw new Error("Failed to fetch users")
+
+      console.log("[v0] AccessManagement: Response status:", response.status)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.log("[v0] AccessManagement: Error response:", errorData)
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+      }
+
       const data = await response.json()
+      console.log("[v0] AccessManagement: Received data:", data)
 
-      const formattedUsers = data.users
-        .filter((u: any) => u.role === "uk_employee" || u.role === "uk" || u.role === "franchisee")
-        .map((u: any) => ({
-          id: u.id,
-          name: u.name,
-          email: u.telegram || u.phone,
-          phone: u.phone,
-          role: u.role,
-          roleDisplay: u.role === "uk" ? "Директор УК" : u.role === "uk_employee" ? "Сотрудник УК" : "Франчайзи",
-          franchiseeId: u.franchiseeId,
-          franchiseeName: u.franchiseeName,
-          permissions: {
-            dashboard: u.userPermissions?.canViewDashboard ?? true,
-            deals: u.userPermissions?.canViewDeals ?? false,
-            finances: u.userPermissions?.canViewFinances ?? false,
-            constants: u.userPermissions?.canManageConstants ?? false,
-            notifications: u.userPermissions?.canViewNotifications ?? true,
-          },
-          assignedFranchisees: u.assignedFranchisees || [],
-          status: u.isActive ? "active" : "inactive",
-        }))
+      const formattedUsers = (data.users || []).map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.telegram || u.phone,
+        phone: u.phone,
+        role: u.role,
+        roleDisplay: u.role === "uk" ? "Директор УК" : u.role === "uk_employee" ? "Сотрудник УК" : "Франчайзи",
+        franchiseeId: u.franchiseeId,
+        franchiseeName: u.franchiseeName,
+        permissions: {
+          dashboard: u.userPermissions?.canViewDashboard ?? true,
+          deals: u.userPermissions?.canViewDeals ?? false,
+          finances: u.userPermissions?.canViewFinances ?? false,
+          constants: u.userPermissions?.canManageConstants ?? false,
+          notifications: u.userPermissions?.canViewNotifications ?? true,
+        },
+        assignedFranchisees: u.assignedFranchisees || [],
+        status: u.isActive ? "active" : "inactive",
+      }))
 
-      console.log("[v0] Fetched UK users and franchisees:", formattedUsers.length)
+      console.log("[v0] AccessManagement: Formatted users:", formattedUsers.length)
       setUsers(formattedUsers)
     } catch (error) {
-      console.error("[v0] Error fetching users:", error)
+      console.error("[v0] AccessManagement: Error fetching users:", error)
+      setError(error instanceof Error ? error.message : "Ошибка загрузки")
     } finally {
       setLoading(false)
     }
@@ -89,9 +110,7 @@ export function AccessManagementUK() {
   const fetchFranchisees = async () => {
     try {
       const response = await fetch("/api/franchisees", {
-        headers: {
-          ...getAuthHeaders(),
-        },
+        headers: getAuthHeaders(),
       })
       if (!response.ok) throw new Error("Failed to fetch franchisees")
       const data = await response.json()
@@ -182,8 +201,33 @@ export function AccessManagementUK() {
   const ukUsers = users.filter((u) => u.role === "uk" || u.role === "uk_employee")
   const franchiseeUsers = users.filter((u) => u.role === "franchisee")
 
-  if (loading) {
-    return <div className="p-6 text-center">Загрузка...</div>
+  if (authLoading || loading) {
+    return (
+      <div className="p-6 flex items-center justify-center gap-2">
+        <Loader2 className="animate-spin" size={20} />
+        <span>Загрузка...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Card className="p-4 text-center border-red-200 bg-red-50 dark:bg-red-900/20">
+          <h3 className="text-sm font-semibold mb-1 text-red-600">Ошибка загрузки</h3>
+          <p className="text-xs text-red-500">{error}</p>
+          <button
+            onClick={() => {
+              setError(null)
+              fetchUsers()
+            }}
+            className="mt-2 text-xs text-primary hover:underline"
+          >
+            Попробовать снова
+          </button>
+        </Card>
+      </div>
+    )
   }
 
   return (

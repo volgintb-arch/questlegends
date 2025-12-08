@@ -1,128 +1,174 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { type NextRequest, NextResponse } from "next/server"
+import { neon } from "@neondatabase/serverless"
+import { jwtVerify } from "jose"
 
-// GET all KPIs for a franchisee
-export async function GET(request: Request) {
+async function getCurrentUser(request: NextRequest) {
+  const authHeader = request.headers.get("authorization")
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null
+  }
+
+  const token = authHeader.substring(7)
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
+    const { payload } = await jwtVerify(token, secret)
+    return {
+      id: payload.userId as string,
+      role: payload.role as string,
+      franchiseeId: payload.franchiseeId as string | null,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getCurrentUser(request)
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
+    const startDate = searchParams.get("startDate")
+    const endDate = searchParams.get("endDate")
 
-    if (!franchiseeId) {
-      return NextResponse.json({ error: "Franchisee ID required" }, { status: 400 })
+    const sql = neon(process.env.DATABASE_URL!)
+
+    let kpis
+    if (franchiseeId) {
+      if (startDate && endDate) {
+        kpis = await sql`
+          SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "Kpi" k
+          LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
+          WHERE k."franchiseeId" = ${franchiseeId}
+            AND k."startDate" >= ${startDate}
+            AND k."endDate" <= ${endDate}
+          ORDER BY k."startDate" DESC
+        `
+      } else {
+        kpis = await sql`
+          SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "Kpi" k
+          LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
+          WHERE k."franchiseeId" = ${franchiseeId}
+          ORDER BY k."startDate" DESC
+        `
+      }
+    } else {
+      if (startDate && endDate) {
+        kpis = await sql`
+          SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "Kpi" k
+          LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
+          WHERE k."startDate" >= ${startDate}
+            AND k."endDate" <= ${endDate}
+          ORDER BY k."startDate" DESC
+        `
+      } else {
+        kpis = await sql`
+          SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "Kpi" k
+          LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
+          ORDER BY k."startDate" DESC
+        `
+      }
     }
 
-    const kpis = await prisma.franchiseeKPI.findMany({
-      where: { franchiseeId },
-      include: {
-        franchisee: {
-          select: {
-            id: true,
-            name: true,
-            city: true,
-          },
-        },
-      },
-      orderBy: {
-        periodStart: "desc",
-      },
-    })
-
-    return NextResponse.json(kpis)
+    return NextResponse.json({ success: true, data: kpis })
   } catch (error) {
-    console.error("[KPI_GET]", error)
+    console.error("[v0] KPI_GET error:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
 
-// POST create new KPI
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-    if (!session?.user || session.user.role !== "uk") {
+    if (user.role !== "uk" && user.role !== "super_admin") {
       return NextResponse.json({ error: "Forbidden - Only UK can set KPIs" }, { status: 403 })
     }
 
     const body = await request.json()
-    const { franchiseeId, periodType, periodYear, periodNumber, targetRevenue, targetGames, maxExpenses } = body
+    const { franchiseeId, name, target, period, startDate, endDate } = body
 
-    // Validate required fields
-    if (!franchiseeId || !periodType || !periodYear || !periodNumber) {
+    if (!franchiseeId || !name || !target || !period || !startDate || !endDate) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Validate period type
-    if (!["month", "quarter", "year"].includes(periodType)) {
-      return NextResponse.json({ error: "Invalid period type" }, { status: 400 })
-    }
+    const sql = neon(process.env.DATABASE_URL!)
 
-    // Validate period number
-    if (periodType === "month" && (periodNumber < 1 || periodNumber > 12)) {
-      return NextResponse.json({ error: "Invalid month number (1-12)" }, { status: 400 })
-    }
-    if (periodType === "quarter" && (periodNumber < 1 || periodNumber > 4)) {
-      return NextResponse.json({ error: "Invalid quarter number (1-4)" }, { status: 400 })
-    }
+    const result = await sql`
+      INSERT INTO "Kpi" ("franchiseeId", name, target, actual, period, "startDate", "endDate", "createdById", "createdAt", "updatedAt")
+      VALUES (${franchiseeId}, ${name}, ${target}, 0, ${period}, ${startDate}, ${endDate}, ${user.id}, NOW(), NOW())
+      RETURNING *
+    `
 
-    const kpi = await prisma.franchiseeKPI.create({
-      data: {
-        franchiseeId,
-        periodType,
-        periodYear: Number.parseInt(periodYear),
-        periodNumber: Number.parseInt(periodNumber),
-        targetRevenue: targetRevenue ? Number.parseInt(targetRevenue) : null,
-        targetGames: targetGames ? Number.parseInt(targetGames) : null,
-        maxExpenses: maxExpenses ? Number.parseInt(maxExpenses) : null,
-        setByUserId: session.user.id,
-      },
-      include: {
-        franchisee: {
-          select: {
-            id: true,
-            name: true,
-            city: true,
-          },
-        },
-      },
-    })
-
-    return NextResponse.json(kpi)
+    return NextResponse.json({ success: true, data: result[0] })
   } catch (error) {
-    console.error("[KPI_POST]", error)
+    console.error("[v0] KPI_POST error:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
 
-// DELETE KPI
-export async function DELETE(request: Request) {
+export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-    if (!session?.user || session.user.role !== "uk") {
+    const body = await request.json()
+    const { id, actual } = body
+
+    if (!id) {
+      return NextResponse.json({ error: "KPI ID required" }, { status: 400 })
+    }
+
+    const sql = neon(process.env.DATABASE_URL!)
+
+    if (actual !== undefined) {
+      await sql`UPDATE "Kpi" SET actual = ${actual}, "updatedAt" = NOW() WHERE id = ${id}::uuid`
+    }
+
+    const result = await sql`SELECT * FROM "Kpi" WHERE id = ${id}::uuid`
+    return NextResponse.json({ success: true, data: result[0] })
+  } catch (error) {
+    console.error("[v0] KPI_PATCH error:", error)
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (user.role !== "uk" && user.role !== "super_admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
-    const kpiId = searchParams.get("id")
+    const id = searchParams.get("id")
 
-    if (!kpiId) {
+    if (!id) {
       return NextResponse.json({ error: "KPI ID required" }, { status: 400 })
     }
 
-    await prisma.franchiseeKPI.delete({
-      where: { id: kpiId },
-    })
+    const sql = neon(process.env.DATABASE_URL!)
+    await sql`DELETE FROM "Kpi" WHERE id = ${id}::uuid`
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[KPI_DELETE]", error)
+    console.error("[v0] KPI_DELETE error:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

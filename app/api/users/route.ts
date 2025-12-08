@@ -130,6 +130,7 @@ export async function POST(request: Request) {
     console.log("[v0] Creating new user - start")
 
     const bcrypt = await import("bcryptjs")
+    const { v4: uuidv4 } = await import("uuid")
 
     const user = await getCurrentUser(request)
     if (!user) {
@@ -210,12 +211,13 @@ export async function POST(request: Request) {
     if (role === "franchisee" && city && (user.role === "uk" || user.role === "super_admin")) {
       console.log("[v0] Creating franchisee record for city:", city)
 
+      const franchiseeUUID = uuidv4()
       const franchiseeName = `${city} - ${name}`
       const franchiseeAddress = `г. ${city}`
 
       const newFranchisee = await sql`
-        INSERT INTO "Franchisee" (name, city, address)
-        VALUES (${franchiseeName}, ${city}, ${franchiseeAddress})
+        INSERT INTO "Franchisee" (id, name, city, address, "updatedAt")
+        VALUES (${franchiseeUUID}, ${franchiseeName}, ${city}, ${franchiseeAddress}, NOW())
         RETURNING id
       `
 
@@ -231,9 +233,10 @@ export async function POST(request: Request) {
 
     console.log("[v0] Creating user with role:", finalRole, "email:", userEmail, "franchiseeId:", userFranchiseeId)
 
+    const userUUID = uuidv4()
     const newUser = await sql`
-      INSERT INTO "User" (phone, email, "passwordHash", password, name, role, telegram, whatsapp, "telegramId", description, "franchiseeId")
-      VALUES (${phone || null}, ${userEmail}, ${passwordHash}, ${passwordHash}, ${name}, ${finalRole}, ${telegram || null}, ${whatsapp || null}, ${telegramId || null}, ${description || null}, ${userFranchiseeId})
+      INSERT INTO "User" (id, phone, email, "passwordHash", password, name, role, telegram, whatsapp, "telegramId", description, "franchiseeId", "isActive", "createdAt", "updatedAt")
+      VALUES (${userUUID}, ${phone || null}, ${userEmail}, ${passwordHash}, ${passwordHash}, ${name}, ${finalRole}, ${telegram || null}, ${whatsapp || null}, ${telegramId || null}, ${description || null}, ${userFranchiseeId}, true, NOW(), NOW())
       RETURNING id, phone, email, name, role, telegram, whatsapp, "telegramId"
     `
 

@@ -1,11 +1,9 @@
 "use client"
 
-import { useState } from "react"
-
+import { useState, useEffect } from "react"
+import { useAuth } from "@/contexts/auth-context"
 import type React from "react"
-import { UKKPIManagement } from "./uk-kpi-management"
-import { useEffect } from "react"
-import { DollarSign, TrendingUp, Users, Settings, BarChart3, Send } from "lucide-react"
+import { DollarSign, TrendingUp, Users, Settings, BarChart3, Target } from "lucide-react"
 import { MetricCard } from "./metric-card"
 import { KPISettingsModal } from "./kpi-settings-modal"
 
@@ -32,13 +30,8 @@ interface FranchiseData {
 }
 
 export function DashboardUK() {
+  const { getAuthHeaders } = useAuth()
   const [showKPISettings, setShowKPISettings] = useState(false)
-  const [showMessageModal, setShowMessageModal] = useState(false)
-  const [selectedFranchisee, setSelectedFranchisee] = useState("")
-  const [messageText, setMessageText] = useState("")
-  const [isSending, setIsSending] = useState(false)
-  const [sendError, setSendError] = useState("")
-  const [sendSuccess, setSendSuccess] = useState("")
   const [franchises, setFranchises] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -47,19 +40,20 @@ export function DashboardUK() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const headers = getAuthHeaders()
         const [franchisesRes, transactionsRes, networkStatsRes] = await Promise.all([
-          fetch("/api/franchisees"),
-          fetch("/api/transactions"),
-          fetch("/api/kpi/network-stats"),
+          fetch("/api/franchisees", { headers }),
+          fetch("/api/transactions", { headers }),
+          fetch("/api/kpi/network-stats", { headers }),
         ])
 
         if (franchisesRes.ok) {
           const franchisesData = await franchisesRes.json()
-          setFranchises(franchisesData)
+          setFranchises(Array.isArray(franchisesData) ? franchisesData : franchisesData.data || [])
         }
         if (transactionsRes.ok) {
           const transactionsData = await transactionsRes.json()
-          setTransactions(transactionsData)
+          setTransactions(Array.isArray(transactionsData) ? transactionsData : transactionsData.data || [])
         }
         if (networkStatsRes.ok) {
           const statsData = await networkStatsRes.json()
@@ -73,7 +67,7 @@ export function DashboardUK() {
     }
 
     fetchData()
-  }, [])
+  }, [getAuthHeaders])
 
   const totalRevenue = transactions.reduce((sum, t) => sum + (t.amount || 0), 0)
   const totalRoyalties = transactions.reduce((sum, t) => sum + (t.royaltyAmount || 0), 0)
@@ -138,47 +132,6 @@ export function DashboardUK() {
 
   const visibleKPIs = kpiData.filter((kpi) => kpi.visible)
 
-  const handleSendMessage = async () => {
-    if (!selectedFranchisee || !messageText.trim()) return
-
-    setIsSending(true)
-    setSendError("")
-    setSendSuccess("")
-
-    try {
-      const response = await fetch("/api/telegram/send-message", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          franchiseeId: selectedFranchisee,
-          message: messageText.trim(),
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || "Failed to send message")
-      }
-
-      setSendSuccess(`Сообщение отправлено в Telegram пользователю ${data.recipient}`)
-      setMessageText("")
-
-      setTimeout(() => {
-        setShowMessageModal(false)
-        setSelectedFranchisee("")
-        setSendSuccess("")
-      }, 2000)
-    } catch (error) {
-      console.error("[v0] Error sending Telegram message:", error)
-      setSendError(error instanceof Error ? error.message : "Не удалось отправить сообщение")
-    } finally {
-      setIsSending(false)
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -189,37 +142,6 @@ export function DashboardUK() {
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      <UKKPIManagement />
-
-      <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
-        <h2 className="text-lg sm:text-xl font-semibold text-foreground mb-3 sm:mb-4">Отправить сообщение франчайзи</h2>
-        <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-          Отправьте сообщение франчайзи в Telegram - получатель должен настроить Telegram ID в профиле
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <select
-            value={selectedFranchisee}
-            onChange={(e) => setSelectedFranchisee(e.target.value)}
-            className="flex-1 bg-muted border border-border rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm outline-none focus:border-primary"
-          >
-            <option value="">Выберите франчайзи...</option>
-            {franchises.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name} - {f.location}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => setShowMessageModal(true)}
-            disabled={!selectedFranchisee}
-            className="w-full sm:w-auto px-4 py-2 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
-          >
-            <Send size={16} />
-            Написать
-          </button>
-        </div>
-      </div>
-
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg sm:text-xl font-semibold text-foreground">Ключевые Показатели</h2>
@@ -242,6 +164,29 @@ export function DashboardUK() {
             />
           ))}
         </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg sm:text-xl font-semibold text-foreground">Франчайзи сети</h2>
+          <span className="text-xs text-muted-foreground">{franchises.length} франшиз</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {franchises.slice(0, 6).map((franchise) => (
+            <div key={franchise.id} className="bg-card border border-border rounded-lg p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-medium text-foreground text-sm">{franchise.name}</h3>
+                  <p className="text-xs text-muted-foreground">{franchise.city}</p>
+                </div>
+                <Target size={16} className="text-primary" />
+              </div>
+            </div>
+          ))}
+        </div>
+        {franchises.length > 6 && (
+          <p className="text-xs text-muted-foreground text-center">И еще {franchises.length - 6} франшиз...</p>
+        )}
       </div>
 
       <div className="rounded-lg bg-card border border-border p-4 sm:p-6">
@@ -285,68 +230,6 @@ export function DashboardUK() {
         onSave={handleSaveKPIs}
         currentKPIs={kpiData.map((k) => ({ id: k.id, name: k.name, visible: k.visible }))}
       />
-
-      {showMessageModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
-          <div className="bg-card border border-border rounded-lg max-w-2xl w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">
-              Отправить сообщение в Telegram: {franchises.find((f) => f.id === selectedFranchisee)?.name}
-            </h3>
-
-            {sendSuccess && (
-              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-600 text-sm">
-                {sendSuccess}
-              </div>
-            )}
-
-            {sendError && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-600 text-sm">
-                {sendError}
-              </div>
-            )}
-
-            <textarea
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Введите ваше сообщение или комментарий..."
-              rows={5}
-              disabled={isSending}
-              className="w-full bg-muted border border-border rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm outline-none focus:border-primary resize-none disabled:opacity-50"
-            />
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 mt-3 sm:mt-4">
-              <button
-                onClick={() => {
-                  setShowMessageModal(false)
-                  setMessageText("")
-                  setSendError("")
-                  setSendSuccess("")
-                }}
-                disabled={isSending}
-                className="w-full sm:w-auto px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg transition-colors text-sm disabled:opacity-50"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleSendMessage}
-                disabled={!messageText.trim() || isSending}
-                className="w-full sm:w-auto px-4 py-2 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
-              >
-                {isSending ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    Отправка...
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} />
-                    Отправить в Telegram
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

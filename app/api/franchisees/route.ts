@@ -35,9 +35,8 @@ export async function GET(request: Request) {
 
     const sql = neon(process.env.DATABASE_URL)
 
-    // UK can view all franchisees, others see only their own
     let franchisees
-    if (user.role === "uk" || user.role === "UK") {
+    if (user.role === "super_admin" || user.role === "uk" || user.role === "uk_employee") {
       franchisees = await sql`
         SELECT f.*, 
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
@@ -57,7 +56,14 @@ export async function GET(request: Request) {
       franchisees = []
     }
 
-    return NextResponse.json(franchisees)
+    console.log("[v0] Franchisees API: Found", franchisees.length, "franchisees for role", user.role)
+
+    return NextResponse.json(franchisees, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        Pragma: "no-cache",
+      },
+    })
   } catch (error) {
     console.error("[v0] FRANCHISEES_GET error:", error)
     return NextResponse.json([])
@@ -71,8 +77,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Only UK can create franchisees
-    if (user.role !== "uk" && user.role !== "UK") {
+    if (user.role !== "super_admin" && user.role !== "uk" && user.role !== "uk_employee") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

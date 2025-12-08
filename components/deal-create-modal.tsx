@@ -19,25 +19,21 @@ interface Deal {
   source?: string
 }
 
+interface Pipeline {
+  id: string
+  name: string
+  stages: { id: string; name: string; order: number }[]
+}
+
 interface DealCreateModalProps {
   isOpen: boolean
   onClose: () => void
-  onCreate: (deal: Deal) => void
+  onCreated?: (deal: any) => void
+  pipeline?: Pipeline | null
   role: "uk" | "franchisee" | "admin" | "super_admin" | "uk_employee"
-  pipelineId?: string
-  initialStage?: string
-  initialStageId?: string
 }
 
-export function DealCreateModal({
-  isOpen,
-  onClose,
-  onCreate,
-  role,
-  pipelineId,
-  initialStage,
-  initialStageId,
-}: DealCreateModalProps) {
+export function DealCreateModal({ isOpen, onClose, onCreated, pipeline, role }: DealCreateModalProps) {
   const { user, getAuthHeaders } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [employees, setEmployees] = useState<any[]>([])
@@ -78,64 +74,61 @@ export function DealCreateModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!formData.clientName.trim()) return
+
     setIsSubmitting(true)
 
     try {
+      const initialStage = pipeline?.stages?.sort((a, b) => a.order - b.order)[0]
+
+      const payload = {
+        clientName: formData.clientName,
+        clientPhone: formData.clientPhone,
+        clientTelegram: formData.clientTelegram,
+        city: formData.location,
+        budget: formData.price ? Number(formData.price) : 0,
+        source: formData.source,
+        description: formData.description,
+        responsibleId: formData.responsibleId || null,
+        pipelineId: pipeline?.id,
+        stageId: initialStage?.id,
+        stage: initialStage?.name || "Новый",
+      }
+
+      console.log("[v0] Creating deal with payload:", payload)
+
       const response = await fetch("/api/deals", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...getAuthHeaders(),
         },
-        body: JSON.stringify({
-          clientName: formData.clientName,
-          clientPhone: formData.clientPhone,
-          clientTelegram: isUKRole ? null : formData.clientTelegram,
-          location: formData.location,
-          price: Number(formData.price) || null,
-          stage: initialStage || "Новый",
-          stageId: initialStageId,
-          pipelineId: pipelineId,
-          source: formData.source,
-          description: formData.description,
-          responsible: formData.responsible,
-          responsibleId: formData.responsibleId,
-          franchiseeId: isUKRole ? null : user?.franchiseeId,
-        }),
+        body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to create deal")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create deal")
       }
 
-      const savedDeal = await response.json()
+      const result = await response.json()
+      console.log("[v0] Deal created successfully:", result)
 
-      const newDeal: Deal = {
-        id: savedDeal.id,
-        clientName: formData.clientName,
-        clientPhone: formData.clientPhone,
-        clientTelegram: formData.clientTelegram,
-        price: Number(formData.price) || 0,
-        stage: initialStage || "Новый",
-        stageId: initialStageId,
-        pipelineId: pipelineId,
-        location: formData.location,
-        source: formData.source,
+      if (onCreated) {
+        onCreated(result.data || result)
       }
-
-      onCreate(newDeal)
       onClose()
+
+      // Reset form
       setFormData({
         clientName: "",
         clientPhone: "",
         clientTelegram: "",
         location: "",
         price: "",
-        source: "Сайт",
-        responsible: "",
-        responsibleId: "",
+        source: "",
         description: "",
+        responsibleId: "",
       })
     } catch (error) {
       console.error("[v0] Failed to create deal:", error)

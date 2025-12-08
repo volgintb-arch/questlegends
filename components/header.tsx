@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Moon, Sun, Bell, User, LogOut, SettingsIcon, ChevronDown, Menu } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
@@ -19,15 +19,36 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
   const [showNotifications, setShowNotifications] = useState(false)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [showProfileSettings, setShowProfileSettings] = useState(false)
-  const { logout } = useAuth()
+  const [unreadCount, setUnreadCount] = useState(0)
+  const { user, getAuthHeaders, logout } = useAuth()
   const router = useRouter()
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!user) return
+      try {
+        const response = await fetch("/api/notifications?unreadOnly=true", {
+          headers: getAuthHeaders(),
+        })
+        if (response.ok) {
+          const data = await response.json()
+          const notifications = data.data || data.notifications || []
+          setUnreadCount(Array.isArray(notifications) ? notifications.length : 0)
+        }
+      } catch (error) {
+        console.error("[v0] Error fetching notifications:", error)
+      }
+    }
+
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 30000) // Refresh every 30s
+    return () => clearInterval(interval)
+  }, [user, getAuthHeaders])
 
   const toggleTheme = () => {
     setIsDark(!isDark)
     document.documentElement.classList.toggle("dark")
   }
-
-  const unreadNotificationsCount = 3
 
   const handleLogout = async () => {
     console.log("[v0] Logging out user")
@@ -68,9 +89,9 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
                 className="p-2 hover:bg-muted/50 rounded-lg transition-colors relative"
               >
                 <Bell className="w-[18px] h-[18px] sm:w-5 sm:h-5 text-foreground" />
-                {unreadNotificationsCount > 0 && (
+                {unreadCount > 0 && (
                   <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-4 h-4 sm:w-5 sm:h-5 bg-accent rounded-full text-[9px] sm:text-[10px] font-semibold flex items-center justify-center text-accent-foreground">
-                    {unreadNotificationsCount}
+                    {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
               </button>

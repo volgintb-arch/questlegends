@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
 
     const userId = payload.userId as string
 
+    console.log("[v0] Auth me - userId from JWT:", userId)
+
     const sql = neon(process.env.DATABASE_URL!)
 
     const users = await sql`
@@ -33,6 +35,8 @@ export async function GET(request: NextRequest) {
     }
 
     const user = users[0]
+
+    console.log("[v0] Auth me - user from DB:", { id: user.id, name: user.name, role: user.role })
 
     return NextResponse.json({
       user: {

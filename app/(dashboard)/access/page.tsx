@@ -8,17 +8,17 @@ import { AccessManagementAdmin } from "@/components/access-management-admin"
 export default function AccessPage() {
   const { user } = useAuth()
 
-  if (user.role === "uk") {
+  if (user?.role === "super_admin" || user?.role === "uk" || user?.role === "uk_employee") {
     return <AccessManagementUK />
   }
 
-  if (user.role === "franchisee") {
+  if (user?.role === "franchisee") {
     return <AccessManagementFranchisee />
   }
 
-  if (user.role === "admin") {
+  if (user?.role === "admin") {
     return <AccessManagementAdmin />
   }
 
-  return <div>Access denied</div>
+  return <div className="p-6 text-muted-foreground">Доступ запрещен</div>
 }

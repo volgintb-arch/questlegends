@@ -29,16 +29,63 @@ export async function GET(request: Request) {
 
     const currentUser = await getCurrentUser(request)
     if (!currentUser) {
-      console.log("[v0] Permissions API: Unauthorized")
+      console.log("[v0] Permissions API: Unauthorized - no token")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    console.log("[v0] Permissions API: User role:", currentUser.role, "franchiseeId:", currentUser.franchiseeId)
 
     const sql = neon(process.env.DATABASE_URL!)
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
 
     let users
-    if (franchiseeId) {
+
+    if (currentUser.role === "super_admin" || currentUser.role === "uk" || currentUser.role === "uk_employee") {
+      if (franchiseeId) {
+        users = await sql`
+          SELECT u.id, u.name, u.phone, u.role, u.telegram, u."isActive", u.description,
+                 u."franchiseeId",
+                 up."canViewDashboard", up."canViewDeals", up."canViewFinances", 
+                 up."canManageConstants", up."canViewNotifications",
+                 f.name as "franchiseeName"
+          FROM "User" u
+          LEFT JOIN "UserPermission" up ON u.id = up."userId"
+          LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+          WHERE u."franchiseeId" = ${franchiseeId}
+            AND u.role IN ('admin', 'employee', 'animator', 'host', 'dj')
+            AND u."isActive" = true
+          ORDER BY u."createdAt" DESC
+        `
+      } else {
+        users = await sql`
+          SELECT u.id, u.name, u.phone, u.role, u.telegram, u."isActive", u.description,
+                 u."franchiseeId",
+                 up."canViewDashboard", up."canViewDeals", up."canViewFinances", 
+                 up."canManageConstants", up."canViewNotifications",
+                 f.name as "franchiseeName"
+          FROM "User" u
+          LEFT JOIN "UserPermission" up ON u.id = up."userId"
+          LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+          WHERE u.role IN ('uk', 'uk_employee', 'franchisee')
+            AND u."isActive" = true
+            AND u.id != ${currentUser.id}
+          ORDER BY 
+            CASE u.role 
+              WHEN 'uk' THEN 1 
+              WHEN 'uk_employee' THEN 2 
+              WHEN 'franchisee' THEN 3 
+            END,
+            u."createdAt" DESC
+        `
+      }
+    } else if (currentUser.role === "franchisee" || currentUser.role === "admin") {
+      const fId = currentUser.franchiseeId
+      if (!fId) {
+        console.log("[v0] Permissions API: No franchiseeId for franchisee user")
+        return NextResponse.json({ users: [] })
+      }
+
       users = await sql`
         SELECT u.id, u.name, u.phone, u.role, u.telegram, u."isActive", u.description,
                u."franchiseeId",
@@ -48,31 +95,14 @@ export async function GET(request: Request) {
         FROM "User" u
         LEFT JOIN "UserPermission" up ON u.id = up."userId"
         LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
-        WHERE u."franchiseeId" = ${franchiseeId}
+        WHERE u."franchiseeId" = ${fId}
           AND u.role IN ('admin', 'employee', 'animator', 'host', 'dj')
           AND u."isActive" = true
         ORDER BY u."createdAt" DESC
       `
     } else {
-      users = await sql`
-        SELECT u.id, u.name, u.phone, u.role, u.telegram, u."isActive", u.description,
-               u."franchiseeId",
-               up."canViewDashboard", up."canViewDeals", up."canViewFinances", 
-               up."canManageConstants", up."canViewNotifications",
-               f.name as "franchiseeName"
-        FROM "User" u
-        LEFT JOIN "UserPermission" up ON u.id = up."userId"
-        LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
-        WHERE u.role IN ('uk', 'uk_employee', 'franchisee')
-          AND u."isActive" = true
-        ORDER BY 
-          CASE u.role 
-            WHEN 'uk' THEN 1 
-            WHEN 'uk_employee' THEN 2 
-            WHEN 'franchisee' THEN 3 
-          END,
-          u."createdAt" DESC
-      `
+      console.log("[v0] Permissions API: Access denied for role:", currentUser.role)
+      return NextResponse.json({ users: [] })
     }
 
     const formattedUsers = users.map((u: any) => ({
@@ -120,7 +150,6 @@ export async function PUT(request: Request) {
 
     const sql = neon(process.env.DATABASE_URL!)
 
-    // Check if permission exists
     const existing = await sql`SELECT id FROM "UserPermission" WHERE "userId" = ${userId}`
 
     if (existing.length > 0) {
