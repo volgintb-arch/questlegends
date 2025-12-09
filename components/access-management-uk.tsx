@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
-import { Shield, Building2, User, Loader2 } from "lucide-react"
+import { Shield, Building2, Loader2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/contexts/auth-context"
@@ -11,6 +11,18 @@ interface Franchisee {
   id: string
   name: string
   city: string
+}
+
+interface UserPermissions {
+  dashboard: boolean
+  crm: boolean
+  erp: boolean
+  kpi: boolean
+  messages: boolean
+  knowledgeBase: boolean
+  users: boolean
+  access: boolean
+  notifications: boolean
 }
 
 interface AccessUser {
@@ -22,15 +34,21 @@ interface AccessUser {
   roleDisplay: string
   franchiseeId?: string
   franchiseeName?: string
-  permissions: {
-    dashboard: boolean
-    deals: boolean
-    finances: boolean
-    constants: boolean
-    notifications: boolean
-  }
+  permissions: UserPermissions
   assignedFranchisees: string[]
   status: "active" | "inactive"
+}
+
+const permissionLabels: Record<keyof UserPermissions, string> = {
+  dashboard: "Дашборд",
+  crm: "CRM",
+  erp: "ERP",
+  kpi: "KPI",
+  messages: "Сообщения",
+  knowledgeBase: "База Знаний",
+  users: "Пользователи",
+  access: "Доступ",
+  notifications: "Уведомления",
 }
 
 export function AccessManagementUK() {
@@ -57,25 +75,16 @@ export function AccessManagementUK() {
     try {
       setLoading(true)
       setError(null)
-      console.log("[v0] AccessManagement: Fetching permissions...")
 
       const headers = getAuthHeaders()
-      console.log("[v0] AccessManagement: Auth headers:", Object.keys(headers))
-
-      const response = await fetch("/api/permissions", {
-        headers,
-      })
-
-      console.log("[v0] AccessManagement: Response status:", response.status)
+      const response = await fetch("/api/permissions", { headers })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        console.log("[v0] AccessManagement: Error response:", errorData)
         throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
       const data = await response.json()
-      console.log("[v0] AccessManagement: Received data:", data)
 
       const formattedUsers = (data.users || []).map((u: any) => ({
         id: u.id,
@@ -83,21 +92,24 @@ export function AccessManagementUK() {
         email: u.telegram || u.phone,
         phone: u.phone,
         role: u.role,
-        roleDisplay: u.role === "uk" ? "Директор УК" : u.role === "uk_employee" ? "Сотрудник УК" : "Франчайзи",
+        roleDisplay: u.role === "uk" ? "Директор УК" : "Сотрудник УК",
         franchiseeId: u.franchiseeId,
         franchiseeName: u.franchiseeName,
         permissions: {
           dashboard: u.userPermissions?.canViewDashboard ?? true,
-          deals: u.userPermissions?.canViewDeals ?? false,
-          finances: u.userPermissions?.canViewFinances ?? false,
-          constants: u.userPermissions?.canManageConstants ?? false,
+          crm: u.userPermissions?.canViewCrm ?? true,
+          erp: u.userPermissions?.canViewErp ?? true,
+          kpi: u.userPermissions?.canViewKpi ?? true,
+          messages: u.userPermissions?.canViewMessages ?? true,
+          knowledgeBase: u.userPermissions?.canViewKnowledgeBase ?? true,
+          users: u.userPermissions?.canViewUsers ?? false,
+          access: u.userPermissions?.canViewAccess ?? false,
           notifications: u.userPermissions?.canViewNotifications ?? true,
         },
         assignedFranchisees: u.assignedFranchisees || [],
         status: u.isActive ? "active" : "inactive",
       }))
 
-      console.log("[v0] AccessManagement: Formatted users:", formattedUsers.length)
       setUsers(formattedUsers)
     } catch (error) {
       console.error("[v0] AccessManagement: Error fetching users:", error)
@@ -129,7 +141,7 @@ export function AccessManagementUK() {
     }
   }
 
-  const handleTogglePermission = async (userId: string, permission: keyof AccessUser["permissions"]) => {
+  const handleTogglePermission = async (userId: string, permission: keyof UserPermissions) => {
     const user = users.find((u) => u.id === userId)
     if (!user) return
 
@@ -149,9 +161,13 @@ export function AccessManagementUK() {
           userId,
           permissions: {
             canViewDashboard: newPermissions.dashboard,
-            canViewDeals: newPermissions.deals,
-            canViewFinances: newPermissions.finances,
-            canManageConstants: newPermissions.constants,
+            canViewCrm: newPermissions.crm,
+            canViewErp: newPermissions.erp,
+            canViewKpi: newPermissions.kpi,
+            canViewMessages: newPermissions.messages,
+            canViewKnowledgeBase: newPermissions.knowledgeBase,
+            canViewUsers: newPermissions.users,
+            canViewAccess: newPermissions.access,
             canViewNotifications: newPermissions.notifications,
           },
         }),
@@ -198,9 +214,6 @@ export function AccessManagementUK() {
 
   const canEdit = currentUser?.role === "super_admin" || currentUser?.role === "uk"
 
-  const ukUsers = users.filter((u) => u.role === "uk" || u.role === "uk_employee")
-  const franchiseeUsers = users.filter((u) => u.role === "franchisee")
-
   if (authLoading || loading) {
     return (
       <div className="p-6 flex items-center justify-center gap-2">
@@ -235,7 +248,7 @@ export function AccessManagementUK() {
       <div>
         <h1 className="text-xl font-bold text-foreground">Управление Доступом</h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Управление правами доступа сотрудников УК и франчайзи
+          Управление правами доступа сотрудников УК
           {!canEdit && " (только просмотр)"}
         </p>
       </div>
@@ -243,18 +256,18 @@ export function AccessManagementUK() {
       <div className="space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-1.5">
           <Shield className="text-primary" size={16} />
-          Сотрудники УК ({ukUsers.length})
+          Сотрудники УК ({users.length})
         </h2>
 
         <div className="grid gap-3">
-          {ukUsers.length === 0 ? (
+          {users.length === 0 ? (
             <Card className="p-4 text-center">
               <Shield size={32} className="mx-auto mb-2 text-muted-foreground" />
               <h3 className="text-sm font-semibold mb-1">Нет сотрудников УК</h3>
-              <p className="text-xs text-muted-foreground">В системе пока нет зарегистрированных сотрудников УК</p>
+              <p className="text-xs text-muted-foreground">Создайте сотрудников УК во вкладке "Пользователи"</p>
             </Card>
           ) : (
-            ukUsers.map((user) => (
+            users.map((user) => (
               <Card key={user.id} className="p-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
@@ -277,53 +290,19 @@ export function AccessManagementUK() {
                   </div>
 
                   <div className="space-y-1 mb-2">
-                    <p className="text-xs font-medium">Права доступа:</p>
-                    <div className="flex flex-wrap gap-2">
-                      <div className="flex items-center gap-1">
-                        <Checkbox
-                          className="h-3 w-3"
-                          checked={user.permissions.dashboard}
-                          onCheckedChange={() => handleTogglePermission(user.id, "dashboard")}
-                          disabled={!canEdit}
-                        />
-                        <Label className="text-[10px]">Дашборд</Label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Checkbox
-                          className="h-3 w-3"
-                          checked={user.permissions.deals}
-                          onCheckedChange={() => handleTogglePermission(user.id, "deals")}
-                          disabled={!canEdit}
-                        />
-                        <Label className="text-[10px]">CRM</Label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Checkbox
-                          className="h-3 w-3"
-                          checked={user.permissions.finances}
-                          onCheckedChange={() => handleTogglePermission(user.id, "finances")}
-                          disabled={!canEdit}
-                        />
-                        <Label className="text-[10px]">Финансы</Label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Checkbox
-                          className="h-3 w-3"
-                          checked={user.permissions.constants}
-                          onCheckedChange={() => handleTogglePermission(user.id, "constants")}
-                          disabled={!canEdit}
-                        />
-                        <Label className="text-[10px]">Константы</Label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Checkbox
-                          className="h-3 w-3"
-                          checked={user.permissions.notifications}
-                          onCheckedChange={() => handleTogglePermission(user.id, "notifications")}
-                          disabled={!canEdit}
-                        />
-                        <Label className="text-[10px]">Уведомления</Label>
-                      </div>
+                    <p className="text-xs font-medium">Права доступа к модулям:</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(Object.keys(permissionLabels) as Array<keyof UserPermissions>).map((key) => (
+                        <div key={key} className="flex items-center gap-1">
+                          <Checkbox
+                            className="h-3 w-3"
+                            checked={user.permissions[key]}
+                            onCheckedChange={() => handleTogglePermission(user.id, key)}
+                            disabled={!canEdit}
+                          />
+                          <Label className="text-[10px]">{permissionLabels[key]}</Label>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -331,11 +310,11 @@ export function AccessManagementUK() {
                     <div className="flex items-center gap-1">
                       <Building2 size={12} className="text-muted-foreground" />
                       <p className="text-xs font-medium">
-                        Франшизы ({user.assignedFranchisees.length}/{franchisees.length}):
+                        Доступ к франшизам ({user.assignedFranchisees.length}/{franchisees.length}):
                       </p>
                     </div>
                     {franchisees.length === 0 ? (
-                      <p className="text-[10px] text-muted-foreground">Нет франшиз</p>
+                      <p className="text-[10px] text-muted-foreground">Нет франшиз в системе</p>
                     ) : (
                       <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
                         {franchisees.map((franchisee) => (
@@ -359,105 +338,18 @@ export function AccessManagementUK() {
         </div>
       </div>
 
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold flex items-center gap-1.5">
-          <Building2 className="text-orange-500" size={16} />
-          Франчайзи ({franchiseeUsers.length})
-        </h2>
-
-        <div className="grid gap-3">
-          {franchiseeUsers.length === 0 ? (
-            <Card className="p-4 text-center">
-              <Building2 size={32} className="mx-auto mb-2 text-muted-foreground" />
-              <h3 className="text-sm font-semibold mb-1">Нет франчайзи</h3>
-              <p className="text-xs text-muted-foreground">В системе пока нет зарегистрированных франчайзи</p>
-            </Card>
-          ) : (
-            franchiseeUsers.map((user) => (
-              <Card key={user.id} className="p-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-7 h-7 rounded-full bg-orange-500/10 flex items-center justify-center">
-                      <User className="text-orange-500" size={14} />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-sm">{user.name}</h3>
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-[10px] text-muted-foreground">{user.roleDisplay}</p>
-                        {user.franchiseeName && (
-                          <span className="text-[9px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded">
-                            {user.franchiseeName}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                    <div>
-                      <span className="text-muted-foreground">Email:</span> {user.email}
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Тел:</span> {user.phone}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium">Права доступа:</p>
-                    <div className="flex flex-wrap gap-2">
-                      <div className="flex items-center gap-1">
-                        <Checkbox
-                          className="h-3 w-3"
-                          checked={user.permissions.dashboard}
-                          onCheckedChange={() => handleTogglePermission(user.id, "dashboard")}
-                          disabled={!canEdit}
-                        />
-                        <Label className="text-[10px]">Дашборд</Label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Checkbox
-                          className="h-3 w-3"
-                          checked={user.permissions.deals}
-                          onCheckedChange={() => handleTogglePermission(user.id, "deals")}
-                          disabled={!canEdit}
-                        />
-                        <Label className="text-[10px]">CRM</Label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Checkbox
-                          className="h-3 w-3"
-                          checked={user.permissions.finances}
-                          onCheckedChange={() => handleTogglePermission(user.id, "finances")}
-                          disabled={!canEdit}
-                        />
-                        <Label className="text-[10px]">Финансы</Label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Checkbox
-                          className="h-3 w-3"
-                          checked={user.permissions.constants}
-                          onCheckedChange={() => handleTogglePermission(user.id, "constants")}
-                          disabled={!canEdit}
-                        />
-                        <Label className="text-[10px]">Константы</Label>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Checkbox
-                          className="h-3 w-3"
-                          checked={user.permissions.notifications}
-                          onCheckedChange={() => handleTogglePermission(user.id, "notifications")}
-                          disabled={!canEdit}
-                        />
-                        <Label className="text-[10px]">Уведомления</Label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))
-          )}
+      <Card className="p-3 bg-muted/30 border-dashed">
+        <div className="flex items-start gap-2">
+          <Building2 size={16} className="text-orange-500 mt-0.5" />
+          <div>
+            <h3 className="text-xs font-medium">Права франчайзи</h3>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Права доступа франчайзи фиксированы согласно их функционалу и не редактируются. Каждый франчайзи имеет
+              доступ только к своей франшизе.
+            </p>
+          </div>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

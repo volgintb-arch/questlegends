@@ -166,18 +166,16 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
 
   const loadEmployees = async () => {
     try {
-      // Fetch all users that can be assigned as responsible
       const res = await fetch("/api/users", { headers: getAuthHeaders() })
       if (res.ok) {
         const data = await res.json()
-        // Filter to only show relevant employees
-        const allUsers = data.users || []
-        setEmployees(
-          allUsers.filter((u: any) =>
-            ["super_admin", "uk", "uk_employee", "franchisee", "admin", "employee"].includes(u.role),
-          ),
+        const allUsers = data.data || data.users || []
+        console.log("[v0] Users API response:", allUsers.length, "users")
+        const filteredUsers = allUsers.filter((u: any) =>
+          ["super_admin", "uk", "uk_employee", "franchisee", "admin", "employee"].includes(u.role),
         )
-        console.log("[v0] Loaded employees:", allUsers.length)
+        setEmployees(filteredUsers)
+        console.log("[v0] Loaded employees:", filteredUsers.length)
       }
     } catch (e) {
       console.error("[v0] Error loading employees:", e)
@@ -213,14 +211,19 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
   const handleAddNote = async () => {
     if (!messageInput.trim()) return
     try {
+      console.log("[v0] Adding note:", messageInput)
       const res = await fetch(`/api/deals/${deal.id}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ type: "note", content: messageInput }),
       })
+      console.log("[v0] Add note response status:", res.status)
       if (res.ok) {
         setMessageInput("")
         loadEvents()
+      } else {
+        const errorData = await res.json()
+        console.error("[v0] Add note error:", errorData)
       }
     } catch (e) {
       console.error("[v0] Error adding note:", e)

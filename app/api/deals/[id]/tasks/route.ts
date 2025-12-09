@@ -2,8 +2,6 @@ import { neon } from "@neondatabase/serverless"
 import { type NextRequest, NextResponse } from "next/server"
 import { jwtVerify } from "jose"
 
-const sql = neon(process.env.DATABASE_URL!)
-
 async function getUserFromToken(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
   if (!authHeader?.startsWith("Bearer ")) return null
@@ -30,14 +28,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const { id } = await params
+    const sql = neon(process.env.DATABASE_URL!)
 
     const tasks = await sql`
-      SELECT * FROM "DealTask"
-      WHERE "dealId" = ${id}
-      ORDER BY "createdAt" DESC
+      SELECT t.*, u.name as "assigneeName"
+      FROM "DealTask" t
+      LEFT JOIN "User" u ON t."assigneeId" = u.id
+      WHERE t."dealId" = ${id}
+      ORDER BY t."createdAt" DESC
     `
 
-    return NextResponse.json({ data: tasks })
+    return NextResponse.json({ tasks })
   } catch (error) {
     console.error("Error fetching tasks:", error)
     return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 })
@@ -53,13 +54,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { id } = await params
     const body = await request.json()
-    const { title, description, assigneeId, assigneeName, deadline } = body
+    const { title, description, assigneeId, deadline } = body
+
+    console.log("[v0] Creating task:", { title, assigneeId, deadline })
+
+    const sql = neon(process.env.DATABASE_URL!)
+
+    let assigneeName = null
+    if (assigneeId) {
+      const assignees = await sql`SELECT name FROM "User" WHERE id = ${assigneeId}`
+      assigneeName = assignees[0]?.name || null
+    }
 
     const [task] = await sql`
-      INSERT INTO "DealTask" ("dealId", title, description, "assigneeId", "assigneeName", deadline, "createdById")
-      VALUES (${id}, ${title}, ${description || null}, ${assigneeId || null}, ${assigneeName || null}, ${deadline || null}, ${user.id})
+      INSERT INTO "DealTask" ("dealId", title, description, "assigneeId", deadline, "createdById")
+      VALUES (${id}, ${title}, ${description || null}, ${assigneeId || null}, ${deadline || null}, ${user.id})
       RETURNING *
     `
+
+    console.log("[v0] Task created:", task.id)
 
     // Create event for task creation
     await sql`
@@ -85,11 +98,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           ${user.id}, ${assigneeId}, ${id}, ${task.id}, false, false, ${now}, ${now}
         )
       `
+      console.log("[v0] Notification created for assignee:", assigneeId)
     }
 
-    return NextResponse.json({ data: task })
-  } catch (error) {
-    console.error("Error creating task:", error)
-    return NextResponse.json({ error: "Failed to create task" }, { status: 500 })
+    return NextResponse.json({ data: { ...task, assigneeName }, success: true })
+  } catch (error: any) {
+    console.error("[v0] Error creating task:", error.message)
+    return NextResponse.json({ error: "Failed to create task", details: error.message }, { status: 500 })
   }
 }

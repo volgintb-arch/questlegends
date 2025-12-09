@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { jwtVerify } from "jose"
+import bcrypt from "bcryptjs"
 
 async function getCurrentUser(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
@@ -22,14 +23,14 @@ async function getCurrentUser(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await getCurrentUser(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = await params
+    const { id } = params
     const sql = neon(process.env.DATABASE_URL!)
 
     const users = await sql`
@@ -50,14 +51,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const currentUser = await getCurrentUser(request)
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = await params
+    const { id } = params
     const body = await request.json()
     const sql = neon(process.env.DATABASE_URL!)
 
@@ -80,10 +81,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Update user
-    const updates: string[] = []
-    const values: any[] = []
-
+    // Update user fields
     if (body.name !== undefined) {
       await sql`UPDATE "User" SET name = ${body.name}, "updatedAt" = NOW() WHERE id = ${id}`
     }
@@ -97,6 +95,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       await sql`UPDATE "User" SET "isActive" = ${body.isActive}, "updatedAt" = NOW() WHERE id = ${id}`
     }
 
+    if (body.password && body.password.trim()) {
+      const hashedPassword = await bcrypt.hash(body.password, 10)
+      await sql`UPDATE "User" SET "passwordHash" = ${hashedPassword}, password = ${hashedPassword}, "updatedAt" = NOW() WHERE id = ${id}`
+    }
+
     const updated = await sql`SELECT * FROM "User" WHERE id = ${id}`
     return NextResponse.json({ success: true, data: updated[0] })
   } catch (error) {
@@ -105,14 +108,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const currentUser = await getCurrentUser(request)
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = await params
+    const { id } = params
     const sql = neon(process.env.DATABASE_URL!)
 
     // Check if user exists

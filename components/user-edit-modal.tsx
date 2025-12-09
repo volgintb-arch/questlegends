@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/contexts/auth-context"
-import { Loader2 } from "lucide-react"
+import { Loader2, Eye, EyeOff } from "lucide-react"
 
 interface UserEditModalProps {
   isOpen: boolean
@@ -21,11 +21,13 @@ interface UserEditModalProps {
 export function UserEditModal({ isOpen, onClose, user, onUpdated }: UserEditModalProps) {
   const { user: currentUser, getAuthHeaders } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
     role: "",
     isActive: true,
+    password: "",
   })
 
   useEffect(() => {
@@ -35,6 +37,7 @@ export function UserEditModal({ isOpen, onClose, user, onUpdated }: UserEditModa
         phone: user.phone || "",
         role: user.role || "",
         isActive: user.isActive ?? true,
+        password: "", // Reset password on user change
       })
     }
   }, [user])
@@ -45,13 +48,24 @@ export function UserEditModal({ isOpen, onClose, user, onUpdated }: UserEditModa
 
     setIsLoading(true)
     try {
+      const payload: any = {
+        name: formData.name,
+        phone: formData.phone,
+        role: formData.role,
+        isActive: formData.isActive,
+      }
+
+      if (formData.password.trim()) {
+        payload.password = formData.password
+      }
+
       const response = await fetch(`/api/users/${user.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           ...getAuthHeaders(),
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       })
 
       if (response.ok) {
@@ -123,6 +137,26 @@ export function UserEditModal({ isOpen, onClose, user, onUpdated }: UserEditModa
               className="h-8 text-xs"
               required
             />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs">Новый пароль (оставьте пустым, чтобы не менять)</Label>
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="h-8 text-xs pr-8"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-1">
