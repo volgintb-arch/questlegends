@@ -1,20 +1,22 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertTriangle, AlertCircle, CheckCircle, Info, Bell, Trash2, MessageSquare } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { AlertTriangle, AlertCircle, CheckCircle, Info, Bell, Trash2, MessageSquare, ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { NotificationDetailModal } from "./notification-detail-modal"
 import { useAuth } from "@/contexts/auth-context"
 
 interface Notification {
   id: string
-  type: "critical" | "warning" | "info" | "success" | "message"
+  type: "critical" | "warning" | "info" | "success" | "message" | "task"
   title: string
   message: string
   timestamp: string
   read: boolean
   location?: string
   dealId?: string
+  taskId?: string
   comments: string[]
   archived: boolean
   sender?: string
@@ -33,6 +35,7 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const { getAuthHeaders } = useAuth()
+  const router = useRouter()
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -44,6 +47,8 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
         return <CheckCircle size={20} className="text-green-500" />
       case "message":
         return <MessageSquare size={20} className="text-purple-500" />
+      case "task":
+        return <CheckCircle size={20} className="text-blue-500" />
       default:
         return <Info size={20} className="text-blue-500" />
     }
@@ -59,6 +64,8 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
         return "Успех"
       case "message":
         return "Сообщение"
+      case "task":
+        return "Задача"
       default:
         return "Информация"
     }
@@ -74,6 +81,8 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
         return "bg-green-500/20 text-green-500 border-green-500/30"
       case "message":
         return "bg-purple-500/20 text-purple-500 border-purple-500/30"
+      case "task":
+        return "bg-blue-500/20 text-blue-500 border-blue-500/30"
       default:
         return "bg-blue-500/20 text-blue-500 border-blue-500/30"
     }
@@ -99,6 +108,18 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
       setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)))
     } catch (error) {
       console.error("[v0] Error marking notification as read:", error)
+    }
+  }
+
+  const openDealCard = async (notification: Notification) => {
+    if (notification.dealId) {
+      // Mark as read first
+      if (!notification.read) {
+        await markAsRead(notification.id)
+      }
+      // Navigate to CRM with deal ID and task ID in query params
+      const taskParam = notification.taskId ? `&taskId=${notification.taskId}` : ""
+      router.push(`/crm?dealId=${notification.dealId}${taskParam}`)
     }
   }
 
@@ -156,6 +177,11 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
 
   const unreadCount = notifications.filter((n) => !n.read && !n.archived).length
 
+  const handleViewNotification = (notification: Notification) => {
+    setSelectedNotification(notification)
+    setShowDetailModal(true)
+  }
+
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
@@ -182,7 +208,8 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
             timestamp: new Date(n.createdAt).toLocaleString("ru-RU"),
             read: n.isRead,
             location: n.location,
-            dealId: n.deal?.id,
+            dealId: n.dealId,
+            taskId: n.taskId,
             comments: n.comments?.map((c: any) => c.text) || [],
             archived: n.isArchived,
             sender: n.sender?.name,
@@ -266,6 +293,7 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
           className="bg-card border border-border rounded-lg px-4 py-2 text-sm outline-none focus:border-primary"
         >
           <option value="all">Все типы</option>
+          <option value="task">Задачи</option>
           <option value="message">Сообщения от УК</option>
           <option value="warning">Предупреждения</option>
           <option value="info">Информация</option>
@@ -281,7 +309,8 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
               key={notification.id}
               className={`border rounded-lg p-4 transition-all ${
                 notification.read ? "bg-card border-border/50" : "bg-card border-border bg-primary/5"
-              }`}
+              } ${notification.dealId ? "cursor-pointer hover:border-primary/50" : ""}`}
+              onClick={() => notification.dealId && openDealCard(notification)}
             >
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0 mt-1">{getIcon(notification.type)}</div>
@@ -306,18 +335,19 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
                       </span>
                     )}
                     {notification.dealId && (
-                      <span className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground">
-                        {notification.dealId}
+                      <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-500 flex items-center gap-1">
+                        <ExternalLink size={12} />
+                        Открыть сделку
                       </span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/30">
+                  <div
+                    className="flex items-center gap-2 mt-3 pt-3 border-t border-border/30"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
-                      onClick={() => {
-                        setSelectedNotification(notification)
-                        setShowDetailModal(true)
-                      }}
+                      onClick={() => handleViewNotification(notification)}
                       className="text-xs px-3 py-1 rounded bg-blue-500/20 text-blue-600 hover:bg-blue-500/30 transition-colors"
                     >
                       Подробно
@@ -339,7 +369,7 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
                     </button>
                   </div>
 
-                  <div className="mt-3 pt-3 border-t border-border/30 flex gap-2">
+                  <div className="mt-3 pt-3 border-t border-border/30 flex gap-2" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="text"
                       placeholder="Добавить комментарий и архивировать..."

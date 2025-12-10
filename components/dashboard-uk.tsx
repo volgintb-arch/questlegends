@@ -30,12 +30,14 @@ interface FranchiseData {
 }
 
 export function DashboardUK() {
-  const { getAuthHeaders } = useAuth()
+  const { user, getAuthHeaders } = useAuth()
   const [showKPISettings, setShowKPISettings] = useState(false)
   const [franchises, setFranchises] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [networkStats, setNetworkStats] = useState<any>(null)
+
+  const isUkEmployee = user?.role === "uk_employee"
 
   useEffect(() => {
     const fetchData = async () => {
@@ -144,7 +146,9 @@ export function DashboardUK() {
     <div className="space-y-6 sm:space-y-8">
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg sm:text-xl font-semibold text-foreground">Ключевые Показатели</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-foreground">
+            {isUkEmployee ? "Ключевые Показатели ваших франчизи" : "Ключевые Показатели"}
+          </h2>
           <button
             onClick={() => setShowKPISettings(true)}
             className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 bg-muted/50 hover:bg-muted text-muted-foreground text-xs font-medium rounded transition-colors"
@@ -168,7 +172,9 @@ export function DashboardUK() {
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg sm:text-xl font-semibold text-foreground">Франчайзи сети</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-foreground">
+            {isUkEmployee ? "Делегированные франчизи" : "Франчайзи сети"}
+          </h2>
           <span className="text-xs text-muted-foreground">{franchises.length} франшиз</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -190,7 +196,9 @@ export function DashboardUK() {
       </div>
 
       <div className="rounded-lg bg-card border border-border p-4 sm:p-6">
-        <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-4">Статистика Сети</h3>
+        <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-4">
+          {isUkEmployee ? "Статистика делегированных франчизи" : "Статистика Сети"}
+        </h3>
         {networkStats ? (
           <div className="space-y-3">
             <div>

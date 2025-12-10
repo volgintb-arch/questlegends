@@ -49,7 +49,7 @@ export async function GET(request: Request) {
         deals = await sql`
           SELECT 
             d.*,
-            u.name as "responsibleName",
+            u.name as "responsibleUserName",
             f.name as "franchiseeName",
             f.city as "franchiseeCity"
           FROM "Deal" d
@@ -64,7 +64,7 @@ export async function GET(request: Request) {
         deals = await sql`
           SELECT 
             d.*,
-            u.name as "responsibleName",
+            u.name as "responsibleUserName",
             f.name as "franchiseeName",
             f.city as "franchiseeCity"
           FROM "Deal" d
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
       deals = await sql`
         SELECT 
           d.*,
-          u.name as "responsibleName",
+          u.name as "responsibleUserName",
           f.name as "franchiseeName",
           f.city as "franchiseeCity"
         FROM "Deal" d
@@ -91,11 +91,10 @@ export async function GET(request: Request) {
         ORDER BY d."createdAt" DESC
       `
     } else {
-      // UK/super_admin - show all deals or filter by pipeline
       deals = await sql`
         SELECT 
           d.*,
-          u.name as "responsibleName",
+          u.name as "responsibleUserName",
           f.name as "franchiseeName",
           f.city as "franchiseeCity"
         FROM "Deal" d
@@ -109,7 +108,7 @@ export async function GET(request: Request) {
 
     const formattedDeals = deals.map((deal: any) => ({
       ...deal,
-      responsible: deal.responsibleName ? { id: deal.responsibleId, name: deal.responsibleName } : null,
+      responsible: deal.responsibleUserName ? { id: deal.responsibleId, name: deal.responsibleUserName } : null,
       franchisee: deal.franchiseeName
         ? {
             id: deal.franchiseeId,
@@ -136,61 +135,46 @@ export async function POST(request: Request) {
     const sql = neon(process.env.DATABASE_URL!)
     const body = await request.json()
 
-    let franchiseeId: string | null = null
-
-    if (user.role !== "uk" && user.role !== "super_admin") {
-      franchiseeId = user.franchiseeId || body.franchiseeId || null
-
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-      if (franchiseeId && !uuidRegex.test(franchiseeId)) {
-        const cityName = franchiseeId
-        const existingFranchisee = await sql`
-          SELECT id FROM "Franchisee" WHERE city = ${cityName} LIMIT 1
-        `
-
-        if (existingFranchisee.length > 0) {
-          franchiseeId = existingFranchisee[0].id
-        } else {
-          const newFranchiseeId = crypto.randomUUID()
-          const now = new Date().toISOString()
-          await sql`
-            INSERT INTO "Franchisee" (id, name, city, "createdAt", "updatedAt")
-            VALUES (${newFranchiseeId}, ${"Франшиза " + cityName}, ${cityName}, ${now}, ${now})
-          `
-          franchiseeId = newFranchiseeId
-        }
-      }
-    }
-
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
 
-    const locationInfo = body.location ? `Город: ${body.location}` : ""
-    const notesWithLocation =
-      user.role === "uk" || user.role === "super_admin"
-        ? [locationInfo, body.notes || body.description || ""].filter(Boolean).join("\n")
-        : body.notes || body.description || null
-
     await sql`
       INSERT INTO "Deal" (
-        id, "clientName", "clientPhone", "clientTelegram",
-        source, stage, "stageId", "pipelineId", participants, "gameDate", package,
-        price, responsible, "responsibleId", animator, host, dj,
-        notes, "franchiseeId", "createdAt", "updatedAt"
+        id, 
+        "clientName",
+        "contactName", 
+        "contactPhone", 
+        "messengerLink", 
+        "city",
+        "paushalnyyVznos",
+        "investmentAmount",
+        "leadSource",
+        "responsibleId",
+        "additionalComment",
+        source, 
+        stage, 
+        "stageId", 
+        "pipelineId",
+        "createdAt", 
+        "updatedAt"
       ) VALUES (
-        ${id}, ${body.clientName || null}, ${body.clientPhone || null}, 
-        ${body.clientTelegram || body.clientWhatsapp || null},
-        ${body.source || null}, ${body.stage || "Новый"}, 
+        ${id}, 
+        ${body.contactName || body.clientName || null},
+        ${body.contactName || null},
+        ${body.contactPhone || null},
+        ${body.messengerLink || null},
+        ${body.city || null},
+        ${body.paushalnyyVznos || null},
+        ${body.investmentAmount || null},
+        ${body.leadSource || body.source || null},
+        ${body.responsibleId || user.id},
+        ${body.additionalComment || null},
+        ${body.leadSource || body.source || null},
+        ${body.stage || "Новый"}, 
         ${body.stageId ? sql`${body.stageId}::uuid` : sql`NULL`},
         ${body.pipelineId ? sql`${body.pipelineId}::uuid` : sql`NULL`},
-        ${body.participants || null},
-        ${body.gameDate ? new Date(body.gameDate).toISOString() : null},
-        ${body.package || body.packageType || null},
-        ${body.price || null}, ${body.responsible || null}, ${body.responsibleId || user.id},
-        ${body.animator || null}, ${body.host || null}, ${body.dj || null},
-        ${notesWithLocation},
-        ${franchiseeId}, ${now}, ${now}
+        ${now}, 
+        ${now}
       )
     `
 

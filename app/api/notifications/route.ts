@@ -84,7 +84,8 @@ export async function GET(request: NextRequest) {
       if (filterType && filterType !== "all" && filterRead && filterRead !== "all") {
         const isRead = filterRead === "read"
         return await sql`
-          SELECT n.*, s.name as "senderName", s.role as "senderRole"
+          SELECT n.*, s.name as "senderName", s.role as "senderRole",
+                 n."relatedDealId", n."relatedTaskId"
           FROM "Notification" n
           LEFT JOIN "User" s ON n."senderId" = s.id
           WHERE n."recipientId" = ${user.id}
@@ -95,7 +96,8 @@ export async function GET(request: NextRequest) {
         `
       } else if (filterType && filterType !== "all") {
         return await sql`
-          SELECT n.*, s.name as "senderName", s.role as "senderRole"
+          SELECT n.*, s.name as "senderName", s.role as "senderRole",
+                 n."relatedDealId", n."relatedTaskId"
           FROM "Notification" n
           LEFT JOIN "User" s ON n."senderId" = s.id
           WHERE n."recipientId" = ${user.id}
@@ -106,7 +108,8 @@ export async function GET(request: NextRequest) {
       } else if (filterRead && filterRead !== "all") {
         const isRead = filterRead === "read"
         return await sql`
-          SELECT n.*, s.name as "senderName", s.role as "senderRole"
+          SELECT n.*, s.name as "senderName", s.role as "senderRole",
+                 n."relatedDealId", n."relatedTaskId"
           FROM "Notification" n
           LEFT JOIN "User" s ON n."senderId" = s.id
           WHERE n."recipientId" = ${user.id}
@@ -116,7 +119,8 @@ export async function GET(request: NextRequest) {
         `
       } else {
         return await sql`
-          SELECT n.*, s.name as "senderName", s.role as "senderRole"
+          SELECT n.*, s.name as "senderName", s.role as "senderRole",
+                 n."relatedDealId", n."relatedTaskId"
           FROM "Notification" n
           LEFT JOIN "User" s ON n."senderId" = s.id
           WHERE n."recipientId" = ${user.id}
@@ -130,7 +134,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, count: notifications.count })
     }
 
-    // Transform to expected format
     const transformed = Array.isArray(notifications)
       ? notifications.map((n: any) => ({
           id: n.id,
@@ -138,12 +141,13 @@ export async function GET(request: NextRequest) {
           title: n.title,
           message: n.message,
           location: n.location,
-          dealId: n.dealId,
+          dealId: n.relatedDealId || n.dealId,
+          taskId: n.relatedTaskId,
           isRead: n.isRead,
           isArchived: n.isArchived,
           createdAt: n.createdAt,
           sender: n.senderName ? { id: n.senderId, name: n.senderName, role: n.senderRole } : null,
-          deal: n.dealId ? { id: n.dealId } : null,
+          deal: n.relatedDealId ? { id: n.relatedDealId } : null,
           comments: [],
         }))
       : []
@@ -176,7 +180,7 @@ export async function POST(request: NextRequest) {
 
     await getSql()`
       INSERT INTO "Notification" (
-        id, type, title, message, location, "dealId", "senderId", "recipientId", 
+        id, type, title, message, location, "relatedDealId", "senderId", "recipientId", 
         "isRead", "isArchived", "createdAt", "updatedAt"
       ) VALUES (
         ${id}, ${type}, ${title}, ${message}, ${location || null}, ${dealId || null}, 

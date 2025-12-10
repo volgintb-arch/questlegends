@@ -36,7 +36,12 @@ export async function GET(request: NextRequest) {
 
     const user = users[0]
 
-    console.log("[v0] Auth me - user from DB:", { id: user.id, name: user.name, role: user.role })
+    console.log("[v0] Auth me - user from DB:", {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      franchiseeId: user.franchiseeId,
+    })
 
     return NextResponse.json({
       user: {

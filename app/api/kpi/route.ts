@@ -31,56 +31,82 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
-    const startDate = searchParams.get("startDate")
-    const endDate = searchParams.get("endDate")
 
-    const sql = neon(process.env.DATABASE_URL!)
+    console.log("[v0] KPI GET params:", { franchiseeId, userRole: user.role })
 
-    let kpis
-    if (franchiseeId) {
-      if (startDate && endDate) {
-        kpis = await sql`
-          SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
-          FROM "Kpi" k
-          LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
-          WHERE k."franchiseeId" = ${franchiseeId}
-            AND k."startDate" >= ${startDate}
-            AND k."endDate" <= ${endDate}
-          ORDER BY k."startDate" DESC
-        `
-      } else {
-        kpis = await sql`
-          SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
-          FROM "Kpi" k
-          LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
-          WHERE k."franchiseeId" = ${franchiseeId}
-          ORDER BY k."startDate" DESC
-        `
-      }
-    } else {
-      if (startDate && endDate) {
-        kpis = await sql`
-          SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
-          FROM "Kpi" k
-          LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
-          WHERE k."startDate" >= ${startDate}
-            AND k."endDate" <= ${endDate}
-          ORDER BY k."startDate" DESC
-        `
-      } else {
-        kpis = await sql`
-          SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
-          FROM "Kpi" k
-          LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
-          ORDER BY k."startDate" DESC
-        `
-      }
+    if (!process.env.DATABASE_URL) {
+      console.error("[v0] DATABASE_URL not set")
+      return NextResponse.json({ error: "Database configuration error" }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, data: kpis })
+    const sql = neon(process.env.DATABASE_URL)
+
+    let kpis
+    if (user.role === "uk_employee") {
+      // uk_employee sees only KPIs for assigned franchisees
+      if (franchiseeId && franchiseeId !== "all") {
+        kpis = await sql`
+          SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "Kpi" k
+          LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
+          INNER JOIN "UserFranchiseeAssignment" ufa ON k."franchiseeId" = ufa."franchiseeId"
+          WHERE ufa."userId" = ${user.id} AND k."franchiseeId" = ${franchiseeId}
+          ORDER BY k."createdAt" DESC
+        `
+      } else {
+        kpis = await sql`
+          SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "Kpi" k
+          LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
+          INNER JOIN "UserFranchiseeAssignment" ufa ON k."franchiseeId" = ufa."franchiseeId"
+          WHERE ufa."userId" = ${user.id}
+          ORDER BY k."createdAt" DESC
+        `
+      }
+    } else if (franchiseeId && franchiseeId !== "all") {
+      console.log("[v0] Fetching KPIs for specific franchisee:", franchiseeId)
+      kpis = await sql`
+        SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
+        FROM "Kpi" k
+        LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
+        WHERE k."franchiseeId" = ${franchiseeId}
+        ORDER BY k."createdAt" DESC
+      `
+    } else {
+      console.log("[v0] Fetching all KPIs")
+      kpis = await sql`
+        SELECT k.*, f.name as "franchiseeName", f.city as "franchiseeCity"
+        FROM "Kpi" k
+        LEFT JOIN "Franchisee" f ON k."franchiseeId" = f.id
+        ORDER BY k."createdAt" DESC
+      `
+    }
+
+    console.log("[v0] KPI query result count:", kpis.length)
+
+    const mappedKpis = kpis.map((kpi: any) => ({
+      id: kpi.id,
+      franchiseeId: kpi.franchiseeId,
+      franchiseeName: kpi.franchiseeName || "Неизвестно",
+      franchiseeCity: kpi.franchiseeCity || "",
+      name: kpi.name,
+      target: Number.parseFloat(kpi.target) || 0,
+      actual: Number.parseFloat(kpi.actual) || 0,
+      period: kpi.period,
+      startDate: kpi.startDate,
+      endDate: kpi.endDate,
+      createdAt: kpi.createdAt,
+      updatedAt: kpi.updatedAt,
+    }))
+
+    console.log("[v0] Returning KPIs:", mappedKpis.length)
+    return NextResponse.json({ success: true, data: mappedKpis })
   } catch (error) {
     console.error("[v0] KPI_GET error:", error)
-    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Internal error", details: error instanceof Error ? error.message : "Unknown" },
+      { status: 500 },
+    )
   }
 }
 
@@ -91,7 +117,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (user.role !== "uk" && user.role !== "super_admin") {
+    if (user.role !== "uk" && user.role !== "super_admin" && user.role !== "uk_employee") {
       return NextResponse.json({ error: "Forbidden - Only UK can set KPIs" }, { status: 403 })
     }
 
@@ -103,6 +129,16 @@ export async function POST(request: NextRequest) {
     }
 
     const sql = neon(process.env.DATABASE_URL!)
+
+    if (user.role === "uk_employee") {
+      const assignment = await sql`
+        SELECT 1 FROM "UserFranchiseeAssignment" 
+        WHERE "userId" = ${user.id} AND "franchiseeId" = ${franchiseeId}
+      `
+      if (assignment.length === 0) {
+        return NextResponse.json({ error: "Forbidden - No access to this franchisee" }, { status: 403 })
+      }
+    }
 
     const result = await sql`
       INSERT INTO "Kpi" ("franchiseeId", name, target, actual, period, "startDate", "endDate", "createdById", "createdAt", "updatedAt")
@@ -124,8 +160,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    if (user.role !== "uk" && user.role !== "super_admin" && user.role !== "uk_employee") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
     const body = await request.json()
-    const { id, actual } = body
+    const { id, name, target, actual, period, startDate, endDate } = body
 
     if (!id) {
       return NextResponse.json({ error: "KPI ID required" }, { status: 400 })
@@ -133,9 +173,59 @@ export async function PATCH(request: NextRequest) {
 
     const sql = neon(process.env.DATABASE_URL!)
 
-    if (actual !== undefined) {
-      await sql`UPDATE "Kpi" SET actual = ${actual}, "updatedAt" = NOW() WHERE id = ${id}::uuid`
+    if (user.role === "uk_employee") {
+      const kpiCheck = await sql`
+        SELECT k."franchiseeId" FROM "Kpi" k
+        INNER JOIN "UserFranchiseeAssignment" ufa ON k."franchiseeId" = ufa."franchiseeId"
+        WHERE k.id = ${id}::uuid AND ufa."userId" = ${user.id}
+      `
+      if (kpiCheck.length === 0) {
+        return NextResponse.json({ error: "Forbidden - No access to this KPI" }, { status: 403 })
+      }
     }
+
+    // Build update query dynamically
+    const updates: string[] = []
+    const values: any[] = []
+
+    if (name !== undefined) {
+      updates.push(`name = $${values.length + 1}`)
+      values.push(name)
+    }
+    if (target !== undefined) {
+      updates.push(`target = $${values.length + 1}`)
+      values.push(target)
+    }
+    if (actual !== undefined) {
+      updates.push(`actual = $${values.length + 1}`)
+      values.push(actual)
+    }
+    if (period !== undefined) {
+      updates.push(`period = $${values.length + 1}`)
+      values.push(period)
+    }
+    if (startDate !== undefined) {
+      updates.push(`"startDate" = $${values.length + 1}`)
+      values.push(startDate)
+    }
+    if (endDate !== undefined) {
+      updates.push(`"endDate" = $${values.length + 1}`)
+      values.push(endDate)
+    }
+
+    // Use simple update with all provided fields
+    await sql`
+      UPDATE "Kpi" 
+      SET 
+        name = COALESCE(${name || null}, name),
+        target = COALESCE(${target !== undefined ? target : null}, target),
+        actual = COALESCE(${actual !== undefined ? actual : null}, actual),
+        period = COALESCE(${period || null}, period),
+        "startDate" = COALESCE(${startDate || null}, "startDate"),
+        "endDate" = COALESCE(${endDate || null}, "endDate"),
+        "updatedAt" = NOW()
+      WHERE id = ${id}::uuid
+    `
 
     const result = await sql`SELECT * FROM "Kpi" WHERE id = ${id}::uuid`
     return NextResponse.json({ success: true, data: result[0] })
@@ -152,7 +242,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (user.role !== "uk" && user.role !== "super_admin") {
+    if (user.role !== "uk" && user.role !== "super_admin" && user.role !== "uk_employee") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -164,6 +254,18 @@ export async function DELETE(request: NextRequest) {
     }
 
     const sql = neon(process.env.DATABASE_URL!)
+
+    if (user.role === "uk_employee") {
+      const kpiCheck = await sql`
+        SELECT k."franchiseeId" FROM "Kpi" k
+        INNER JOIN "UserFranchiseeAssignment" ufa ON k."franchiseeId" = ufa."franchiseeId"
+        WHERE k.id = ${id}::uuid AND ufa."userId" = ${user.id}
+      `
+      if (kpiCheck.length === 0) {
+        return NextResponse.json({ error: "Forbidden - No access to this KPI" }, { status: 403 })
+      }
+    }
+
     await sql`DELETE FROM "Kpi" WHERE id = ${id}::uuid`
 
     return NextResponse.json({ success: true })

@@ -20,8 +20,6 @@ interface UserPermissions {
   kpi: boolean
   messages: boolean
   knowledgeBase: boolean
-  users: boolean
-  access: boolean
   notifications: boolean
 }
 
@@ -46,8 +44,6 @@ const permissionLabels: Record<keyof UserPermissions, string> = {
   kpi: "KPI",
   messages: "Сообщения",
   knowledgeBase: "База Знаний",
-  users: "Пользователи",
-  access: "Доступ",
   notifications: "Уведомления",
 }
 
@@ -102,8 +98,6 @@ export function AccessManagementUK() {
           kpi: u.userPermissions?.canViewKpi ?? true,
           messages: u.userPermissions?.canViewMessages ?? true,
           knowledgeBase: u.userPermissions?.canViewKnowledgeBase ?? true,
-          users: u.userPermissions?.canViewUsers ?? false,
-          access: u.userPermissions?.canViewAccess ?? false,
           notifications: u.userPermissions?.canViewNotifications ?? true,
         },
         assignedFranchisees: u.assignedFranchisees || [],
@@ -166,8 +160,8 @@ export function AccessManagementUK() {
             canViewKpi: newPermissions.kpi,
             canViewMessages: newPermissions.messages,
             canViewKnowledgeBase: newPermissions.knowledgeBase,
-            canViewUsers: newPermissions.users,
-            canViewAccess: newPermissions.access,
+            canViewUsers: false, // Always false for UK employees
+            canViewAccess: false, // Always false for UK employees
             canViewNotifications: newPermissions.notifications,
           },
         }),
@@ -212,7 +206,7 @@ export function AccessManagementUK() {
     }
   }
 
-  const canEdit = currentUser?.role === "super_admin" || currentUser?.role === "uk"
+  const canEdit = currentUser?.role === "super_admin"
 
   if (authLoading || loading) {
     return (
@@ -248,8 +242,9 @@ export function AccessManagementUK() {
       <div>
         <h1 className="text-xl font-bold text-foreground">Управление Доступом</h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Управление правами доступа сотрудников УК
-          {!canEdit && " (только просмотр)"}
+          {canEdit
+            ? "Управление правами доступа сотрудников УК"
+            : "Просмотр прав доступа сотрудников УК (только супер-админ может изменять)"}
         </p>
       </div>
 
@@ -290,8 +285,11 @@ export function AccessManagementUK() {
                   </div>
 
                   <div className="space-y-1 mb-2">
-                    <p className="text-xs font-medium">Права доступа к модулям:</p>
-                    <div className="grid grid-cols-3 gap-2">
+                    <p className="text-xs font-medium">
+                      Права доступа к модулям:
+                      {!canEdit && <span className="text-muted-foreground ml-1">(только просмотр)</span>}
+                    </p>
+                    <div className="grid grid-cols-4 gap-2">
                       {(Object.keys(permissionLabels) as Array<keyof UserPermissions>).map((key) => (
                         <div key={key} className="flex items-center gap-1">
                           <Checkbox
@@ -340,12 +338,12 @@ export function AccessManagementUK() {
 
       <Card className="p-3 bg-muted/30 border-dashed">
         <div className="flex items-start gap-2">
-          <Building2 size={16} className="text-orange-500 mt-0.5" />
+          <Shield size={16} className="text-primary mt-0.5" />
           <div>
-            <h3 className="text-xs font-medium">Права франчайзи</h3>
+            <h3 className="text-xs font-medium">Система прав доступа</h3>
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              Права доступа франчайзи фиксированы согласно их функционалу и не редактируются. Каждый франчайзи имеет
-              доступ только к своей франшизе.
+              Сотрудники УК имеют полный доступ к CRM и другим модулям. Управление пользователями и доступом доступно
+              только супер-админу.
             </p>
           </div>
         </div>

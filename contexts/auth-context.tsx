@@ -95,6 +95,18 @@ export interface Franchisee {
   manager?: string
 }
 
+export interface UserPermissions {
+  canViewDashboard: boolean
+  canViewCrm: boolean
+  canViewErp: boolean
+  canViewKpi: boolean
+  canViewMessages: boolean
+  canViewKnowledgeBase: boolean
+  canViewUsers: boolean
+  canViewAccess: boolean
+  canViewNotifications: boolean
+}
+
 export interface User {
   id: string
   name: string
@@ -107,6 +119,7 @@ export interface User {
   description?: string
   telegram_id?: string
   whatsapp?: string
+  permissions?: UserPermissions
 }
 
 interface AuthContextType {
@@ -123,6 +136,8 @@ interface AuthContextType {
   hasPermission: (permission: string) => boolean
   canCreateRole: (role: UserRole) => boolean
   getAuthHeaders: () => HeadersInit
+  canViewModule: (module: keyof UserPermissions) => boolean
+  refreshPermissions: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -156,6 +171,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {}
   }
 
+  const loadUserPermissions = async (userId: string, authToken: string): Promise<UserPermissions | undefined> => {
+    try {
+      const response = await fetch(`/api/auth/permissions?userId=${userId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        return data.permissions
+      }
+    } catch (error) {
+      console.error("[v0] Failed to load user permissions:", error)
+    }
+    return undefined
+  }
+
+  const refreshPermissions = async () => {
+    if (!user || !token) return
+    const permissions = await loadUserPermissions(user.id, token)
+    if (permissions) {
+      setUser({ ...user, permissions })
+    }
+  }
+
   useEffect(() => {
     const loadUser = async () => {
       try {
@@ -173,7 +211,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (response.ok) {
           const data = await response.json()
-          setUser(data.user)
+
+          let permissions: UserPermissions | undefined
+          if (data.user.role === "uk" || data.user.role === "uk_employee") {
+            permissions = await loadUserPermissions(data.user.id, storedToken)
+          }
+
+          setUser({ ...data.user, permissions })
 
           if (data.user.role === "uk" || data.user.role === "super_admin") {
             const franchiseesRes = await fetch("/api/franchisees", {
@@ -216,7 +260,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setStoredToken(data.token)
     setToken(data.token)
-    setUser(data.user)
+
+    let permissions: UserPermissions | undefined
+    if (data.user.role === "uk" || data.user.role === "uk_employee") {
+      permissions = await loadUserPermissions(data.user.id, data.token)
+    }
+
+    setUser({ ...data.user, permissions })
 
     if (data.user.role === "uk" || data.user.role === "super_admin") {
       const franchiseesRes = await fetch("/api/franchisees", {
@@ -281,6 +331,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return permissions.createUsers?.includes(checkRole) || false
   }
 
+  const canViewModule = (module: keyof UserPermissions): boolean => {
+    if (!user) return false
+
+    if (user.role === "super_admin") return true
+
+    if (user.role === "uk" || user.role === "uk_employee") {
+      if (!user.permissions) {
+        if (user.role === "uk") return true
+        const ukEmployeeDefaults: Record<keyof UserPermissions, boolean> = {
+          canViewDashboard: true,
+          canViewCrm: true,
+          canViewErp: false,
+          canViewKpi: false,
+          canViewMessages: true,
+          canViewKnowledgeBase: true,
+          canViewUsers: false,
+          canViewAccess: false,
+          canViewNotifications: true,
+        }
+        return ukEmployeeDefaults[module]
+      }
+      return user.permissions[module]
+    }
+
+    return true
+  }
+
   const value: AuthContextType = {
     user,
     token,
@@ -295,6 +372,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasPermission,
     canCreateRole,
     getAuthHeaders,
+    canViewModule,
+    refreshPermissions,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

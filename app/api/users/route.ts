@@ -46,12 +46,48 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
     const roleFilter = searchParams.get("role")
+    const rolesFilter = searchParams.get("roles")
 
-    console.log("[v0] User role:", user.role, "franchiseeId:", user.franchiseeId, "roleFilter:", roleFilter)
+    console.log(
+      "[v0] User role:",
+      user.role,
+      "franchiseeId:",
+      user.franchiseeId,
+      "roleFilter:",
+      roleFilter,
+      "rolesFilter:",
+      rolesFilter,
+    )
 
     let users
 
-    if (roleFilter === "uk") {
+    if (rolesFilter) {
+      const roles = rolesFilter.split(",")
+      if (user.role === "franchisee" || user.role === "admin") {
+        users = await sql`
+          SELECT 
+            u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
+            u."telegramId", u.description, u."isActive", u."createdAt",
+            f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "User" u
+          LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+          WHERE u."franchiseeId" = ${user.franchiseeId}
+            AND u.role = ANY(${roles})
+          ORDER BY u.name ASC
+        `
+      } else {
+        users = await sql`
+          SELECT 
+            u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
+            u."telegramId", u.description, u."isActive", u."createdAt",
+            f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "User" u
+          LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+          WHERE u.role = ANY(${roles})
+          ORDER BY u.name ASC
+        `
+      }
+    } else if (roleFilter === "uk") {
       users = await sql`
         SELECT 
           u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
@@ -244,9 +280,10 @@ export async function POST(request: Request) {
 
     if (["animator", "host", "dj"].includes(role) && userFranchiseeId) {
       console.log("[v0] Creating personnel record for user:", newUser[0].id)
+      const personnelUUID = uuidv4()
       await sql`
-        INSERT INTO "Personnel" ("franchiseeId", name, role, phone, telegram, whatsapp, "userId")
-        VALUES (${userFranchiseeId}, ${name}, ${role}, ${phone || null}, ${telegram || null}, ${whatsapp || null}, ${newUser[0].id})
+        INSERT INTO "Personnel" (id, "franchiseeId", name, role, phone, telegram, whatsapp, "userId")
+        VALUES (${personnelUUID}, ${userFranchiseeId}, ${name}, ${role}, ${phone || null}, ${telegram || null}, ${whatsapp || null}, ${newUser[0].id})
       `
       console.log("[v0] Personnel record created")
     }

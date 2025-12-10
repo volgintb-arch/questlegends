@@ -1,62 +1,78 @@
 // API Client Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"
 
 export class ApiError extends Error {
   constructor(
     public code: string,
     message: string,
-    public details?: any,
+    public details?: unknown,
   ) {
     super(message)
     this.name = "ApiError"
   }
 }
 
+async function getAuthToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null
+  return localStorage.getItem("auth_token")
+}
+
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
+  const url = `/api${endpoint}`
+  const token = await getAuthToken()
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  }
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`
+  }
 
   const response = await fetch(url, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    headers,
   })
+
+  const contentType = response.headers.get("content-type")
+  if (!contentType || !contentType.includes("application/json")) {
+    throw new ApiError("INVALID_RESPONSE", `Expected JSON response but got ${contentType}`, { status: response.status })
+  }
 
   const data = await response.json()
 
   if (!response.ok) {
     throw new ApiError(
-      data.error?.code || "UNKNOWN_ERROR",
-      data.error?.message || "An error occurred",
+      data.error?.code || data.error || "UNKNOWN_ERROR",
+      data.error?.message || data.message || "An error occurred",
       data.error?.details,
     )
   }
 
-  return data.data
+  return data.data !== undefined ? data.data : data
 }
 
 export const api = {
-  get: (endpoint: string, options?: RequestInit) => fetchApi(endpoint, { ...options, method: "GET" }),
+  get: <T,>(endpoint: string, options?: RequestInit) => fetchApi<T>(endpoint, { ...options, method: "GET" }),
 
-  post: (endpoint: string, body?: any, options?: RequestInit) =>
-    fetchApi(endpoint, {
+  post: <T,>(endpoint: string, body?: unknown, options?: RequestInit) =>
+    fetchApi<T>(endpoint, {
       ...options,
       method: "POST",
       body: JSON.stringify(body),
     }),
 
-  put: (endpoint: string, body?: any, options?: RequestInit) =>
-    fetchApi(endpoint, {
+  put: <T,>(endpoint: string, body?: unknown, options?: RequestInit) =>
+    fetchApi<T>(endpoint, {
       ...options,
       method: "PUT",
       body: JSON.stringify(body),
     }),
 
-  delete: (endpoint: string, options?: RequestInit) => fetchApi(endpoint, { ...options, method: "DELETE" }),
+  delete: <T,>(endpoint: string, options?: RequestInit) => fetchApi<T>(endpoint, { ...options, method: "DELETE" }),
 
-  patch: (endpoint: string, body?: any, options?: RequestInit) =>
-    fetchApi(endpoint, {
+  patch: <T,>(endpoint: string, body?: unknown, options?: RequestInit) =>
+    fetchApi<T>(endpoint, {
       ...options,
       method: "PATCH",
       body: JSON.stringify(body),

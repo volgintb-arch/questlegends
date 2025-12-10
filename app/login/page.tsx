@@ -67,11 +67,6 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Вход..." : "Войти"}
             </Button>
-            <div className="text-xs text-gray-500 text-center mt-4 space-y-1">
-              <p className="font-medium">Супер-админ УК:</p>
-              <p>Телефон: +79000000000</p>
-              <p>Пароль: admin123</p>
-            </div>
           </form>
         </CardContent>
       </Card>

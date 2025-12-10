@@ -223,7 +223,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
     ...Object.fromEntries(categories.slice(1).map((cat) => [cat, articles.filter((a) => a.category === cat).length])),
   }
 
-  const canManageArticles = role === "uk" || role === "super_admin"
+  const canManageArticles = role === "uk" || role === "super_admin" || role === "uk_employee"
 
   // Article detail view
   if (selectedArticle) {

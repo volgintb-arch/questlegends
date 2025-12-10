@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Paperclip, ArrowLeft, Search, MessageSquare } from "lucide-react"
+import { Send, Paperclip, ArrowLeft, Search, MessageSquare, Trash2, Download } from "lucide-react"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
 
@@ -42,6 +42,7 @@ export function MessagingSection() {
   const [newMessage, setNewMessage] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [availableUsers, setAvailableUsers] = useState<any[]>([])
+  const [assignedFranchiseeIds, setAssignedFranchiseeIds] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -49,19 +50,23 @@ export function MessagingSection() {
   useEffect(() => {
     fetchConversations()
     fetchAvailableUsers()
-  }, [])
-
-  useEffect(() => {
-    if (selectedPartner) {
-      fetchMessages(selectedPartner.id)
-      const interval = setInterval(() => fetchMessages(selectedPartner.id), 5000)
-      return () => clearInterval(interval)
+    if (user?.role === "uk_employee") {
+      fetchAssignedFranchisees()
     }
-  }, [selectedPartner])
+  }, [user?.role])
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  const fetchAssignedFranchisees = async () => {
+    try {
+      const response = await fetch("/api/franchisees", {
+        headers: getAuthHeaders(),
+      })
+      const data = await response.json()
+      const franchisees = Array.isArray(data) ? data : []
+      setAssignedFranchiseeIds(franchisees.map((f: any) => f.id))
+    } catch (error) {
+      console.error("[v0] Error fetching assigned franchisees:", error)
+    }
+  }
 
   const fetchConversations = async () => {
     try {
@@ -99,17 +104,31 @@ export function MessagingSection() {
       const data = await response.json()
       const users = Array.isArray(data) ? data : data.data || []
 
+      let assignedIds: string[] = []
+      if (user?.role === "uk_employee") {
+        const franchiseesRes = await fetch("/api/franchisees", {
+          headers: getAuthHeaders(),
+        })
+        const franchiseesData = await franchiseesRes.json()
+        assignedIds = (Array.isArray(franchiseesData) ? franchiseesData : []).map((f: any) => f.id)
+      }
+
       const filtered = users.filter((u: any) => {
-        if (u.id === user?.id) return false // Exclude self
+        if (u.id === user?.id) return false
 
         if (user?.role === "super_admin") {
-          // Super admin can message everyone
           return true
-        } else if (user?.role === "uk" || user?.role === "uk_employee") {
-          // UK can message: their own UK employees, and all franchisees
-          return u.role === "uk" || u.role === "uk_employee" || u.role === "franchisee"
+        } else if (user?.role === "uk") {
+          return u.role === "uk" || u.role === "uk_employee" || u.role === "franchisee" || u.role === "super_admin"
+        } else if (user?.role === "uk_employee") {
+          if (u.role === "super_admin" || u.role === "uk") {
+            return true
+          }
+          if (u.role === "franchisee" && assignedIds.includes(u.franchiseeId)) {
+            return true
+          }
+          return false
         } else if (user?.role === "franchisee") {
-          // Franchisee can message: UK users and their own employees
           return (
             u.role === "uk" ||
             u.role === "uk_employee" ||
@@ -117,7 +136,6 @@ export function MessagingSection() {
             (u.franchiseeId === user.franchiseeId && ["admin", "employee", "animator", "host", "dj"].includes(u.role))
           )
         } else if (user?.role === "admin") {
-          // Admin can message: their franchise colleagues and UK
           return (
             u.role === "uk" ||
             u.role === "uk_employee" ||
@@ -132,6 +150,18 @@ export function MessagingSection() {
       console.error("[v0] Error fetching users:", error)
     }
   }
+
+  useEffect(() => {
+    if (selectedPartner) {
+      fetchMessages(selectedPartner.id)
+      const interval = setInterval(() => fetchMessages(selectedPartner.id), 5000)
+      return () => clearInterval(interval)
+    }
+  }, [selectedPartner])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedPartner) return
@@ -160,6 +190,34 @@ export function MessagingSection() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!confirm("Удалить это сообщение?")) return
+
+    try {
+      const response = await fetch(`/api/messages/${messageId}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      })
+
+      if (response.ok) {
+        setMessages(messages.filter((m) => m.id !== messageId))
+        fetchConversations()
+      }
+    } catch (error) {
+      console.error("[v0] Error deleting message:", error)
+    }
+  }
+
+  const handleDownloadAttachment = (fileUrl: string, fileName: string) => {
+    const link = document.createElement("a")
+    link.href = fileUrl
+    link.download = fileName
+    link.target = "_blank"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -222,10 +280,6 @@ export function MessagingSection() {
       (u) => u.franchiseeId === user?.franchiseeId && ["admin", "employee", "animator", "host", "dj"].includes(u.role),
     ),
   }
-
-  const filteredUsers = availableUsers.filter(
-    (u) => u.name?.toLowerCase().includes(searchQuery.toLowerCase()) || u.phone?.includes(searchQuery),
-  )
 
   return (
     <div className="flex h-[calc(100vh-120px)] bg-background rounded-lg border">
@@ -411,19 +465,41 @@ export function MessagingSection() {
               <div className="space-y-3">
                 {messages.map((msg) => {
                   const isOwn = msg.senderId === user?.id
+                  const hasAttachment = msg.fileUrl || msg.fileName
                   return (
-                    <div key={msg.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+                    <div key={msg.id} className={`flex ${isOwn ? "justify-end" : "justify-start"} group`}>
                       <div
-                        className={`max-w-[70%] rounded-lg p-2 ${
+                        className={`max-w-[70%] rounded-lg p-2 relative ${
                           isOwn ? "bg-primary text-primary-foreground" : "bg-muted"
                         }`}
                       >
                         <p className="text-xs">{msg.content}</p>
+                        {hasAttachment && msg.fileUrl && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 mt-1 text-[10px] gap-1"
+                            onClick={() => handleDownloadAttachment(msg.fileUrl!, msg.fileName || "file")}
+                          >
+                            <Download className="h-3 w-3" />
+                            Скачать
+                          </Button>
+                        )}
                         <p
                           className={`text-[9px] mt-1 ${isOwn ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                         >
                           {format(new Date(msg.createdAt), "HH:mm", { locale: ru })}
                         </p>
+                        {isOwn && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute -right-8 top-0 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => handleDeleteMessage(msg.id)}
+                          >
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )

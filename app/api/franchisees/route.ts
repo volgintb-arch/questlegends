@@ -36,17 +36,30 @@ export async function GET(request: Request) {
     const sql = neon(process.env.DATABASE_URL)
 
     let franchisees
-    if (user.role === "super_admin" || user.role === "uk" || user.role === "uk_employee") {
+    if (user.role === "super_admin" || user.role === "uk") {
       franchisees = await sql`
         SELECT f.*, 
+          COALESCE(f."royaltyPercent", 10) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
           (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount"
         FROM "Franchisee" f
         ORDER BY f.name ASC
       `
+    } else if (user.role === "uk_employee") {
+      franchisees = await sql`
+        SELECT f.*, 
+          COALESCE(f."royaltyPercent", 10) as "royaltyPercent",
+          (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
+          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount"
+        FROM "Franchisee" f
+        INNER JOIN "UserFranchiseeAssignment" ufa ON f.id = ufa."franchiseeId"
+        WHERE ufa."userId" = ${user.id}
+        ORDER BY f.name ASC
+      `
     } else if (user.franchiseeId) {
       franchisees = await sql`
         SELECT f.*,
+          COALESCE(f."royaltyPercent", 10) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
           (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount"
         FROM "Franchisee" f

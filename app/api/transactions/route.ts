@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     }
 
     if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ transactions: [] })
+      return NextResponse.json({ transactions: [], data: [] })
     }
 
     const sql = neon(process.env.DATABASE_URL)
@@ -43,9 +43,10 @@ export async function GET(request: Request) {
       // Franchisee/admin sees only their transactions
       if (user.franchiseeId) {
         transactions = await sql`
-          SELECT t.*, 
-            d.id as "dealId", d."clientName" as "dealTitle", d."clientName",
-            f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
+            t."dealId", t."franchiseeId", t."gameLeadId",
+            d."clientName" as "dealTitle",
+            f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
           LEFT JOIN "Deal" d ON t."dealId" = d.id
           LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
@@ -56,13 +57,44 @@ export async function GET(request: Request) {
       } else {
         transactions = []
       }
-    } else {
-      // UK sees all or filtered by franchiseeId
+    } else if (user.role === "uk_employee") {
       if (franchiseeId) {
         transactions = await sql`
-          SELECT t.*, 
-            d.id as "dealId", d."clientName" as "dealTitle", d."clientName",
-            f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
+            t."dealId", t."franchiseeId", t."gameLeadId",
+            d."clientName" as "dealTitle",
+            f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "Transaction" t
+          LEFT JOIN "Deal" d ON t."dealId" = d.id
+          LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
+          INNER JOIN "UserFranchiseeAssignment" ufa ON t."franchiseeId" = ufa."franchiseeId"
+          WHERE ufa."userId" = ${user.id} AND t."franchiseeId" = ${franchiseeId}
+          ORDER BY t.date DESC
+          LIMIT 100
+        `
+      } else {
+        transactions = await sql`
+          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
+            t."dealId", t."franchiseeId", t."gameLeadId",
+            d."clientName" as "dealTitle",
+            f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "Transaction" t
+          LEFT JOIN "Deal" d ON t."dealId" = d.id
+          LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
+          INNER JOIN "UserFranchiseeAssignment" ufa ON t."franchiseeId" = ufa."franchiseeId"
+          WHERE ufa."userId" = ${user.id}
+          ORDER BY t.date DESC
+          LIMIT 100
+        `
+      }
+    } else {
+      // UK/super_admin sees all or filtered by franchiseeId
+      if (franchiseeId) {
+        transactions = await sql`
+          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
+            t."dealId", t."franchiseeId", t."gameLeadId",
+            d."clientName" as "dealTitle",
+            f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
           LEFT JOIN "Deal" d ON t."dealId" = d.id
           LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
@@ -72,9 +104,10 @@ export async function GET(request: Request) {
         `
       } else {
         transactions = await sql`
-          SELECT t.*, 
-            d.id as "dealId", d."clientName" as "dealTitle", d."clientName",
-            f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
+            t."dealId", t."franchiseeId", t."gameLeadId",
+            d."clientName" as "dealTitle",
+            f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
           LEFT JOIN "Deal" d ON t."dealId" = d.id
           LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
@@ -84,10 +117,10 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ transactions })
+    return NextResponse.json({ transactions, data: transactions })
   } catch (error) {
     console.error("[v0] TRANSACTIONS_GET error:", error)
-    return NextResponse.json({ transactions: [] })
+    return NextResponse.json({ transactions: [], data: [] })
   }
 }
 
@@ -105,22 +138,23 @@ export async function POST(request: Request) {
     const sql = neon(process.env.DATABASE_URL)
     const body = await request.json()
 
-    const { dealId, franchiseeId, type, amount, description, date } = body
+    const { dealId, franchiseeId, type, amount, description, date, category, gameLeadId } = body
 
     const actualFranchiseeId = franchiseeId || user.franchiseeId
 
     const result = await sql`
       INSERT INTO "Transaction" (
-        id, "dealId", "franchiseeId", type, amount, description, date, "createdAt", "updatedAt"
+        id, "dealId", "franchiseeId", "gameLeadId", type, amount, description, category, date, "createdAt"
       ) VALUES (
-        gen_random_uuid(),
+        gen_random_uuid()::text,
         ${dealId || null},
         ${actualFranchiseeId},
+        ${gameLeadId || null},
         ${type || "income"},
         ${amount || 0},
         ${description || ""},
+        ${category || null},
         ${date ? new Date(date).toISOString() : new Date().toISOString()},
-        NOW(),
         NOW()
       )
       RETURNING *

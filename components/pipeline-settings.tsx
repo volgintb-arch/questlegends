@@ -8,13 +8,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Trash2, GripVertical, Palette, X } from "lucide-react"
+import { Plus, Trash2, GripVertical, Palette, X, Lock } from "lucide-react"
 
 interface Stage {
   id: string
   name: string
   color: string
   order: number
+  isFixed?: boolean
+  stageType?: string
 }
 
 interface Pipeline {
@@ -39,7 +41,11 @@ const COLORS = [
   "#84CC16",
 ]
 
-export function PipelineSettings() {
+interface PipelineSettingsProps {
+  onPipelineCreated?: (pipelineId: string) => void
+}
+
+export function PipelineSettings({ onPipelineCreated }: PipelineSettingsProps) {
   const { getAuthHeaders, user } = useAuth()
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,6 +92,9 @@ export function PipelineSettings() {
         setSelectedPipeline(data.data)
         setNewPipelineName("")
         setShowCreateModal(false)
+        if (onPipelineCreated) {
+          onPipelineCreated(data.data.id)
+        }
       }
     } catch (error) {
       console.error("Error creating pipeline:", error)
@@ -126,9 +135,12 @@ export function PipelineSettings() {
       })
       const data = await res.json()
       if (data.data) {
+        // Insert before fixed stages
+        const nonFixedStages = (selectedPipeline.stages || []).filter((s) => !s.isFixed)
+        const fixedStages = (selectedPipeline.stages || []).filter((s) => s.isFixed)
         const updatedPipeline = {
           ...selectedPipeline,
-          stages: [...(selectedPipeline.stages || []), data.data],
+          stages: [...nonFixedStages, data.data, ...fixedStages],
         }
         setSelectedPipeline(updatedPipeline)
         setPipelines(pipelines.map((p) => (p.id === selectedPipeline.id ? updatedPipeline : p)))
@@ -142,6 +154,13 @@ export function PipelineSettings() {
 
   const deleteStage = async (stageId: string) => {
     if (!selectedPipeline) return
+
+    const stage = selectedPipeline.stages.find((s) => s.id === stageId)
+    if (stage?.isFixed) {
+      alert("Нельзя удалить фиксированный этап")
+      return
+    }
+
     if (!confirm("Удалить этап?")) return
 
     try {
@@ -186,12 +205,17 @@ export function PipelineSettings() {
   }
 
   const handleDragStart = (index: number) => {
+    const stage = selectedPipeline?.stages[index]
+    if (stage?.isFixed) return
     setDraggedStage(index)
   }
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault()
     if (draggedStage === null || !selectedPipeline) return
+
+    const targetStage = selectedPipeline.stages[index]
+    if (targetStage?.isFixed) return
 
     if (draggedStage !== index) {
       const newStages = [...selectedPipeline.stages]
@@ -211,6 +235,9 @@ export function PipelineSettings() {
 
   const updateStageName = async (stageId: string, name: string) => {
     if (!selectedPipeline) return
+
+    const stage = selectedPipeline.stages.find((s) => s.id === stageId)
+    if (stage?.isFixed) return
 
     try {
       await fetch(`/api/pipelines/${selectedPipeline.id}/stages/${stageId}`, {
@@ -280,6 +307,9 @@ export function PipelineSettings() {
                   onChange={(e) => setNewPipelineName(e.target.value)}
                   className="h-8 text-xs"
                 />
+                <p className="text-[10px] text-muted-foreground">
+                  Этапы "Завершен" и "Отказ" будут добавлены автоматически
+                </p>
                 <Button onClick={createPipeline} className="w-full h-8 text-xs">
                   Создать
                 </Button>
@@ -329,23 +359,31 @@ export function PipelineSettings() {
               {(selectedPipeline.stages || []).map((stage, index) => (
                 <div
                   key={stage.id}
-                  draggable={canManage}
+                  draggable={canManage && !stage.isFixed}
                   onDragStart={() => handleDragStart(index)}
                   onDragOver={(e) => handleDragOver(e, index)}
                   onDragEnd={handleDragEnd}
                   className={`flex items-center gap-2 p-1.5 rounded border bg-background ${
                     draggedStage === index ? "opacity-50" : ""
-                  }`}
+                  } ${stage.isFixed ? "bg-muted/50" : ""}`}
                 >
-                  {canManage && <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab" />}
+                  {canManage && !stage.isFixed && (
+                    <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab" />
+                  )}
+                  {stage.isFixed && <Lock className="h-3 w-3 text-muted-foreground" />}
                   <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
                   <Input
                     value={stage.name}
                     onChange={(e) => updateStageName(stage.id, e.target.value)}
-                    disabled={!canManage}
+                    disabled={!canManage || stage.isFixed}
                     className="h-6 text-xs flex-1 border-0 bg-transparent p-0"
                   />
-                  {canManage && (
+                  {stage.isFixed && (
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">
+                      {stage.stageType === "completed" ? "Успех" : "Отказ"}
+                    </span>
+                  )}
+                  {canManage && !stage.isFixed && (
                     <>
                       <Dialog>
                         <DialogTrigger asChild>

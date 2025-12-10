@@ -1,11 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Settings } from "lucide-react"
+import { useSearchParams, useRouter } from "next/navigation"
+import { Plus, Settings, TrendingUp, TrendingDown, CheckCircle, XCircle, History } from "lucide-react"
 import dynamic from "next/dynamic"
 import { DealCardAmoCRM } from "./deal-card-amocrm"
 import { DealCreateModal } from "./deal-create-modal"
 import { PipelineSettings } from "./pipeline-settings"
+import { CrmLogsModal } from "./crm-logs-modal"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -18,7 +20,7 @@ const KanbanBoard = dynamic(() => import("./kanban-board").then((mod) => mod.Kan
 })
 
 interface DealsKanbanProps {
-  role: "uk" | "franchisee" | "admin" | "super_admin"
+  role: "uk" | "uk_employee" | "franchisee" | "admin" | "super_admin"
 }
 
 interface Deal {
@@ -35,6 +37,9 @@ interface Deal {
   clientEmail?: string
   stage?: string
   stageId?: string
+  contactName?: string
+  city?: string
+  responsibleName?: string
 }
 
 interface Pipeline {
@@ -50,21 +55,54 @@ interface Stage {
   name: string
   color: string
   order: number
+  isFixed?: boolean
+  stageType?: string
+}
+
+interface CrmStats {
+  completed: {
+    totalInvestments: number
+    totalPaushalka: number
+    count: number
+  }
+  cancelled: {
+    lostPaushalka: number
+    count: number
+  }
 }
 
 type BoardData = Record<string, Deal[]>
 
 export function DealsKanban({ role }: DealsKanbanProps) {
   const { user, getAuthHeaders } = useAuth()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [viewingDeal, setViewingDeal] = useState<any | null>(null)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showLogsModal, setShowLogsModal] = useState(false)
 
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [selectedPipeline, setSelectedPipeline] = useState<Pipeline | null>(null)
   const [boardData, setBoardData] = useState<BoardData>({})
+  const [crmStats, setCrmStats] = useState<CrmStats | null>(null)
+
+  const fetchCrmStats = async (pipelineId?: string) => {
+    try {
+      const params = new URLSearchParams()
+      if (pipelineId) params.append("pipelineId", pipelineId)
+
+      const res = await fetch(`/api/crm/stats?${params.toString()}`, { headers: getAuthHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setCrmStats(data)
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching CRM stats:", error)
+    }
+  }
 
   useEffect(() => {
     const fetchPipelines = async () => {
@@ -99,7 +137,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         setLoading(true)
         const params = new URLSearchParams()
         params.append("pipelineId", selectedPipeline.id)
-        if (user?.franchiseeId && role !== "uk" && role !== "super_admin") {
+        if (user?.franchiseeId && role !== "uk" && role !== "uk_employee" && role !== "super_admin") {
           params.append("franchiseeId", user.franchiseeId)
         }
 
@@ -124,7 +162,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
           if (grouped[stageId]) {
             grouped[stageId].push({
               id: deal.id,
-              title: deal.clientName || deal.title || "Без названия",
+              title: deal.contactName || deal.clientName || deal.title || "Без названия",
               location: deal.city || deal.location || "",
               amount: deal.budget ? `${Number(deal.budget).toLocaleString()} ₽` : "0 ₽",
               daysOpen: Math.floor((Date.now() - new Date(deal.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
@@ -133,11 +171,16 @@ export function DealsKanban({ role }: DealsKanbanProps) {
               clientEmail: deal.clientEmail,
               stage: deal.stage,
               stageId: deal.stageId,
+              contactName: deal.contactName,
+              city: deal.city,
+              responsibleName: deal.responsibleName,
             })
           }
         })
 
         setBoardData(grouped)
+
+        fetchCrmStats(selectedPipeline.id)
       } catch (error) {
         console.error("[v0] Error fetching deals:", error)
       } finally {
@@ -149,6 +192,14 @@ export function DealsKanban({ role }: DealsKanbanProps) {
       fetchDeals()
     }
   }, [selectedPipeline, user, role, getAuthHeaders])
+
+  useEffect(() => {
+    const dealIdFromUrl = searchParams.get("dealId")
+    if (dealIdFromUrl && user && !isViewModalOpen) {
+      handleViewDeal(dealIdFromUrl)
+      router.replace("/crm", { scroll: false })
+    }
+  }, [searchParams, user])
 
   const handleDragEnd = async (
     sourceId: string,
@@ -177,6 +228,8 @@ export function DealsKanban({ role }: DealsKanbanProps) {
           stage: selectedPipeline.stages.find((s) => s.id === destId)?.name,
         }),
       })
+
+      fetchCrmStats(selectedPipeline.id)
     } catch (error) {
       console.error("[v0] Error updating deal stage:", error)
     }
@@ -209,7 +262,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
       const stageId = deal.stageId || selectedPipeline.stages[0]?.id
       const newDeal = {
         id: deal.id,
-        title: deal.clientName || "Без названия",
+        title: deal.contactName || deal.clientName || "Без названия",
         location: deal.city || "",
         amount: deal.budget ? `${Number(deal.budget).toLocaleString()} ₽` : "0 ₽",
         daysOpen: 0,
@@ -217,6 +270,9 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         clientPhone: deal.clientPhone,
         stage: deal.stage,
         stageId: deal.stageId,
+        contactName: deal.contactName,
+        city: deal.city,
+        responsibleName: deal.responsibleName,
       }
 
       setBoardData((prev) => ({
@@ -233,7 +289,24 @@ export function DealsKanban({ role }: DealsKanbanProps) {
     window.location.reload()
   }
 
-  const canManageSettings = user?.role === "super_admin" || user?.role === "uk"
+  const handlePipelineCreated = async (pipelineId: string) => {
+    try {
+      const res = await fetch("/api/pipelines", { headers: getAuthHeaders() })
+      const data = await res.json()
+      if (data.data) {
+        setPipelines(data.data)
+        const newPipeline = data.data.find((p: Pipeline) => p.id === pipelineId)
+        if (newPipeline) {
+          setSelectedPipeline(newPipeline)
+        }
+      }
+      setShowSettings(false)
+    } catch (error) {
+      console.error("[v0] Error refreshing pipelines:", error)
+    }
+  }
+
+  const canManageSettings = user?.role === "super_admin" || user?.role === "uk" || user?.role === "uk_employee"
 
   const hasValidStages =
     selectedPipeline &&
@@ -268,6 +341,17 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         </div>
         <div className="flex items-center gap-2">
           {canManageSettings && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs bg-transparent"
+              onClick={() => setShowLogsModal(true)}
+            >
+              <History className="h-3 w-3 mr-1" />
+              Логи
+            </Button>
+          )}
+          {canManageSettings && (
             <Sheet open={showSettings} onOpenChange={setShowSettings}>
               <SheetTrigger asChild>
                 <Button variant="outline" size="sm" className="h-7 text-xs bg-transparent">
@@ -280,7 +364,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
                   <SheetTitle className="text-sm">Настройки CRM</SheetTitle>
                 </SheetHeader>
                 <div className="mt-4">
-                  <PipelineSettings />
+                  <PipelineSettings onPipelineCreated={handlePipelineCreated} />
                 </div>
               </SheetContent>
             </Sheet>
@@ -317,6 +401,58 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         </div>
       )}
 
+      {crmStats && (
+        <div className="border-t bg-muted/30 p-3 shrink-0">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-6">
+              {/* Completed stats */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 text-green-600">
+                  <CheckCircle className="h-4 w-4" />
+                  <span className="text-xs font-medium">Завершено:</span>
+                </div>
+                <span className="text-xs text-muted-foreground">{crmStats.completed.count} сделок</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-3 w-3 text-green-600" />
+                <span className="text-xs">Инвестиции:</span>
+                <span className="text-xs font-semibold text-green-600">
+                  {crmStats.completed.totalInvestments.toLocaleString()} ₽
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-3 w-3 text-green-600" />
+                <span className="text-xs">Паушалка:</span>
+                <span className="text-xs font-semibold text-green-600">
+                  {crmStats.completed.totalPaushalka.toLocaleString()} ₽
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* Cancelled stats */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 text-red-500">
+                  <XCircle className="h-4 w-4" />
+                  <span className="text-xs font-medium">Отказы:</span>
+                </div>
+                <span className="text-xs text-muted-foreground">{crmStats.cancelled.count} сделок</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <TrendingDown className="h-3 w-3 text-red-500" />
+                <span className="text-xs">Недополучено:</span>
+                <span className="text-xs font-semibold text-red-500">
+                  {crmStats.cancelled.lostPaushalka.toLocaleString()} ₽
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedPipeline && (
         <DealCreateModal
           isOpen={isCreateModalOpen}
@@ -339,6 +475,8 @@ export function DealsKanban({ role }: DealsKanbanProps) {
           stages={selectedPipeline.stages || []}
         />
       )}
+
+      <CrmLogsModal isOpen={showLogsModal} onClose={() => setShowLogsModal(false)} />
     </div>
   )
 }

@@ -1,276 +1,425 @@
 "use client"
-import { DollarSign, Percent, Users, Calendar, Clock, User, TrendingDown } from "lucide-react"
-import { MetricCard } from "./metric-card"
-import { DashboardGrid } from "./dashboard-grid"
+import {
+  DollarSign,
+  Percent,
+  Calendar,
+  TrendingUp,
+  Gamepad2,
+  Target,
+  CreditCard,
+  CalendarDays,
+  CheckCircle2,
+  Bell,
+  RefreshCw,
+  ExternalLink,
+} from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { useState, useEffect } from "react"
-import { DealCardFull } from "./deal-card-full"
-import { KPIWidget } from "./kpi-widget"
+import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+
+interface GameLead {
+  id: string
+  clientName: string
+  gameDate: string
+  gameTime: string
+  playersCount: number
+  totalAmount: number
+  prepayment: number
+  animatorsCount: number
+  hostsCount: number
+  djsCount: number
+  stageType: string
+  stageName: string
+}
+
+interface Notification {
+  id: string
+  title: string
+  message: string
+  type: string
+  isRead: boolean
+  createdAt: string
+  relatedDealId?: string
+  relatedTaskId?: string
+}
+
+interface DashboardStats {
+  totalRevenue: number
+  totalGames: number
+  completedGames: number
+  upcomingGames: number
+  totalFot: number
+  royaltyPercent: number
+  royaltyAmount: number
+  profit: number
+  unreadNotifications: number
+}
 
 export function DashboardFranchisee() {
-  const { user } = useAuth()
-  const [selectedDeal, setSelectedDeal] = useState<any>(null)
-  const [kpis, setKpis] = useState<any[]>([])
+  const { user, getAuthHeaders, loading: authLoading } = useAuth()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [deals, setDeals] = useState<any[]>([])
-  const [expenses, setExpenses] = useState<any[]>([])
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [topLocations, setTopLocations] = useState<any[]>([])
+  const [refreshing, setRefreshing] = useState(false)
+  const [stats, setStats] = useState<DashboardStats>({
+    totalRevenue: 0,
+    totalGames: 0,
+    completedGames: 0,
+    upcomingGames: 0,
+    totalFot: 0,
+    royaltyPercent: 7,
+    royaltyAmount: 0,
+    profit: 0,
+    unreadNotifications: 0,
+  })
+  const [upcomingGames, setUpcomingGames] = useState<GameLead[]>([])
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [kpiTarget, setKpiTarget] = useState(0)
+  const [kpiProgress, setKpiProgress] = useState(0)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user?.franchiseeId) return
-
-      try {
-        const [kpisRes, dealsRes, expensesRes, transactionsRes] = await Promise.all([
-          fetch(`/api/kpi?franchiseeId=${user.franchiseeId}`),
-          fetch(`/api/deals?franchiseeId=${user.franchiseeId}`),
-          fetch(`/api/expenses?franchiseeId=${user.franchiseeId}`),
-          fetch(`/api/transactions?franchiseeId=${user.franchiseeId}`),
-        ])
-
-        if (kpisRes.ok) setKpis(await kpisRes.json())
-        if (dealsRes.ok) setDeals(await dealsRes.json())
-        if (expensesRes.ok) setExpenses(await expensesRes.json())
-        if (transactionsRes.ok) setTransactions(await transactionsRes.json())
-
-        // Fetch top locations data
-        const topLocationsRes = await fetch(`/api/top-locations?franchiseeId=${user.franchiseeId}`)
-        if (topLocationsRes.ok) setTopLocations(await topLocationsRes.json())
-      } catch (error) {
-        console.error("[v0] Failed to fetch dashboard data:", error)
-      } finally {
-        setLoading(false)
-      }
+  const fetchDashboardData = useCallback(async () => {
+    if (!user?.franchiseeId) {
+      setLoading(false)
+      return
     }
 
-    fetchData()
-  }, [user?.franchiseeId])
+    const headers = getAuthHeaders()
 
-  const currentDate = new Date()
-  const currentMonth = currentDate.getMonth() + 1
-  const currentYear = currentDate.getFullYear()
-  const currentKPI = kpis.find(
-    (kpi) => kpi.periodType === "month" && kpi.periodNumber === currentMonth && kpi.periodYear === currentYear,
-  )
+    try {
+      const results = await Promise.allSettled([
+        fetch(`/api/transactions?franchiseeId=${user.franchiseeId}`, { headers }),
+        fetch(`/api/franchisees/${user.franchiseeId}`, { headers }),
+        fetch(`/api/game-leads?franchiseeId=${user.franchiseeId}`, { headers }),
+        fetch(`/api/kpi?franchiseeId=${user.franchiseeId}`, { headers }),
+        fetch(`/api/notifications?unreadOnly=true`, { headers }),
+      ])
 
-  const revenue = transactions.reduce((sum, t) => sum + (t.revenue || 0), 0)
-  const royalty = revenue * 0.07
-  const fot = transactions.reduce((sum, t) => sum + (t.fot || 0), 0)
-  const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0)
-  const netProfit = revenue - royalty - fot - totalExpenses
+      const transactionsRes = results[0]
+      let transactions: any[] = []
+      if (transactionsRes.status === "fulfilled" && transactionsRes.value.ok) {
+        const transData = await transactionsRes.value.json()
+        transactions = transData.transactions || transData.data || []
+      }
 
-  const metrics = [
-    {
-      title: "Итоговая Прибыль (P&L)",
-      value: `${netProfit.toLocaleString("ru-RU")} ₽`,
-      trend: { value: 18.5, isPositive: netProfit > 0 },
-      icon: <DollarSign className="w-6 h-6" />,
-      large: true,
-    },
-    {
-      title: "Общие Расходы",
-      value: `${totalExpenses.toLocaleString("ru-RU")} ₽`,
-      trend: { value: 5.2, isPositive: false },
-      icon: <TrendingDown className="w-5 h-5" />,
-    },
-    {
-      title: "Мои Роялти (7%)",
-      value: `${royalty.toLocaleString("ru-RU")} ₽`,
-      trend: { value: 15.8, isPositive: true },
-      icon: <Percent className="w-5 h-5" />,
-    },
-    {
-      title: "Мой ФОТ",
-      value: `${fot.toLocaleString("ru-RU")} ₽`,
-      trend: { value: 3.2, isPositive: false },
-      icon: <Users className="w-5 h-5" />,
-    },
-  ]
+      const franchiseeData =
+        results[1].status === "fulfilled" && results[1].value.ok ? await results[1].value.json() : null
 
-  const maxRevenue = Math.max(...topLocations.map((l) => l.revenue))
+      const leadsRes = results[2]
+      let leads: GameLead[] = []
+      if (leadsRes.status === "fulfilled" && leadsRes.value.ok) {
+        const leadsData = await leadsRes.value.json()
+        leads = leadsData.data || []
+      }
 
-  const upcomingGames = deals
-    .filter((deal: any) => deal.gameDate && new Date(deal.gameDate) > new Date())
-    .sort((a: any, b: any) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
-    .slice(0, 4)
-    .map((deal: any) => ({
-      id: deal.id,
-      title: deal.clientName || "Без названия",
-      clientName: deal.clientName,
-      clientPhone: deal.clientPhone,
-      clientTelegram: deal.clientTelegram,
-      participants: deal.participants || 0,
-      package: deal.packageType || "Стандарт",
-      gameDate: deal.gameDate,
-      time: new Date(deal.gameDate).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
-      staff: "Не назначен",
-      stage: deal.stage,
-      checkPerPerson: deal.price && deal.participants ? Math.round(deal.price / deal.participants) : 0,
-    }))
+      const kpiData = results[3].status === "fulfilled" && results[3].value.ok ? await results[3].value.json() : null
 
-  const handleGameClick = (game: any) => {
-    setSelectedDeal({
-      ...game,
-      location: user.franchiseeName || "Москва",
-      amount: `${(game.participants * game.checkPerPerson).toLocaleString()} ₽`,
-      daysOpen: Math.floor((new Date(game.gameDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
-    })
+      const notificationsData =
+        results[4].status === "fulfilled" && results[4].value.ok ? await results[4].value.json() : null
+
+      const royaltyPercent = franchiseeData?.data?.royaltyPercent ?? franchiseeData?.royaltyPercent ?? 7
+      const notificationsList = notificationsData?.data || notificationsData?.notifications || []
+
+      // Calculate stats from transactions
+      const revenue = transactions
+        .filter((t: any) => t.type === "income")
+        .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
+
+      const fot = transactions
+        .filter((t: any) => t.category?.startsWith("fot"))
+        .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
+
+      const royaltyAmount = revenue * (royaltyPercent / 100)
+      const profit = revenue - fot - royaltyAmount
+
+      const completedGames = leads.filter(
+        (l) => l.stageType === "completed" || l.stageName?.toLowerCase().includes("завершен"),
+      ).length
+
+      const today = new Date().toISOString().split("T")[0]
+      const upcoming = leads.filter(
+        (l) =>
+          l.gameDate &&
+          l.gameDate >= today &&
+          l.stageType !== "completed" &&
+          !l.stageName?.toLowerCase().includes("завершен"),
+      )
+
+      // KPI
+      const currentMonth = new Date().getMonth() + 1
+      const currentYear = new Date().getFullYear()
+      const kpis = kpiData?.data || []
+      const currentKpi = kpis.find(
+        (k: any) => k.periodType === "month" && k.periodNumber === currentMonth && k.periodYear === currentYear,
+      )
+
+      if (currentKpi) {
+        setKpiTarget(currentKpi.targetValue || 0)
+        setKpiProgress(currentKpi.targetValue > 0 ? Math.min(100, (revenue / currentKpi.targetValue) * 100) : 0)
+      }
+
+      setStats({
+        totalRevenue: revenue,
+        totalGames: leads.length,
+        completedGames,
+        upcomingGames: upcoming.length,
+        totalFot: fot,
+        royaltyPercent,
+        royaltyAmount,
+        profit,
+        unreadNotifications: notificationsList.filter((n: Notification) => !n.isRead).length,
+      })
+
+      setUpcomingGames(upcoming.slice(0, 5))
+      setNotifications(notificationsList.slice(0, 5))
+    } catch (error) {
+      console.error("[v0] Dashboard: Error fetching data:", error)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [user?.franchiseeId, getAuthHeaders])
+
+  useEffect(() => {
+    if (authLoading) return
+    fetchDashboardData()
+  }, [authLoading, fetchDashboardData])
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await fetchDashboardData()
   }
 
-  const handleDealUpdate = (updatedDeal: any) => {
-    console.log("[v0] Deal updated:", updatedDeal)
-    // TODO: API integration to update deal
+  const handleNotificationClick = async (notification: Notification) => {
+    if (notification.relatedDealId) {
+      // Mark as read
+      try {
+        await fetch(`/api/notifications/${notification.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({ isRead: true }),
+        })
+      } catch (e) {
+        // Ignore errors
+      }
+
+      // Navigate to CRM with deal and task
+      const taskParam = notification.relatedTaskId ? `&taskId=${notification.relatedTaskId}` : ""
+      router.push(`/crm?dealId=${notification.relatedDealId}${taskParam}`)
+    }
   }
 
-  const handleDealClose = () => {
-    setSelectedDeal(null)
-  }
-
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground">Загрузка данных...</div>
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-8">
-      {currentKPI && (
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-1">Мои KPI</h3>
-          <p className="text-sm text-muted-foreground mb-6">
-            Целевые показатели на {currentKPI.periodType === "month" ? "месяц" : "квартал"} {currentKPI.periodNumber},{" "}
-            {currentKPI.periodYear}
-          </p>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            {currentKPI.targetRevenue && (
-              <KPIWidget
-                metric="Выручка"
-                targetValue={currentKPI.targetRevenue}
-                actualValue={currentKPI.actualRevenue}
-                unit="₽"
-                periodEnd={new Date(currentYear, currentMonth, 0)}
-              />
-            )}
-            {currentKPI.targetGames && (
-              <KPIWidget
-                metric="Количество игр"
-                targetValue={currentKPI.targetGames}
-                actualValue={currentKPI.actualGames}
-                unit="игр"
-                periodEnd={new Date(currentYear, currentMonth, 0)}
-              />
-            )}
-            {currentKPI.maxExpenses && (
-              <KPIWidget
-                metric="Расходы"
-                targetValue={currentKPI.maxExpenses}
-                actualValue={currentKPI.actualExpenses}
-                unit="₽"
-                periodEnd={new Date(currentYear, currentMonth, 0)}
-              />
-            )}
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold">Дашборд</h1>
+          <p className="text-muted-foreground">Обзор ключевых показателей</p>
         </div>
-      )}
-
-      <DashboardGrid title="Моя Локация" description="Финансовый контроль и прибыль вашей франшизы">
-        {metrics.map((metric, idx) => (
-          <MetricCard key={idx} {...metric} className={metric.large ? "md:col-span-2" : ""} />
-        ))}
-      </DashboardGrid>
-
-      {topLocations.length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-1">Сравнение Выручки</h3>
-          <p className="text-sm text-muted-foreground mb-6">Топ-5 локаций по выручке за предыдущий месяц</p>
-
-          <div className="space-y-4">
-            {topLocations.map((location, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-foreground font-medium">{location.name}</span>
-                  <span className="text-primary font-semibold">{location.revenue.toLocaleString("ru-RU")} ₽</span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
-                  <div
-                    className="bg-primary h-full rounded-full transition-all"
-                    style={{ width: `${(location.revenue / maxRevenue) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-foreground mb-1">Предстоящие Игры</h3>
-        <p className="text-sm text-muted-foreground mb-6">
-          Ближайшие запланированные мероприятия - нажмите для редактирования
-        </p>
-
-        {upcomingGames.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            Нет запланированных игр. Добавьте сделки с датой игры.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {upcomingGames.map((game: any) => (
-              <button
-                key={game.id}
-                onClick={() => handleGameClick(game)}
-                className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 rounded-lg transition-colors border border-border text-left"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="bg-primary/20 p-3 rounded-lg">
-                    <Calendar className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{game.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(game.gameDate).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock size={14} />
-                        {game.time}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Users size={14} />
-                        {game.participants} чел.
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <span className="px-2 py-0.5 bg-primary/20 text-primary rounded text-xs font-medium">
-                          {game.package}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <User size={14} />
-                  <span>{game.staff}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+        <Button variant="outline" size="icon" onClick={handleRefresh} disabled={refreshing}>
+          <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+        </Button>
       </div>
 
-      {selectedDeal && (
-        <DealCardFull
-          deal={selectedDeal}
-          onClose={handleDealClose}
-          onUpdate={handleDealUpdate}
-          onStageChange={(newStage) => console.log("[v0] Stage changed to:", newStage)}
-          userRole="franchisee"
-        />
+      {/* Main Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Доход</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.totalRevenue.toLocaleString("ru-RU")} ₽</div>
+            <p className="text-xs text-muted-foreground">За текущий месяц</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Прибыль</CardTitle>
+            <TrendingUp className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className={cn("text-2xl font-bold", stats.profit >= 0 ? "text-blue-600" : "text-red-600")}>
+              {stats.profit.toLocaleString("ru-RU")} ₽
+            </div>
+            <p className="text-xs text-muted-foreground">После вычета ФОТ и роялти</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Роялти ({stats.royaltyPercent}%)</CardTitle>
+            <Percent className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{stats.royaltyAmount.toLocaleString("ru-RU")} ₽</div>
+            <p className="text-xs text-muted-foreground">К оплате УК</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">ФОТ</CardTitle>
+            <CreditCard className="h-4 w-4 text-purple-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">{stats.totalFot.toLocaleString("ru-RU")} ₽</div>
+            <p className="text-xs text-muted-foreground">Расходы на персонал</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Games Stats */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Всего игр</CardTitle>
+            <Gamepad2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalGames}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Завершено</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.completedGames}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Предстоящие</CardTitle>
+            <Calendar className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{stats.upcomingGames}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* KPI Progress */}
+      {kpiTarget > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Выполнение плана
+            </CardTitle>
+            <CardDescription>Цель: {kpiTarget.toLocaleString("ru-RU")} ₽</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Progress value={kpiProgress} className="h-3" />
+            <p className="text-sm text-muted-foreground mt-2">
+              {stats.totalRevenue.toLocaleString("ru-RU")} ₽ из {kpiTarget.toLocaleString("ru-RU")} ₽ (
+              {kpiProgress.toFixed(1)}%)
+            </p>
+          </CardContent>
+        </Card>
       )}
+
+      {/* Two columns: Upcoming Games and Notifications */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Upcoming Games */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5" />
+              Ближайшие игры
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {upcomingGames.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Нет предстоящих игр</p>
+            ) : (
+              <div className="space-y-3">
+                {upcomingGames.map((game) => (
+                  <div key={game.id} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                    <div>
+                      <p className="font-medium">{game.clientName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {game.gameDate} {game.gameTime && `в ${game.gameTime}`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{(game.totalAmount || 0).toLocaleString("ru-RU")} ₽</p>
+                      <p className="text-sm text-muted-foreground">{game.playersCount || 0} чел.</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Notifications */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Уведомления
+              {stats.unreadNotifications > 0 && (
+                <Badge variant="destructive" className="ml-2">
+                  {stats.unreadNotifications}
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {notifications.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Нет новых уведомлений</p>
+            ) : (
+              <div className="space-y-3">
+                {notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    onClick={() => handleNotificationClick(notification)}
+                    className={cn(
+                      "p-3 rounded-lg cursor-pointer transition-colors hover:bg-muted",
+                      notification.isRead ? "bg-muted/30" : "bg-muted/50 border-l-2 border-primary",
+                    )}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{notification.title}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-2">{notification.message}</p>
+                      </div>
+                      {notification.relatedDealId && (
+                        <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0 ml-2" />
+                      )}
+                    </div>
+                    {notification.type === "task" && (
+                      <Badge variant="outline" className="mt-2 text-xs">
+                        Задача
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

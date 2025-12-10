@@ -1,70 +1,78 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { type NextRequest, NextResponse } from "next/server"
+import { neon } from "@neondatabase/serverless"
+import { jwtVerify } from "jose"
 
-export async function GET(request: Request) {
+const sql = neon(process.env.DATABASE_URL!)
+
+async function getCurrentUser(request: Request) {
+  const authHeader = request.headers.get("authorization")
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null
+  }
+  const token = authHeader.substring(7)
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
+    const { payload } = await jwtVerify(token, secret)
+    return {
+      id: payload.userId as string,
+      name: payload.name as string,
+      role: payload.role as string,
+      franchiseeId: payload.franchiseeId as string | null,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const user = await getCurrentUser(req)
+    const { searchParams } = new URL(req.url)
+    const franchiseeId = searchParams.get("franchiseeId") || user?.franchiseeId
+
+    if (!franchiseeId) {
+      return NextResponse.json({ error: "franchiseeId is required" }, { status: 400 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const franchiseeId = searchParams.get("franchiseeId")
+    // Get personnel from Personnel table
+    const personnel = await sql`
+      SELECT p.id, p.name, p.role, p.phone, p."hourlyRate" as rate, p."isActive"
+      FROM "Personnel" p
+      WHERE p."franchiseeId" = ${franchiseeId} AND p."isActive" = true
+      ORDER BY p.name
+    `
 
-    const where: any = { isActive: true }
-
-    if (session.user.role === "franchisee" || session.user.role === "admin" || session.user.role === "employee") {
-      where.franchiseeId = session.user.franchiseeId
-    } else if (franchiseeId) {
-      where.franchiseeId = franchiseeId
-    }
-
-    const personnel = await prisma.personnel.findMany({
-      where,
-      include: {
-        assignments: {
-          include: {
-            deal: {
-              select: {
-                id: true,
-                title: true,
-                gameDate: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { name: "asc" },
-    })
-
-    return NextResponse.json(personnel)
+    return NextResponse.json({ success: true, data: personnel })
   } catch (error) {
-    console.error("[PERSONNEL_GET]", error)
+    console.error("[v0] Error fetching personnel:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await getCurrentUser(req)
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await request.json()
+    const body = await req.json()
+    const { name, role, phone, rate } = body
 
-    const personnel = await prisma.personnel.create({
-      data: {
-        ...body,
-        franchiseeId: session.user.franchiseeId,
-      },
-    })
+    const franchiseeId = user.franchiseeId
+    if (!franchiseeId) {
+      return NextResponse.json({ error: "No franchisee context" }, { status: 400 })
+    }
 
-    return NextResponse.json(personnel)
+    const [personnel] = await sql`
+      INSERT INTO "Personnel" (id, "franchiseeId", name, role, phone, "hourlyRate", "isActive")
+      VALUES (gen_random_uuid()::text, ${franchiseeId}, ${name}, ${role}, ${phone || null}, ${rate || 0}, true)
+      RETURNING id, name, role, phone, "hourlyRate" as rate, "isActive"
+    `
+
+    return NextResponse.json({ success: true, data: personnel })
   } catch (error) {
-    console.error("[PERSONNEL_POST]", error)
+    console.error("[v0] Error creating personnel:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

@@ -10,12 +10,12 @@ import {
   Bell,
   Users,
   Calendar,
-  DollarSign,
   Shield,
   UserCog,
   MessageSquare,
   Target,
 } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 interface SidebarProps {
   role: string
@@ -26,73 +26,131 @@ interface SidebarProps {
 
 export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggle }: SidebarProps) {
   const router = useRouter()
+  const { canViewModule, user } = useAuth()
 
   const getMenuItems = () => {
-    const commonItems = [{ id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/" }]
-
-    const superAdminItems = [
-      ...commonItems,
-      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
-      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp" },
-      { id: "kpi", label: "KPI", icon: Target, path: "/kpi" },
-      { id: "messages", label: "Сообщения", icon: MessageSquare, path: "/messages" },
-      { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
-      { id: "users", label: "Пользователи", icon: UserCog, path: "/users" },
-      { id: "access", label: "Доступ", icon: Users, path: "/access" },
-      { id: "notifications", label: "Уведомления", icon: Bell, path: "/notifications" },
+    const commonItems = [
+      { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
     ]
 
-    const ukItems = [
-      ...commonItems,
-      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
-      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp" },
-      { id: "kpi", label: "KPI", icon: Target, path: "/kpi" },
-      { id: "messages", label: "Сообщения", icon: MessageSquare, path: "/messages" },
-      { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
-      { id: "users", label: "Пользователи", icon: UserCog, path: "/users" },
-      { id: "access", label: "Доступ", icon: Users, path: "/access" },
-      { id: "notifications", label: "Уведомления", icon: Bell, path: "/notifications" },
+    const superAdminItems = [
+      { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
+      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
+      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
+      { id: "kpi", label: "KPI", icon: Target, path: "/kpi", module: "canViewKpi" as const },
+      {
+        id: "messages",
+        label: "Сообщения",
+        icon: MessageSquare,
+        path: "/messages",
+        module: "canViewMessages" as const,
+      },
+      {
+        id: "knowledge",
+        label: "База Знаний",
+        icon: BookOpen,
+        path: "/knowledge",
+        module: "canViewKnowledgeBase" as const,
+      },
+      { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
+      { id: "access", label: "Доступ", icon: Users, path: "/access", module: "canViewAccess" as const },
+      {
+        id: "notifications",
+        label: "Уведомления",
+        icon: Bell,
+        path: "/notifications",
+        module: "canViewNotifications" as const,
+      },
     ]
 
     const ukEmployeeItems = [
-      ...commonItems,
-      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
-      { id: "messages", label: "Сообщения", icon: MessageSquare, path: "/messages" },
-      { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
-      { id: "notifications", label: "Уведомления", icon: Bell, path: "/notifications" },
+      { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
+      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
+      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
+      { id: "kpi", label: "KPI", icon: Target, path: "/kpi", module: "canViewKpi" as const },
+      {
+        id: "messages",
+        label: "Сообщения",
+        icon: MessageSquare,
+        path: "/messages",
+        module: "canViewMessages" as const,
+      },
+      {
+        id: "knowledge",
+        label: "База Знаний",
+        icon: BookOpen,
+        path: "/knowledge",
+        module: "canViewKnowledgeBase" as const,
+      },
+      {
+        id: "notifications",
+        label: "Уведомления",
+        icon: Bell,
+        path: "/notifications",
+        module: "canViewNotifications" as const,
+      },
     ]
 
     const franchiseeItems = [
-      ...commonItems,
-      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
-      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp" },
-      { id: "messages", label: "Сообщения", icon: MessageSquare, path: "/messages" },
-      { id: "personnel", label: "График", icon: Calendar, path: "/personnel" },
-      { id: "finances", label: "Расходы", icon: DollarSign, path: "/finances" },
-      { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
-      { id: "users", label: "Пользователи", icon: UserCog, path: "/users" },
-      { id: "access", label: "Доступ", icon: Shield, path: "/access" },
-      { id: "notifications", label: "Уведомления", icon: Bell, path: "/notifications" },
+      { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
+      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
+      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
+      {
+        id: "messages",
+        label: "Сообщения",
+        icon: MessageSquare,
+        path: "/messages",
+        module: "canViewMessages" as const,
+      },
+      { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+      {
+        id: "knowledge",
+        label: "База Знаний",
+        icon: BookOpen,
+        path: "/knowledge",
+        module: "canViewKnowledgeBase" as const,
+      },
+      { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
+      { id: "access", label: "Доступ", icon: Shield, path: "/access", module: "canViewAccess" as const },
+      {
+        id: "notifications",
+        label: "Уведомления",
+        icon: Bell,
+        path: "/notifications",
+        module: "canViewNotifications" as const,
+      },
     ]
 
     const adminItems = [
-      ...commonItems,
-      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm" },
-      { id: "finances", label: "Расходы", icon: DollarSign, path: "/finances" },
-      { id: "schedule", label: "График", icon: Calendar, path: "/personnel" },
-      { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
-      { id: "users", label: "Пользователи", icon: UserCog, path: "/users" },
-      { id: "access", label: "Доступ", icon: Shield, path: "/access" },
+      { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
+      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
+      { id: "schedule", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+      {
+        id: "knowledge",
+        label: "База Знаний",
+        icon: BookOpen,
+        path: "/knowledge",
+        module: "canViewKnowledgeBase" as const,
+      },
+      { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
+      { id: "access", label: "Доступ", icon: Shield, path: "/access", module: "canViewAccess" as const },
     ]
 
     const personnelItems = [
-      { id: "schedule", label: "Мои Смены", icon: Calendar, path: "/shifts" },
-      { id: "knowledge", label: "База Знаний", icon: BookOpen, path: "/knowledge" },
+      { id: "schedule", label: "Мои Смены", icon: Calendar, path: "/shifts", module: "canViewDashboard" as const },
+      {
+        id: "knowledge",
+        label: "База Знаний",
+        icon: BookOpen,
+        path: "/knowledge",
+        module: "canViewKnowledgeBase" as const,
+      },
     ]
 
     if (role === "super_admin") return superAdminItems
-    if (role === "uk") return ukItems
-    if (role === "uk_employee") return ukEmployeeItems
+    if (role === "uk" || role === "uk_employee") {
+      return ukEmployeeItems.filter((item) => canViewModule(item.module))
+    }
     if (role === "franchisee") return franchiseeItems
     if (role === "admin") return adminItems
     if (role === "employee" || role === "animator" || role === "host" || role === "dj") return personnelItems

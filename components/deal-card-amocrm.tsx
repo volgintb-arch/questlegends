@@ -18,6 +18,11 @@ import {
   FileText,
   Download,
   Plus,
+  MapPin,
+  Link,
+  Briefcase,
+  Trash2,
+  Users,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -28,6 +33,16 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/contexts/auth-context"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 // Types
 interface FeedEvent {
@@ -73,7 +88,18 @@ interface DealData {
   source?: string
   responsible?: string
   responsibleId?: string
+  responsibleName?: string
   createdAt: string
+  // New contact fields
+  contactName?: string
+  contactPhone?: string
+  messengerLink?: string
+  city?: string
+  // New deal fields
+  paushalnyyVznos?: number
+  investmentAmount?: number
+  leadSource?: string
+  additionalComment?: string
 }
 
 interface PipelineStage {
@@ -105,15 +131,17 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
   const [tasks, setTasks] = useState<DealTask[]>([])
   const [files, setFiles] = useState<DealFile[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [responsibleUsers, setResponsibleUsers] = useState<string[]>([])
   const [leftWidth, setLeftWidth] = useState(45)
   const [isDragging, setIsDragging] = useState(false)
   const [messageInput, setMessageInput] = useState("")
   const [activeTab, setActiveTab] = useState<"note" | "task" | "file">("note")
   const [isEditingTitle, setIsEditingTitle] = useState(false)
-  const [isEditingBudget, setIsEditingBudget] = useState(false)
   const [showTaskModal, setShowTaskModal] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [newTask, setNewTask] = useState({ title: "", description: "", assigneeId: "", deadline: "" })
   const [isSaving, setIsSaving] = useState(false)
+  const [editingField, setEditingField] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -121,12 +149,28 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
   useEffect(() => {
     if (isOpen && deal.id) {
       setDealData(deal)
+      loadDealDetails()
       loadEvents()
       loadTasks()
       loadFiles()
       loadEmployees()
+      loadResponsibleUsers()
     }
-  }, [isOpen, deal]) // Updated to use deal instead of deal.id
+  }, [isOpen, deal])
+
+  const loadDealDetails = async () => {
+    try {
+      const res = await fetch(`/api/deals/${deal.id}`, { headers: getAuthHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success !== false) {
+          setDealData((prev) => ({ ...prev, ...data }))
+        }
+      }
+    } catch (e) {
+      console.error("[v0] Error loading deal details:", e)
+    }
+  }
 
   const loadEvents = async () => {
     try {
@@ -170,15 +214,41 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
       if (res.ok) {
         const data = await res.json()
         const allUsers = data.data || data.users || []
-        console.log("[v0] Users API response:", allUsers.length, "users")
-        const filteredUsers = allUsers.filter((u: any) =>
-          ["super_admin", "uk", "uk_employee", "franchisee", "admin", "employee"].includes(u.role),
-        )
+        const filteredUsers = allUsers.filter((u: any) => ["super_admin", "uk", "uk_employee"].includes(u.role))
         setEmployees(filteredUsers)
-        console.log("[v0] Loaded employees:", filteredUsers.length)
       }
     } catch (e) {
       console.error("[v0] Error loading employees:", e)
+    }
+  }
+
+  const loadResponsibleUsers = async () => {
+    try {
+      const res = await fetch(`/api/deals/${deal.id}/responsible`, { headers: getAuthHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setResponsibleUsers(data.responsibleIds || [])
+      }
+    } catch (e) {
+      console.error("[v0] Error loading responsible users:", e)
+    }
+  }
+
+  const toggleResponsibleUser = async (userId: string) => {
+    const newResponsibleUsers = responsibleUsers.includes(userId)
+      ? responsibleUsers.filter((id) => id !== userId)
+      : [...responsibleUsers, userId]
+
+    setResponsibleUsers(newResponsibleUsers)
+
+    try {
+      await fetch(`/api/deals/${deal.id}/responsible`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ responsibleIds: newResponsibleUsers }),
+      })
+    } catch (e) {
+      console.error("[v0] Error updating responsible users:", e)
     }
   }
 
@@ -193,7 +263,6 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
           body: JSON.stringify(updates),
         })
         if (res.ok) {
-          const data = await res.json()
           const updated = { ...dealData, ...updates }
           setDealData(updated)
           onUpdate(updated)
@@ -207,23 +276,82 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
     [deal.id, dealData, getAuthHeaders, onUpdate],
   )
 
+  const handleDeleteDeal = async () => {
+    try {
+      const res = await fetch(`/api/deals/${deal.id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      })
+      if (res.ok) {
+        setShowDeleteDialog(false)
+        onClose()
+        onUpdate(dealData) // Pass the current dealData to potentially trigger a refresh in the parent
+      }
+    } catch (e) {
+      console.error("[v0] Error deleting deal:", e)
+    }
+  }
+
+  const renderEditableField = (
+    fieldKey: keyof DealData,
+    label: string,
+    icon: React.ReactNode,
+    type: "text" | "number" | "tel" | "url" = "text",
+  ) => {
+    const value = dealData[fieldKey]
+    const isEditing = editingField === fieldKey
+
+    return (
+      <div className="space-y-1">
+        <label className="text-[10px] font-medium text-muted-foreground">{label}</label>
+        {isEditing ? (
+          <Input
+            type={type}
+            className="h-7 text-xs"
+            value={value || ""}
+            onChange={(e) =>
+              setDealData({ ...dealData, [fieldKey]: type === "number" ? Number(e.target.value) : e.target.value })
+            }
+            onBlur={() => {
+              setEditingField(null)
+              saveDeal({ [fieldKey]: dealData[fieldKey] })
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setEditingField(null)
+                saveDeal({ [fieldKey]: dealData[fieldKey] })
+              }
+            }}
+            autoFocus
+          />
+        ) : (
+          <div
+            className="flex items-center gap-2 p-1.5 bg-muted/30 rounded cursor-pointer hover:bg-muted/50 transition-colors text-xs"
+            onClick={() => setEditingField(fieldKey)}
+          >
+            {icon}
+            <span className={value ? "text-foreground" : "text-muted-foreground"}>
+              {type === "number" && value ? `${Number(value).toLocaleString()} ₽` : value || "Не указано"}
+            </span>
+            <Edit3 size={10} className="ml-auto text-muted-foreground" />
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // Add note
   const handleAddNote = async () => {
     if (!messageInput.trim()) return
     try {
-      console.log("[v0] Adding note:", messageInput)
       const res = await fetch(`/api/deals/${deal.id}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ type: "note", content: messageInput }),
       })
-      console.log("[v0] Add note response status:", res.status)
       if (res.ok) {
         setMessageInput("")
         loadEvents()
-      } else {
-        const errorData = await res.json()
-        console.error("[v0] Add note error:", errorData)
       }
     } catch (e) {
       console.error("[v0] Error adding note:", e)
@@ -327,6 +455,8 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
     })
   }
 
+  const canDelete = user?.role === "super_admin" || user?.role === "uk" || user?.role === "uk_employee"
+
   if (!isOpen) return null
 
   return (
@@ -339,11 +469,13 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
               {isEditingTitle ? (
                 <Input
                   className="text-base font-semibold h-8"
-                  value={dealData.clientName}
-                  onChange={(e) => setDealData({ ...dealData, clientName: e.target.value })}
+                  value={dealData.contactName || dealData.clientName}
+                  onChange={(e) =>
+                    setDealData({ ...dealData, contactName: e.target.value, clientName: e.target.value })
+                  }
                   onBlur={() => {
                     setIsEditingTitle(false)
-                    saveDeal({ clientName: dealData.clientName })
+                    saveDeal({ contactName: dealData.contactName, clientName: dealData.contactName })
                   }}
                   onKeyDown={(e) => e.key === "Enter" && setIsEditingTitle(false)}
                   autoFocus
@@ -353,46 +485,33 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
                   className="text-base font-semibold cursor-pointer hover:text-primary flex items-center gap-1"
                   onClick={() => setIsEditingTitle(true)}
                 >
-                  {dealData.clientName}
+                  {dealData.contactName || dealData.clientName || "Без названия"}
                   <Edit3 size={12} className="text-muted-foreground" />
                 </h2>
               )}
               {isSaving && <span className="text-[10px] text-muted-foreground">Сохранение...</span>}
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X size={18} />
-            </Button>
+            <div className="flex items-center gap-2">
+              {canDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                  onClick={() => setShowDeleteDialog(true)}
+                >
+                  <Trash2 size={18} />
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X size={18} />
+              </Button>
+            </div>
           </div>
 
           {/* Content */}
           <div className="flex flex-1 overflow-hidden">
             {/* Left Panel */}
             <div className="overflow-y-auto p-4 space-y-4" style={{ width: `${leftWidth}%` }}>
-              {/* Budget */}
-              <div className="flex items-center gap-2">
-                <DollarSign size={16} className="text-green-500" />
-                {isEditingBudget ? (
-                  <Input
-                    type="number"
-                    className="h-7 w-32 text-sm"
-                    value={dealData.price || ""}
-                    onChange={(e) => setDealData({ ...dealData, price: Number(e.target.value) })}
-                    onBlur={() => {
-                      setIsEditingBudget(false)
-                      saveDeal({ price: dealData.price })
-                    }}
-                    autoFocus
-                  />
-                ) : (
-                  <span
-                    className="text-sm font-medium cursor-pointer hover:text-primary"
-                    onClick={() => setIsEditingBudget(true)}
-                  >
-                    {dealData.price ? `${dealData.price.toLocaleString()} ₽` : "Не указан"}
-                  </span>
-                )}
-              </div>
-
               {/* Pipeline Stages */}
               {stages.length > 0 && (
                 <div className="space-y-2">
@@ -419,61 +538,123 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
                 </div>
               )}
 
-              {/* Contact Info */}
               <div className="space-y-2 p-3 bg-muted/30 rounded-lg">
-                <h3 className="text-xs font-semibold flex items-center gap-1">
+                <h3 className="text-xs font-semibold flex items-center gap-1 text-primary">
                   <User size={12} />
-                  Контакт
+                  Контактные данные
                 </h3>
-                <div className="space-y-1 text-xs">
-                  {dealData.clientPhone && (
-                    <div className="flex items-center gap-2">
-                      <Phone size={12} className="text-muted-foreground" />
-                      <a href={`tel:${dealData.clientPhone}`} className="hover:text-primary">
-                        {dealData.clientPhone}
-                      </a>
-                    </div>
+                <div className="space-y-2">
+                  {renderEditableField("contactName", "ФИО", <User size={12} className="text-muted-foreground" />)}
+                  {renderEditableField(
+                    "contactPhone",
+                    "Номер телефона",
+                    <Phone size={12} className="text-muted-foreground" />,
+                    "tel",
                   )}
-                  {dealData.clientTelegram && (
-                    <div className="flex items-center gap-2">
-                      <MessageSquare size={12} className="text-muted-foreground" />
-                      <span>{dealData.clientTelegram}</span>
-                    </div>
+                  {renderEditableField(
+                    "messengerLink",
+                    "Ссылка на мессенджер",
+                    <Link size={12} className="text-muted-foreground" />,
+                    "url",
                   )}
-                  {dealData.location && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <span>Город: {dealData.location}</span>
-                    </div>
-                  )}
-                  {dealData.source && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <span>Источник: {dealData.source}</span>
-                    </div>
-                  )}
+                  {renderEditableField("city", "Город", <MapPin size={12} className="text-muted-foreground" />)}
                 </div>
               </div>
 
-              {/* Responsible */}
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">Ответственный</p>
-                <Select
-                  value={dealData.responsibleId || ""}
-                  onValueChange={(value) => {
-                    const emp = employees.find((e) => e.id === value)
-                    saveDeal({ responsibleId: value, responsible: emp?.name })
-                  }}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Выбрать" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((emp) => (
-                      <SelectItem key={emp.id} value={emp.id} className="text-xs">
-                        {emp.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2 p-3 bg-muted/30 rounded-lg">
+                <h3 className="text-xs font-semibold flex items-center gap-1 text-primary">
+                  <Briefcase size={12} />
+                  Данные сделки
+                </h3>
+                <div className="space-y-2">
+                  {renderEditableField(
+                    "paushalnyyVznos",
+                    "Паушальный взнос",
+                    <DollarSign size={12} className="text-green-500" />,
+                    "number",
+                  )}
+                  {renderEditableField(
+                    "investmentAmount",
+                    "Сумма инвестиций",
+                    <DollarSign size={12} className="text-blue-500" />,
+                    "number",
+                  )}
+
+                  {/* Lead Source */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">Источник лида</label>
+                    <Select
+                      value={dealData.leadSource || dealData.source || ""}
+                      onValueChange={(value) => saveDeal({ leadSource: value })}
+                    >
+                      <SelectTrigger className="h-7 text-xs">
+                        <SelectValue placeholder="Выбрать источник" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Сайт">Сайт</SelectItem>
+                        <SelectItem value="Звонок">Звонок</SelectItem>
+                        <SelectItem value="Рекомендация">Рекомендация</SelectItem>
+                        <SelectItem value="Реклама">Реклама</SelectItem>
+                        <SelectItem value="Соцсети">Соцсети</SelectItem>
+                        <SelectItem value="Выставка">Выставка</SelectItem>
+                        <SelectItem value="Холодный звонок">Холодный звонок</SelectItem>
+                        <SelectItem value="Партнер">Партнер</SelectItem>
+                        <SelectItem value="Другое">Другое</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                      <Users size={10} />
+                      Ответственные (сотрудники УК)
+                    </label>
+                    <div className="space-y-1 max-h-32 overflow-y-auto p-2 bg-muted/20 rounded">
+                      {employees.map((emp) => (
+                        <label
+                          key={emp.id}
+                          className="flex items-center gap-2 cursor-pointer hover:bg-muted/30 p-1 rounded text-xs"
+                        >
+                          <Checkbox
+                            checked={responsibleUsers.includes(emp.id)}
+                            onCheckedChange={() => toggleResponsibleUser(emp.id)}
+                            className="h-3 w-3"
+                          />
+                          <span>{emp.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {responsibleUsers.length > 0 && (
+                      <p className="text-[10px] text-muted-foreground">Выбрано: {responsibleUsers.length}</p>
+                    )}
+                  </div>
+
+                  {/* Additional Comment */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">Дополнительный комментарий</label>
+                    {editingField === "additionalComment" ? (
+                      <Textarea
+                        className="text-xs min-h-[60px]"
+                        value={dealData.additionalComment || ""}
+                        onChange={(e) => setDealData({ ...dealData, additionalComment: e.target.value })}
+                        onBlur={() => {
+                          setEditingField(null)
+                          saveDeal({ additionalComment: dealData.additionalComment })
+                        }}
+                        autoFocus
+                      />
+                    ) : (
+                      <div
+                        className="p-1.5 bg-muted/30 rounded cursor-pointer hover:bg-muted/50 transition-colors text-xs min-h-[40px]"
+                        onClick={() => setEditingField("additionalComment")}
+                      >
+                        <span className={dealData.additionalComment ? "text-foreground" : "text-muted-foreground"}>
+                          {dealData.additionalComment || "Нажмите, чтобы добавить комментарий..."}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Tasks */}
@@ -660,7 +841,7 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
               />
             </div>
             <div>
-              <Label className="text-xs">Исполнитель</Label>
+              <Label className="text-xs">Исполнитель (сотрудник УК)</Label>
               <Select
                 value={newTask.assigneeId}
                 onValueChange={(value) => setNewTask({ ...newTask, assigneeId: value })}
@@ -697,6 +878,24 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить сделку?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы уверены, что хотите удалить сделку "{dealData.contactName || dealData.clientName}"? Это действие нельзя
+              отменить.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteDeal} className="bg-red-500 hover:bg-red-600">
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

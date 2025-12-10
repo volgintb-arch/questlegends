@@ -33,10 +33,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = await request.json()
     const { name, color, order } = body
 
+    const [existingStage] = await sql`
+      SELECT "isFixed", "stageType" FROM "PipelineStage" WHERE id = ${stageId}::uuid
+    `
+
+    if (existingStage?.isFixed && name) {
+      return NextResponse.json({ error: "Cannot rename fixed stage" }, { status: 400 })
+    }
+
     const [stage] = await sql`
       UPDATE "PipelineStage"
       SET 
-        name = COALESCE(${name}, name),
+        name = COALESCE(${existingStage?.isFixed ? null : name}, name),
         color = COALESCE(${color}, color),
         "order" = COALESCE(${order}, "order")
       WHERE id = ${stageId}::uuid AND "pipelineId" = ${id}::uuid
@@ -66,6 +74,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     const { id, stageId } = await params
+
+    const [stage] = await sql`
+      SELECT "isFixed" FROM "PipelineStage" WHERE id = ${stageId}::uuid
+    `
+
+    if (stage?.isFixed) {
+      return NextResponse.json({ error: "Нельзя удалить фиксированный этап" }, { status: 400 })
+    }
 
     // Check if stage has deals
     const [dealCount] = await sql`

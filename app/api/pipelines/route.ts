@@ -66,19 +66,29 @@ export async function POST(request: NextRequest) {
       RETURNING *
     `
 
-    // Create default stages if none provided
     const defaultStages = stages || [
-      { name: "Новый", color: "#6B7280", order: 0 },
-      { name: "В работе", color: "#3B82F6", order: 1 },
-      { name: "Завершен", color: "#22C55E", order: 2 },
+      { name: "Новый", color: "#6B7280", order: 0, isFixed: false, stageType: null },
+      { name: "В работе", color: "#3B82F6", order: 1, isFixed: false, stageType: null },
     ]
 
+    // Add user-provided stages
     for (const stage of defaultStages) {
       await sql`
-        INSERT INTO "PipelineStage" ("pipelineId", name, color, "order")
-        VALUES (${pipeline.id}, ${stage.name}, ${stage.color || "#6B7280"}, ${stage.order})
+        INSERT INTO "PipelineStage" ("pipelineId", name, color, "order", "isFixed", "stageType")
+        VALUES (${pipeline.id}, ${stage.name}, ${stage.color || "#6B7280"}, ${stage.order}, ${stage.isFixed || false}, ${stage.stageType || null})
       `
     }
+
+    // Always add fixed stages at the end
+    const lastOrder = defaultStages.length
+    await sql`
+      INSERT INTO "PipelineStage" ("pipelineId", name, color, "order", "isFixed", "stageType")
+      VALUES (${pipeline.id}, 'Завершен', '#22C55E', ${lastOrder}, true, 'completed')
+    `
+    await sql`
+      INSERT INTO "PipelineStage" ("pipelineId", name, color, "order", "isFixed", "stageType")
+      VALUES (${pipeline.id}, 'Отказ', '#EF4444', ${lastOrder + 1}, true, 'cancelled')
+    `
 
     // Fetch pipeline with stages
     const [result] = await sql`

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { TrendingUp, TrendingDown, DollarSign } from "lucide-react"
+import { TrendingUp, TrendingDown, DollarSign, Settings, X, Check } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -10,6 +10,7 @@ interface FranchiseFinance {
   name: string
   location: string
   revenue: number
+  royaltyPercent: number
   royalty: number
   expenses: number
   profit: number
@@ -24,7 +25,11 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
   const [sortBy, setSortBy] = useState<"revenue" | "profit">("revenue")
   const [franchiseData, setFranchiseData] = useState<FranchiseFinance[]>([])
   const [loading, setLoading] = useState(true)
-  const { getAuthHeaders } = useAuth()
+  const { user, getAuthHeaders } = useAuth()
+
+  const [editingRoyalty, setEditingRoyalty] = useState<string | null>(null)
+  const [editRoyaltyValue, setEditRoyaltyValue] = useState<number>(7)
+  const [savingRoyalty, setSavingRoyalty] = useState(false)
 
   useEffect(() => {
     loadFranchiseFinancials()
@@ -54,9 +59,12 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
         const franchiseeTransactions = transactions.filter((t: any) => t.franchiseeId === f.id)
         const franchiseeExpenses = expenses.filter((e: any) => e.franchiseeId === f.id)
 
-        const revenue = franchiseeTransactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0)
-        const royalty = revenue * ((f.royaltyPercent || 10) / 100)
-        const expensesTotal = franchiseeExpenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0)
+        const revenue = franchiseeTransactions
+          .filter((t: any) => t.type === "income")
+          .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+        const royaltyPercent = f.royaltyPercent || 7
+        const royalty = Math.round(revenue * (royaltyPercent / 100))
+        const expensesTotal = franchiseeExpenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
         const profit = revenue - royalty - expensesTotal
 
         return {
@@ -64,6 +72,7 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
           name: f.name,
           location: f.city || f.location || "",
           revenue,
+          royaltyPercent,
           royalty,
           expenses: expensesTotal,
           profit,
@@ -73,10 +82,52 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
 
       setFranchiseData(financialData)
     } catch (error) {
-      console.error("[v0] Error loading franchise financials:", error)
+      console.error("Error loading franchise financials:", error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSaveRoyalty = async (franchiseeId: string) => {
+    try {
+      setSavingRoyalty(true)
+      const response = await fetch(`/api/franchisees/${franchiseeId}`, {
+        method: "PATCH",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ royaltyPercent: editRoyaltyValue }),
+      })
+
+      if (response.ok) {
+        // Update local state
+        setFranchiseData((prev) =>
+          prev.map((f) => {
+            if (f.id === franchiseeId) {
+              const newRoyalty = Math.round(f.revenue * (editRoyaltyValue / 100))
+              return {
+                ...f,
+                royaltyPercent: editRoyaltyValue,
+                royalty: newRoyalty,
+                profit: f.revenue - newRoyalty - f.expenses,
+              }
+            }
+            return f
+          }),
+        )
+        setEditingRoyalty(null)
+      }
+    } catch (error) {
+      console.error("Error saving royalty:", error)
+    } finally {
+      setSavingRoyalty(false)
+    }
+  }
+
+  const startEditingRoyalty = (franchisee: FranchiseFinance) => {
+    setEditingRoyalty(franchisee.id)
+    setEditRoyaltyValue(franchisee.royaltyPercent)
   }
 
   const filteredFranchises = franchiseData.filter((f) => {
@@ -99,6 +150,8 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
     if (sortBy === "revenue") return b.revenue - a.revenue
     return b.profit - a.profit
   })
+
+  const canEditRoyalty = user?.role === "uk" || user?.role === "super_admin"
 
   return (
     <div className="space-y-6">
@@ -189,7 +242,8 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
                   <TableHead className="text-xs font-semibold text-muted-foreground">Франчайзи</TableHead>
                   <TableHead className="text-xs font-semibold text-muted-foreground">Локация</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-muted-foreground">Выручка</TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-muted-foreground">Роялти</TableHead>
+                  <TableHead className="text-right text-xs font-semibold text-muted-foreground">Роялти %</TableHead>
+                  <TableHead className="text-right text-xs font-semibold text-muted-foreground">Роялти ₽</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-muted-foreground">Расходы</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-muted-foreground">Прибыль</TableHead>
                   <TableHead className="text-xs font-semibold text-muted-foreground">Статус</TableHead>
@@ -202,6 +256,49 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
                     <TableCell className="text-sm text-muted-foreground">{franchise.location}</TableCell>
                     <TableCell className="text-right text-sm font-medium text-green-500">
                       {franchise.revenue.toLocaleString()} ₽
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {editingRoyalty === franchise.id ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <input
+                            type="number"
+                            value={editRoyaltyValue}
+                            onChange={(e) => setEditRoyaltyValue(Number(e.target.value))}
+                            min={0}
+                            max={100}
+                            step={0.5}
+                            className="w-16 h-7 text-sm text-right bg-background border border-border rounded px-2"
+                            autoFocus
+                          />
+                          <span className="text-sm text-muted-foreground">%</span>
+                          <button
+                            onClick={() => handleSaveRoyalty(franchise.id)}
+                            disabled={savingRoyalty}
+                            className="p-1 text-green-500 hover:bg-green-500/10 rounded"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setEditingRoyalty(null)}
+                            className="p-1 text-red-500 hover:bg-red-500/10 rounded"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-sm font-medium text-blue-500">{franchise.royaltyPercent}%</span>
+                          {canEditRoyalty && (
+                            <button
+                              onClick={() => startEditingRoyalty(franchise)}
+                              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
+                              title="Изменить роялти"
+                            >
+                              <Settings className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right text-sm font-medium text-blue-500">
                       {franchise.royalty.toLocaleString()} ₽

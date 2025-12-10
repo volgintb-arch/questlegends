@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Moon, Sun, Bell, User, LogOut, SettingsIcon, ChevronDown, Menu } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
@@ -23,27 +23,32 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
   const { user, getAuthHeaders, logout } = useAuth()
   const router = useRouter()
 
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      if (!user) return
-      try {
-        const response = await fetch("/api/notifications?unreadOnly=true", {
-          headers: getAuthHeaders(),
-        })
-        if (response.ok) {
-          const data = await response.json()
-          const notifications = data.data || data.notifications || []
-          setUnreadCount(Array.isArray(notifications) ? notifications.length : 0)
-        }
-      } catch (error) {
-        console.error("[v0] Error fetching notifications:", error)
+  const fetchNotificationCount = useCallback(async () => {
+    if (!user) return
+    try {
+      const response = await fetch("/api/notifications/count", {
+        headers: getAuthHeaders(),
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setUnreadCount(data.count || 0)
       }
+    } catch (error) {
+      console.error("[v0] Error fetching notification count:", error)
     }
-
-    fetchNotifications()
-    const interval = setInterval(fetchNotifications, 30000) // Refresh every 30s
-    return () => clearInterval(interval)
   }, [user, getAuthHeaders])
+
+  useEffect(() => {
+    fetchNotificationCount()
+    const interval = setInterval(fetchNotificationCount, 10000) // Refresh every 10s
+    return () => clearInterval(interval)
+  }, [fetchNotificationCount])
+
+  useEffect(() => {
+    const handleRefresh = () => fetchNotificationCount()
+    window.addEventListener("refreshNotificationCount", handleRefresh)
+    return () => window.removeEventListener("refreshNotificationCount", handleRefresh)
+  }, [fetchNotificationCount])
 
   const toggleTheme = () => {
     setIsDark(!isDark)
@@ -51,7 +56,6 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
   }
 
   const handleLogout = async () => {
-    console.log("[v0] Logging out user")
     try {
       await logout()
     } catch (error) {
@@ -118,7 +122,6 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
                 </div>
                 <div className="hidden sm:block text-sm text-left">
                   <p className="font-medium text-foreground">{userName}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{role}</p>
                 </div>
                 <ChevronDown
                   className={`hidden sm:block w-4 h-4 text-muted-foreground transition-transform ${showAccountMenu ? "rotate-180" : ""}`}
@@ -129,7 +132,6 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
                 <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-card border border-border rounded-lg shadow-lg overflow-hidden">
                   <div className="p-3 sm:p-4 border-b border-border">
                     <p className="font-medium text-foreground text-sm sm:text-base">{userName}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{role}</p>
                   </div>
                   <div className="py-1 sm:py-2">
                     <button

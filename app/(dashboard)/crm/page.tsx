@@ -2,9 +2,14 @@
 
 import { useAuth } from "@/contexts/auth-context"
 import { DealsKanban } from "@/components/deals-kanban"
+import { GamesCRMFranchisee } from "@/components/games-crm-franchisee"
 
 export default function CRMPage() {
   const { user } = useAuth()
 
-  return <DealsKanban role={user.role} />
+  if (user?.role === "franchisee" || user?.role === "admin") {
+    return <GamesCRMFranchisee />
+  }
+
+  return <DealsKanban role={user?.role || ""} />
 }
