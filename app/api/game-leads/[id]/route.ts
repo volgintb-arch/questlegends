@@ -40,9 +40,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
 
     return NextResponse.json({ success: true, data: game })
-  } catch (error) {
+  } catch (error: any) {
     console.error("[v0] Error fetching game:", error)
-    return NextResponse.json({ error: "Failed to fetch game" }, { status: 500 })
+    const errorMessage = error?.message || String(error)
+    return NextResponse.json({ success: false, error: "Failed to fetch game", message: errorMessage }, { status: 500 })
   }
 }
 
@@ -51,6 +52,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const { id } = params
     const body = await req.json()
     const user = await getCurrentUser(req)
+
+    console.log(`[v0] GameLead PATCH: leadId=${id}, fields=`, Object.keys(body))
 
     // Get current game state
     const [currentGame] = await sql`SELECT * FROM "GameLead" WHERE id = ${id}`
@@ -126,14 +129,46 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           await sql`UPDATE "GameLead" SET "clientEmail" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "gameDate") {
           await sql`UPDATE "GameLead" SET "gameDate" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
+
+          const scheduleUpdateResult = await sql`
+            UPDATE "GameSchedule" 
+            SET "gameDate" = ${value}
+            WHERE "leadId" = ${id}
+            RETURNING id, "gameDate", "leadId"
+          `
+          console.log(
+            `[v0] Synced gameDate to GameSchedule: ${scheduleUpdateResult.length} rows updated`,
+            scheduleUpdateResult,
+          )
         } else if (field === "gameTime") {
           await sql`UPDATE "GameLead" SET "gameTime" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
+
+          const scheduleUpdateResult = await sql`
+            UPDATE "GameSchedule" 
+            SET "gameTime" = ${value}
+            WHERE "leadId" = ${id}
+            RETURNING id, "gameTime", "leadId"
+          `
+          console.log(
+            `[v0] Synced gameTime to GameSchedule: ${scheduleUpdateResult.length} rows updated`,
+            scheduleUpdateResult,
+          )
         } else if (field === "playersCount") {
           await sql`UPDATE "GameLead" SET "playersCount" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
+          await sql`
+            UPDATE "GameSchedule" 
+            SET "playersCount" = ${value}
+            WHERE "leadId" = ${id}
+          `
         } else if (field === "pricePerPerson") {
           await sql`UPDATE "GameLead" SET "pricePerPerson" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "totalAmount") {
           await sql`UPDATE "GameLead" SET "totalAmount" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
+          await sql`
+            UPDATE "GameSchedule" 
+            SET "totalAmount" = ${value}
+            WHERE "leadId" = ${id}
+          `
         } else if (field === "prepayment") {
           newPrepayment = value !== null && value !== undefined && value !== "" ? Number.parseFloat(String(value)) : 0
           await sql`UPDATE "GameLead" SET "prepayment" = ${newPrepayment}, "updatedAt" = NOW() WHERE id = ${id}`
@@ -371,11 +406,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
 
+    console.log("[v0] GameCard: Field gameDate saved successfully")
     const [finalGame] = await sql`SELECT * FROM "GameLead" WHERE id = ${id}`
     return NextResponse.json({ success: true, data: finalGame })
-  } catch (error) {
+  } catch (error: any) {
     console.error("[v0] Error updating game:", error)
-    return NextResponse.json({ error: "Failed to update game" }, { status: 500 })
+    const errorMessage = error?.message || String(error)
+    return NextResponse.json({ success: false, error: "Failed to update game", message: errorMessage }, { status: 500 })
   }
 }
 
@@ -406,8 +443,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     await sql`DELETE FROM "GameLead" WHERE id = ${id}`
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch (error: any) {
     console.error("[v0] Error deleting game:", error)
-    return NextResponse.json({ error: "Failed to delete game" }, { status: 500 })
+    const errorMessage = error?.message || String(error)
+    return NextResponse.json({ success: false, error: "Failed to delete game", message: errorMessage }, { status: 500 })
   }
 }

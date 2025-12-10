@@ -36,51 +36,17 @@ export function DashboardUK() {
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [networkStats, setNetworkStats] = useState<any>(null)
-
-  const isUkEmployee = user?.role === "uk_employee"
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const headers = getAuthHeaders()
-        const [franchisesRes, transactionsRes, networkStatsRes] = await Promise.all([
-          fetch("/api/franchisees", { headers }),
-          fetch("/api/transactions", { headers }),
-          fetch("/api/kpi/network-stats", { headers }),
-        ])
-
-        if (franchisesRes.ok) {
-          const franchisesData = await franchisesRes.json()
-          setFranchises(Array.isArray(franchisesData) ? franchisesData : franchisesData.data || [])
-        }
-        if (transactionsRes.ok) {
-          const transactionsData = await transactionsRes.json()
-          setTransactions(Array.isArray(transactionsData) ? transactionsData : transactionsData.data || [])
-        }
-        if (networkStatsRes.ok) {
-          const statsData = await networkStatsRes.json()
-          setNetworkStats(statsData.stats)
-        }
-      } catch (error) {
-        console.error("[v0] Failed to fetch UK dashboard data:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [getAuthHeaders])
-
-  const totalRevenue = transactions.reduce((sum, t) => sum + (t.amount || 0), 0)
-  const totalRoyalties = transactions.reduce((sum, t) => sum + (t.royaltyAmount || 0), 0)
-  const averageCheck = transactions.length > 0 ? totalRevenue / transactions.length : 0
-  const totalGames = transactions.length
-
-  const [kpiData, setKpiData] = useState<any[]>([
+  const [metrics, setMetrics] = useState({
+    totalRevenue: 0,
+    totalRoyalties: 0,
+    averageCheck: 0,
+    totalGames: 0,
+  })
+  const [kpiData, setKpiData] = useState([
     {
       id: "1",
       name: "Общая Выручка Сети",
-      value: `${(totalRevenue / 1000).toFixed(0)}K ₽`,
+      value: "0K ₽",
       target: 3000000,
       unit: "₽",
       weight: 30,
@@ -90,8 +56,8 @@ export function DashboardUK() {
     },
     {
       id: "2",
-      name: "Сводное Роялти",
-      value: `${(totalRoyalties / 1000).toFixed(0)}K ₽`,
+      name: "Сводное Роялти (7%)",
+      value: "0K ₽",
       target: 210000,
       unit: "₽",
       weight: 20,
@@ -102,7 +68,7 @@ export function DashboardUK() {
     {
       id: "3",
       name: "Средний Чек",
-      value: `${(averageCheck / 1000).toFixed(1)}K ₽`,
+      value: "0K ₽",
       target: 30000,
       unit: "₽",
       weight: 15,
@@ -113,7 +79,7 @@ export function DashboardUK() {
     {
       id: "4",
       name: "Количество Игр",
-      value: totalGames.toString(),
+      value: "0",
       target: 120,
       unit: "игр",
       weight: 10,
@@ -122,6 +88,115 @@ export function DashboardUK() {
       visible: true,
     },
   ])
+
+  const isUkEmployee = user?.role === "uk_employee"
+
+  useEffect(() => {
+    setKpiData((prev) =>
+      prev.map((kpi) => {
+        if (kpi.id === "1") {
+          return {
+            ...kpi,
+            value: `${(metrics.totalRevenue / 1000).toFixed(0)}K ₽`,
+          }
+        }
+        if (kpi.id === "2") {
+          return {
+            ...kpi,
+            value: `${(metrics.totalRoyalties / 1000).toFixed(0)}K ₽`,
+          }
+        }
+        if (kpi.id === "3") {
+          return {
+            ...kpi,
+            value: `${(metrics.averageCheck / 1000).toFixed(0)}K ₽`,
+          }
+        }
+        if (kpi.id === "4") {
+          return {
+            ...kpi,
+            value: `${metrics.totalGames}`,
+          }
+        }
+        return kpi
+      }),
+    )
+  }, [metrics])
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        console.log("[v0] DashboardUK: Fetching data...")
+        const headers = getAuthHeaders()
+        const [franchisesRes, transactionsRes, gamesRes] = await Promise.all([
+          fetch("/api/franchisees", { headers, cache: "no-store" }),
+          fetch("/api/transactions?limit=1000", { headers, cache: "no-store" }),
+          fetch("/api/game-leads?status=completed", { headers, cache: "no-store" }),
+        ])
+
+        let franchisesData: any[] = []
+        let transactionsData: any[] = []
+        let gamesData: any[] = []
+
+        if (franchisesRes.ok) {
+          const data = await franchisesRes.json()
+          franchisesData = Array.isArray(data) ? data : data.data || []
+          setFranchises(franchisesData)
+          console.log("[v0] DashboardUK: Loaded franchises:", franchisesData.length)
+        }
+
+        if (transactionsRes.ok) {
+          const data = await transactionsRes.json()
+          transactionsData = Array.isArray(data) ? data : data.data || []
+          setTransactions(transactionsData)
+          console.log("[v0] DashboardUK: Loaded transactions:", transactionsData.length)
+        }
+
+        if (gamesRes.ok) {
+          const data = await gamesRes.json()
+          gamesData = Array.isArray(data) ? data : data.data || []
+          console.log("[v0] DashboardUK: Loaded games:", gamesData.length)
+        }
+
+        const revenue = transactionsData
+          .filter((t) => t.type === "income" || t.type === "revenue")
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+
+        const royalties = franchisesData.reduce((sum, f) => {
+          const franchiseeRevenue = transactionsData
+            .filter((t) => t.franchiseeId === f.id && (t.type === "income" || t.type === "revenue"))
+            .reduce((s, t) => s + (Number(t.amount) || 0), 0)
+          const royaltyPercent = Number(f.royaltyPercent) || 7.0
+          return sum + (franchiseeRevenue * royaltyPercent) / 100
+        }, 0)
+
+        const games = gamesData.length || transactionsData.filter((t) => t.gameLeadId).length
+        const avgCheck = games > 0 ? revenue / games : 0
+
+        setMetrics({
+          totalRevenue: revenue,
+          totalRoyalties: royalties,
+          averageCheck: avgCheck,
+          totalGames: games,
+        })
+
+        console.log("[v0] DashboardUK: Metrics calculated:", {
+          revenue,
+          royalties,
+          avgCheck,
+          games,
+        })
+      } catch (error) {
+        console.error("[v0] DashboardUK: Failed to fetch data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+    const interval = setInterval(fetchData, 30000)
+    return () => clearInterval(interval)
+  }, [getAuthHeaders])
 
   const handleSaveKPIs = (newKPISettings: any) => {
     setKpiData(

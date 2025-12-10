@@ -6,20 +6,16 @@ import { useAuth } from "@/contexts/auth-context"
 
 interface Shift {
   id: string
-  startTime: string
-  endTime: string
-  role: string
+  gameDate: string
+  gameTime: string
+  clientName: string
+  playersCount: number
+  totalAmount: string
   status: string
-  notes?: string
-  deal?: {
-    id: string
-    title: string
-    clientName: string
-  }
-  franchisee: {
-    id: string
-    name: string
-  }
+  gameDuration: number
+  franchiseeName: string
+  leadClientName?: string
+  gameNotes?: string
 }
 
 export function DashboardEmployee() {
@@ -28,13 +24,15 @@ export function DashboardEmployee() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadShifts()
-  }, [])
+    if (user) {
+      loadShifts()
+    }
+  }, [user])
 
   const loadShifts = async () => {
     try {
       console.log("[v0] Loading shifts for employee")
-      const response = await fetch("/api/shifts")
+      const response = await fetch(`/api/shifts?userId=${user?.id}`)
 
       if (!response.ok) {
         console.error("[v0] Failed to load shifts:", response.status)
@@ -44,7 +42,7 @@ export function DashboardEmployee() {
 
       const data = await response.json()
       console.log("[v0] Shifts loaded:", data)
-      setShifts(data)
+      setShifts(data.data || data)
     } catch (error) {
       console.error("[v0] Error loading shifts:", error)
       setShifts([])
@@ -62,14 +60,26 @@ export function DashboardEmployee() {
   }
 
   const now = new Date()
-  const upcomingShifts = shifts.filter((s) => new Date(s.startTime) > now && s.status === "scheduled")
-  const completedShifts = shifts.filter((s) => s.status === "completed")
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const upcomingShifts = shifts.filter((s) => {
+    const gameDate = new Date(s.gameDate)
+    return gameDate >= today && s.status === "scheduled"
+  })
+
+  const completedShifts = shifts.filter((s) => {
+    const gameDate = new Date(s.gameDate)
+    return gameDate < today && s.status === "scheduled"
+  })
+
   const totalHours = shifts
-    .filter((s) => s.status === "completed" && new Date(s.startTime).getMonth() === now.getMonth())
+    .filter((s) => {
+      const gameDate = new Date(s.gameDate)
+      return gameDate.getMonth() === now.getMonth() && gameDate.getFullYear() === now.getFullYear()
+    })
     .reduce((acc, shift) => {
-      const start = new Date(shift.startTime)
-      const end = new Date(shift.endTime)
-      return acc + (end.getTime() - start.getTime()) / (1000 * 60 * 60)
+      return acc + (shift.gameDuration || 3)
     }, 0)
 
   const roleLabels: Record<string, string> = {
@@ -77,10 +87,6 @@ export function DashboardEmployee() {
     host: "Ведущий",
     dj: "DJ",
     staff: "Персонал",
-  }
-
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
   }
 
   return (
@@ -132,41 +138,36 @@ export function DashboardEmployee() {
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-foreground">Предстоящие смены</h3>
           {upcomingShifts.map((shift) => {
-            const startDate = new Date(shift.startTime)
-            const endDate = new Date(shift.endTime)
+            const gameDate = new Date(shift.gameDate)
 
             return (
               <div key={shift.id} className="rounded-lg bg-card border border-border p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h4 className="font-semibold text-foreground mb-1">
-                      {shift.deal ? shift.deal.title : "Рабочая смена"}
-                    </h4>
+                    <h4 className="font-semibold text-foreground mb-1">{shift.clientName || "Рабочая смена"}</h4>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MapPin size={14} />
-                      <span>{shift.franchisee.name}</span>
+                      <span>{shift.franchiseeName || "Не указано"}</span>
                     </div>
-                    {shift.deal && (
-                      <p className="text-sm text-muted-foreground mt-1">Клиент: {shift.deal.clientName}</p>
-                    )}
+                    <p className="text-sm text-muted-foreground mt-1">Игроков: {shift.playersCount || 0}</p>
                   </div>
                   <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-500">
-                    {roleLabels[shift.role] || shift.role}
+                    {roleLabels[user?.role || ""] || "Персонал"}
                   </span>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <Calendar size={14} />
-                    <span>{startDate.toLocaleDateString("ru-RU")}</span>
+                    <span>{gameDate.toLocaleDateString("ru-RU")}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock size={14} />
                     <span>
-                      {formatTime(startDate)} - {formatTime(endDate)}
+                      {shift.gameTime} ({shift.gameDuration || 3}ч)
                     </span>
                   </div>
                 </div>
-                {shift.notes && <p className="mt-3 text-sm text-muted-foreground italic">{shift.notes}</p>}
+                {shift.gameNotes && <p className="mt-3 text-sm text-muted-foreground italic">{shift.gameNotes}</p>}
               </div>
             )
           })}
@@ -177,19 +178,16 @@ export function DashboardEmployee() {
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-foreground">Выполненные смены</h3>
           {completedShifts.slice(0, 5).map((shift) => {
-            const startDate = new Date(shift.startTime)
-            const endDate = new Date(shift.endTime)
+            const gameDate = new Date(shift.gameDate)
 
             return (
               <div key={shift.id} className="rounded-lg bg-card border border-border p-6 opacity-60">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h4 className="font-semibold text-foreground mb-1">
-                      {shift.deal ? shift.deal.title : "Рабочая смена"}
-                    </h4>
+                    <h4 className="font-semibold text-foreground mb-1">{shift.clientName || "Рабочая смена"}</h4>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MapPin size={14} />
-                      <span>{shift.franchisee.name}</span>
+                      <span>{shift.franchiseeName || "Не указано"}</span>
                     </div>
                   </div>
                   <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-500">
@@ -199,12 +197,12 @@ export function DashboardEmployee() {
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <Calendar size={14} />
-                    <span>{startDate.toLocaleDateString("ru-RU")}</span>
+                    <span>{gameDate.toLocaleDateString("ru-RU")}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock size={14} />
                     <span>
-                      {formatTime(startDate)} - {formatTime(endDate)}
+                      {shift.gameTime} ({shift.gameDuration || 3}ч)
                     </span>
                   </div>
                 </div>

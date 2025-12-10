@@ -212,6 +212,8 @@ export function GameScheduleGrid() {
   const handleDrop = async (item: ScheduleItem) => {
     if (!draggedPerson) return
 
+    console.log("[v0] Dropping staff:", draggedPerson.name, "on game:", item.clientName)
+
     if (item.staff?.some((s) => s.personnelId === draggedPerson.id)) {
       alert("Этот сотрудник уже назначен на эту игру")
       setDraggedPerson(null)
@@ -227,6 +229,7 @@ export function GameScheduleGrid() {
     }
 
     try {
+      console.log("[v0] Assigning staff to game:", item.id)
       const res = await fetch(`/api/game-schedule/${item.id}/staff`, {
         method: "POST",
         headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
@@ -239,11 +242,14 @@ export function GameScheduleGrid() {
       })
 
       if (res.ok) {
+        console.log("[v0] Staff assigned successfully")
         fetchSchedule()
         if (selectedItem?.id === item.id) {
           const updated = await res.json()
           setSelectedItem(updated.data || updated)
         }
+      } else {
+        console.error("[v0] Failed to assign staff, status:", res.status)
       }
     } catch (e) {
       console.error("[v0] Error assigning staff:", e)
@@ -478,9 +484,19 @@ export function GameScheduleGrid() {
                           <div
                             key={item.id}
                             onClick={() => openStaffModal(item)}
+                            onDragOver={(e) => {
+                              e.preventDefault() // Required to allow drop
+                              e.stopPropagation()
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleDrop(item)
+                            }}
                             className={cn(
                               "absolute inset-0 p-2 rounded cursor-pointer transition-all hover:shadow-md",
                               "overflow-hidden",
+                              draggedPerson && "ring-2 ring-primary ring-offset-2", // Highlight when dragging
                             )}
                             style={{
                               height: `calc(${rowSpan * 100}% + ${(rowSpan - 1) * 4}px)`,

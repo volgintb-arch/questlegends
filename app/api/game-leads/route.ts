@@ -70,9 +70,17 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: leads })
-  } catch (error) {
+  } catch (error: any) {
     console.error("[v0] Error fetching game leads:", error)
-    return NextResponse.json({ error: "Failed to fetch leads", details: String(error) }, { status: 500 })
+    const errorMessage = error?.message || String(error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to fetch leads",
+        message: errorMessage,
+      },
+      { status: 500 },
+    )
   }
 }
 

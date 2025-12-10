@@ -356,6 +356,8 @@ export function GameCardFranchisee({
   const handleSaveField = async (field: string, value: any) => {
     setIsSaving(true)
     try {
+      console.log(`[v0] GameCard: Saving field ${field} = ${value} for lead ${game.id}`)
+
       const res = await fetch(`/api/game-leads/${game.id}`, {
         method: "PATCH",
         headers: {
@@ -367,6 +369,8 @@ export function GameCardFranchisee({
 
       if (res.ok) {
         const data = await res.json()
+        console.log(`[v0] GameCard: Field ${field} saved successfully`)
+
         if (data.success && data.data) {
           setGameData((prev) => ({
             ...prev,
@@ -375,6 +379,8 @@ export function GameCardFranchisee({
             ...(data.data.totalAmount !== undefined && { totalAmount: data.data.totalAmount }),
           }))
         }
+
+        onUpdate()
       }
     } catch (error) {
       console.error("[v0] Error saving field:", error)

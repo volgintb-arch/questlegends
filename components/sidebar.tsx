@@ -137,7 +137,6 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
 
     const personnelItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
-      { id: "schedule", label: "Мой График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",

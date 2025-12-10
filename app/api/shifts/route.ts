@@ -1,112 +1,115 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from "@/lib/utils/response"
+import { type NextRequest, NextResponse } from "next/server"
+import { neon } from "@neondatabase/serverless"
 
-export async function GET(request: Request) {
+const sql = neon(process.env.DATABASE_URL!)
+
+export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    console.log("[v0] Fetching shifts for user:", session.user.id, "role:", session.user.role)
-
-    const { searchParams } = new URL(request.url)
+    const { searchParams } = new URL(req.url)
     const franchiseeId = searchParams.get("franchiseeId")
     const personnelId = searchParams.get("personnelId")
+    const userId = searchParams.get("userId")
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
 
-    const where: any = {}
+    console.log("[v0] Shifts API GET:", { userId, franchiseeId, personnelId, startDate, endDate })
 
-    // Employee users (animator, host, dj) see only their own shifts
-    if (session.user.role === "employee") {
-      // Find personnel record linked to this user
-      const personnel = await prisma.personnel.findFirst({
-        where: { userId: session.user.id },
-      })
+    if (userId) {
+      // Find personnel record for this user
+      const personnelRecords = await sql`
+        SELECT id FROM "Personnel" WHERE "userId" = ${userId}
+      `
 
-      if (!personnel) {
-        console.log("[v0] No personnel record found for user")
-        return NextResponse.json([])
+      if (personnelRecords.length === 0) {
+        console.log("[v0] No personnel record found for userId:", userId)
+        return NextResponse.json({ success: true, data: [] })
       }
 
-      where.personnelId = personnel.id
-    } else if (session.user.role === "franchisee" || session.user.role === "admin") {
-      // Franchisee and admin see all shifts in their location
-      where.franchiseeId = session.user.franchiseeId
-    } else if (franchiseeId && session.user.role === "uk") {
-      // UK can filter by franchisee
-      where.franchiseeId = franchiseeId
+      const personnelIdFromUser = personnelRecords[0].id
+
+      const shifts = await sql`
+        SELECT 
+          gs.id,
+          gs."leadId",
+          gs."franchiseeId",
+          gs."gameDate",
+          gs."gameTime",
+          gs."clientName",
+          gs."playersCount",
+          gs."totalAmount",
+          gs."status",
+          gs."createdAt",
+          COALESCE(gl."gameDuration", 3) as "gameDuration",
+          gl."clientName" as "leadClientName",
+          gl."notes" as "gameNotes",
+          f.name as "franchiseeName"
+        FROM "GameSchedule" gs
+        LEFT JOIN "GameLead" gl ON gs."leadId" = gl.id
+        LEFT JOIN "Franchisee" f ON gs."franchiseeId" = f.id
+        INNER JOIN "GameScheduleStaff" gss ON gs.id = gss."scheduleId"
+        WHERE gss."personnelId" = ${personnelIdFromUser}
+        ORDER BY gs."gameDate", gs."gameTime"
+      `
+
+      console.log("[v0] Found shifts for employee:", shifts.length)
+
+      return NextResponse.json({ success: true, data: shifts })
     }
 
+    if (!franchiseeId) {
+      return NextResponse.json({ error: "franchiseeId or userId is required" }, { status: 400 })
+    }
+
+    let query = `
+      SELECT 
+        gs.id,
+        gs."leadId",
+        gs."franchiseeId",
+        gs."gameDate",
+        gs."gameTime",
+        gs."clientName",
+        gs."playersCount",
+        gs."totalAmount",
+        gs."status",
+        gs."createdAt",
+        COALESCE(gl."gameDuration", 3) as "gameDuration",
+        gl."clientName" as "leadClientName",
+        gl."notes" as "gameNotes"
+      FROM "GameSchedule" gs
+      LEFT JOIN "GameLead" gl ON gs."leadId" = gl.id
+      LEFT JOIN "Franchisee" f ON gs."franchiseeId" = f.id
+      LEFT JOIN "GameScheduleStaff" gss ON gs.id = gss."scheduleId"
+      WHERE gs."franchiseeId" = $1
+    `
+
+    const params: any[] = [franchiseeId]
+    let paramCount = 1
+
     if (personnelId) {
-      where.personnelId = personnelId
+      paramCount++
+      query += ` AND gss."personnelId" = $${paramCount}`
+      params.push(personnelId)
     }
 
     if (startDate && endDate) {
-      where.startTime = {
-        gte: new Date(startDate),
-        lte: new Date(endDate),
-      }
+      paramCount++
+      query += ` AND gs."gameDate" >= $${paramCount}::date`
+      params.push(startDate)
+
+      paramCount++
+      query += ` AND gs."gameDate" <= $${paramCount}::date`
+      params.push(endDate)
     }
 
-    console.log("[v0] Querying shifts with filter:", where)
+    query += ` ORDER BY gs."gameDate", gs."gameTime"`
 
-    const shifts = await prisma.shift.findMany({
-      where,
-      include: {
-        personnel: { select: { id: true, name: true, role: true } },
-        franchisee: { select: { id: true, name: true } },
-        deal: {
-          select: {
-            id: true,
-            title: true,
-            clientName: true,
-          },
-        },
-      },
-      orderBy: { startTime: "asc" },
-    })
+    const shifts = await sql(query, params)
 
     console.log("[v0] Found shifts:", shifts.length)
 
-    return NextResponse.json(shifts)
+    return NextResponse.json({ success: true, data: shifts })
   } catch (error) {
     console.error("[v0] SHIFTS_GET error:", error)
     return NextResponse.json({ error: "Failed to fetch shifts" }, { status: 500 })
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return unauthorizedResponse()
-    }
-
-    // Only franchisee and admin can create shifts
-    if (!["UK", "FRANCHISEE", "ADMIN"].includes(session.user.role)) {
-      return forbiddenResponse()
-    }
-
-    const body = await request.json()
-
-    const shift = await prisma.shift.create({
-      data: {
-        ...body,
-        franchiseeId: session.user.franchiseeId || body.franchiseeId,
-      },
-      include: {
-        personnel: { select: { id: true, name: true, role: true } },
-      },
-    })
-
-    return successResponse(shift, 201)
-  } catch (error) {
-    console.error("[SHIFTS_POST]", error)
-    return errorResponse("Failed to create shift", 500)
   }
 }

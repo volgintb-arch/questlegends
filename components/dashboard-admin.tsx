@@ -3,12 +3,14 @@
 import { DollarSign, TrendingDown, Users, AlertTriangle, Plus } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useState, useEffect } from "react"
-import { DealCreateModal } from "./deal-create-modal"
+import { TransactionFormModal } from "./transaction-form-modal"
+import { GameCreateModal } from "./game-create-modal"
 
 export function DashboardAdmin() {
-  const { user } = useAuth()
-  const [showExpenseForm, setShowExpenseForm] = useState(false)
-  const [showDealModal, setShowDealModal] = useState(false)
+  const { user, getAuthHeaders } = useAuth()
+  const [showTransactionForm, setShowTransactionForm] = useState(false)
+  const [showGameModal, setShowGameModal] = useState(false)
+  const [pipeline, setPipeline] = useState<any>(null)
 
   const [metrics, setMetrics] = useState({
     revenue: 0,
@@ -21,36 +23,50 @@ export function DashboardAdmin() {
   useEffect(() => {
     loadMetrics()
     loadGamesRequiringAssignment()
+    loadPipeline()
   }, [user?.franchiseeId])
 
   const loadMetrics = async () => {
     if (!user?.franchiseeId) return
 
     try {
-      const [transactionsRes, expensesRes] = await Promise.all([
-        fetch(`/api/transactions?franchiseeId=${user.franchiseeId}`),
-        fetch(`/api/expenses?franchiseeId=${user.franchiseeId}`),
-      ])
+      console.log("[v0] Admin dashboard: Loading metrics for franchisee:", user.franchiseeId)
+
+      const transactionsRes = await fetch(`/api/transactions?franchiseeId=${user.franchiseeId}`, {
+        headers: getAuthHeaders(),
+      })
 
       let revenue = 0
       let expenses = 0
       let payroll = 0
 
       if (transactionsRes.ok) {
-        const transactions = await transactionsRes.json()
-        revenue = transactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0)
+        const transactionsData = await transactionsRes.json()
+        const transactions = transactionsData.data || transactionsData.transactions || transactionsData || []
+
+        console.log("[v0] Admin dashboard: Loaded transactions:", transactions.length)
+
+        transactions.forEach((t: any) => {
+          const amount = Number(t.amount) || 0
+          if (t.type === "income") {
+            revenue += amount
+          } else if (t.type === "expense") {
+            // Separate payroll from general expenses
+            const isFOT =
+              t.category?.toLowerCase().includes("fot") ||
+              t.category?.toLowerCase().includes("зарплат") ||
+              ["fot_animators", "fot_hosts", "fot_djs", "fot_admin"].includes(t.category)
+
+            if (isFOT) {
+              payroll += amount
+            } else {
+              expenses += amount
+            }
+          }
+        })
       }
 
-      if (expensesRes.ok) {
-        const expensesData = await expensesRes.json()
-        expenses = expensesData
-          .filter((e: any) => e.category !== "Зарплата")
-          .reduce((sum: number, e: any) => sum + (e.amount || 0), 0)
-        payroll = expensesData
-          .filter((e: any) => e.category === "Зарплата")
-          .reduce((sum: number, e: any) => sum + (e.amount || 0), 0)
-      }
-
+      console.log("[v0] Admin dashboard: Metrics calculated -", { revenue, expenses, payroll })
       setMetrics({ revenue, expenses, payroll })
     } catch (error) {
       console.error("[v0] Error loading metrics:", error)
@@ -63,10 +79,27 @@ export function DashboardAdmin() {
     if (!user?.franchiseeId) return
 
     try {
-      const response = await fetch(`/api/deals?franchiseeId=${user.franchiseeId}&stage=SCHEDULED`)
+      const response = await fetch(`/api/game-schedule?franchiseeId=${user.franchiseeId}`, {
+        headers: getAuthHeaders(),
+      })
+
       if (response.ok) {
-        const deals = await response.json()
-        const needsAssignment = deals.filter((deal: any) => !deal.assignments || deal.assignments.length === 0)
+        const data = await response.json()
+        const schedules = data.data || data || []
+
+        // Filter games that need staff assignment
+        const needsAssignment = schedules.filter((game: any) => {
+          const animatorsNeeded = game.animatorsNeeded || game.animatorsCount || 0
+          const hostsNeeded = game.hostsNeeded || game.hostsCount || 0
+          const djsNeeded = game.djsNeeded || game.djsCount || 0
+          const staffAssigned = (game.staff || game.assignedStaff || []).length
+          const totalNeeded = animatorsNeeded + hostsNeeded + djsNeeded
+
+          console.log("[v0] Game check:", game.clientName, "needs:", totalNeeded, "assigned:", staffAssigned)
+          return totalNeeded > staffAssigned
+        })
+
+        console.log("[v0] Games requiring assignment:", needsAssignment.length)
         setGamesRequiringAssignment(needsAssignment)
       }
     } catch (error) {
@@ -74,9 +107,41 @@ export function DashboardAdmin() {
     }
   }
 
-  const handleCreateDeal = async (deal: any) => {
-    console.log("[v0] Admin created new lead:", deal)
+  const loadPipeline = async () => {
+    if (!user?.franchiseeId) return
+
+    try {
+      const response = await fetch(`/api/game-pipelines?franchiseeId=${user.franchiseeId}`, {
+        headers: getAuthHeaders(),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const pipelines = data.data || data || []
+        if (pipelines.length > 0) {
+          setPipeline(pipelines[0])
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error loading pipeline:", error)
+    }
+  }
+
+  const handleTransactionCreated = async () => {
+    console.log("[v0] Admin: Transaction created, reloading metrics")
+    setShowTransactionForm(false)
+    await loadMetrics()
+  }
+
+  const handleGameCreated = async (game: any) => {
+    console.log("[v0] Admin created new game lead:", game)
+    setShowGameModal(false)
     await loadGamesRequiringAssignment()
+
+    // Navigate to CRM card detail
+    if (game.id) {
+      window.location.href = `/crm?cardId=${game.id}`
+    }
   }
 
   if (loading) {
@@ -92,7 +157,7 @@ export function DashboardAdmin() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground mb-2">Оперативный Кабинет</h1>
-        <p className="text-muted-foreground">Администратор: {user.franchiseeName}</p>
+        <p className="text-muted-foreground">Администратор: {user?.name}</p>
       </div>
 
       {/* Key Metrics */}
@@ -106,7 +171,7 @@ export function DashboardAdmin() {
             </div>
             <DollarSign size={24} className="text-primary" />
           </div>
-          <p className="text-xs text-muted-foreground">За текущий месяц</p>
+          <p className="text-xs text-muted-foreground">За текущий период</p>
         </div>
 
         {/* Expenses */}
@@ -118,7 +183,7 @@ export function DashboardAdmin() {
             </div>
             <TrendingDown size={24} className="text-orange-500" />
           </div>
-          <p className="text-xs text-muted-foreground">За текущий месяц</p>
+          <p className="text-xs text-muted-foreground">За текущий период</p>
         </div>
 
         {/* Payroll */}
@@ -130,90 +195,45 @@ export function DashboardAdmin() {
             </div>
             <Users size={24} className="text-orange-500" />
           </div>
-          <p className="text-xs text-muted-foreground">За текущий месяц</p>
+          <p className="text-xs text-muted-foreground">За текущий период</p>
         </div>
       </div>
 
       {/* Operational Bridge - CTA Buttons */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <button
-          onClick={() => setShowExpenseForm(true)}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg p-6 flex items-center justify-center gap-3 text-lg font-semibold transition-colors"
+          onClick={() => setShowTransactionForm(true)}
+          className="bg-red-600 hover:bg-red-700 text-white rounded-lg p-6 flex items-center justify-center gap-3 text-lg font-semibold transition-colors"
         >
           <Plus size={24} />
-          Ввести Расход
+          Добавить Транзакцию
         </button>
         <button
-          onClick={() => setShowDealModal(true)}
-          className="bg-success hover:bg-success/90 text-white rounded-lg p-6 flex items-center justify-center gap-3 text-lg font-semibold transition-colors"
+          onClick={() => setShowGameModal(true)}
+          className="bg-green-600 hover:bg-green-700 text-white rounded-lg p-6 flex items-center justify-center gap-3 text-lg font-semibold transition-colors"
         >
           <Plus size={24} />
-          Добавить лид
+          Добавить Лид
         </button>
       </div>
 
-      {/* Expense Form Modal */}
-      {showExpenseForm && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <h4 className="text-lg font-semibold text-foreground mb-4">Новый расход</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Дата</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Категория</label>
-                <select className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground">
-                  <option>Аренда</option>
-                  <option>Реквизит</option>
-                  <option>Маркетинг</option>
-                  <option>Коммунальные услуги</option>
-                  <option>Прочее</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Сумма (₽)</label>
-                <input
-                  type="number"
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Описание</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground"
-                  placeholder="Детали расхода"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-4">
-              <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
-                Сохранить
-              </button>
-              <button
-                onClick={() => setShowExpenseForm(false)}
-                className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors"
-              >
-                Отмена
-              </button>
-            </div>
-          </div>
-        </div>
+      {showTransactionForm && (
+        <TransactionFormModal
+          onClose={() => setShowTransactionForm(false)}
+          onSubmit={handleTransactionCreated}
+          defaultType="expense"
+        />
       )}
 
-      {/* Deal Create Modal */}
-      <DealCreateModal
-        isOpen={showDealModal}
-        onClose={() => setShowDealModal(false)}
-        onCreate={handleCreateDeal}
-        role="admin"
-      />
+      {showGameModal && pipeline && (
+        <GameCreateModal
+          isOpen={showGameModal}
+          onClose={() => setShowGameModal(false)}
+          onCreated={handleGameCreated}
+          pipeline={pipeline}
+          franchiseeId={user?.franchiseeId}
+        />
+      )}
 
       {/* Requires Assignment Widget */}
       <div className="bg-card border border-destructive/30 rounded-lg p-6">
@@ -230,10 +250,11 @@ export function DashboardAdmin() {
           <div className="text-center py-8 text-muted-foreground">Все игры укомплектованы персоналом</div>
         ) : (
           <div className="space-y-2">
-            {gamesRequiringAssignment.map((game) => (
-              <button
+            {gamesRequiringAssignment.slice(0, 5).map((game) => (
+              <a
                 key={game.id}
-                className="w-full bg-muted hover:bg-muted/80 border border-destructive/20 rounded-lg p-4 text-left transition-colors"
+                href="/personnel"
+                className="block w-full bg-muted hover:bg-muted/80 border border-destructive/20 rounded-lg p-4 text-left transition-colors"
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -253,7 +274,7 @@ export function DashboardAdmin() {
                     Не назначен персонал
                   </span>
                 </div>
-              </button>
+              </a>
             ))}
           </div>
         )}

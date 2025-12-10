@@ -139,7 +139,10 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (currentUser.role !== "super_admin" && currentUser.role !== "uk") {
+    const canManagePermissions =
+      currentUser.role === "super_admin" || currentUser.role === "uk" || currentUser.role === "franchisee"
+
+    if (!canManagePermissions) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
@@ -151,6 +154,16 @@ export async function PUT(request: Request) {
     }
 
     const sql = neon(process.env.DATABASE_URL!)
+
+    if (currentUser.role === "franchisee") {
+      const targetUser = await sql`
+        SELECT "franchiseeId" FROM "User" WHERE id = ${userId}
+      `
+
+      if (targetUser.length === 0 || targetUser[0].franchiseeId !== currentUser.franchiseeId) {
+        return NextResponse.json({ error: "You can only manage users from your own location" }, { status: 403 })
+      }
+    }
 
     if (permissions) {
       const existing = await sql`SELECT id FROM "UserPermission" WHERE "userId" = ${userId}`
@@ -196,7 +209,7 @@ export async function PUT(request: Request) {
       }
     }
 
-    if (assignedFranchisees !== undefined) {
+    if (assignedFranchisees !== undefined && (currentUser.role === "super_admin" || currentUser.role === "uk")) {
       await sql`DELETE FROM "UserFranchiseeAssignment" WHERE "userId" = ${userId}`
 
       if (assignedFranchisees.length > 0) {
@@ -212,6 +225,13 @@ export async function PUT(request: Request) {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("[v0] Error updating permissions:", error)
-    return NextResponse.json({ error: "Failed to update permissions" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to update permissions",
+        message: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    )
   }
 }

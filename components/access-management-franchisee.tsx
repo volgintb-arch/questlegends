@@ -62,19 +62,13 @@ export function AccessManagementFranchisee() {
             {
               id: "crm",
               name: "CRM",
-              description: "Управление сделками и клиентами",
+              description: "Управление заявками на игры",
               enabled: u.userPermissions?.canViewCrm ?? true,
-            },
-            {
-              id: "expenses",
-              name: "ERP",
-              description: "Управление расходами локации",
-              enabled: u.userPermissions?.canViewErp ?? true,
             },
             {
               id: "schedules",
               name: "График",
-              description: "Управление графиком сотрудников",
+              description: "Управление графиком персонала",
               enabled: u.userPermissions?.canViewDashboard ?? true,
             },
             {
@@ -86,7 +80,7 @@ export function AccessManagementFranchisee() {
             {
               id: "users",
               name: "Пользователи",
-              description: "Управление пользователями-персоналом",
+              description: "Создание персонала (аниматоры, ведущие, DJ)",
               enabled: u.userPermissions?.canViewUsers ?? false,
             },
           ],
@@ -112,7 +106,6 @@ export function AccessManagementFranchisee() {
 
     const permissionMap = {
       crm: "canViewCrm",
-      expenses: "canViewErp",
       schedules: "canViewDashboard",
       users: "canViewUsers",
     }
@@ -284,9 +277,9 @@ export function AccessManagementFranchisee() {
         <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
           <li>Управление правами доступа доступно только для администраторов вашей локации</li>
           <li>База Знаний всегда доступна для всех администраторов и не может быть отключена</li>
-          <li>Для создания новых пользователей перейдите во вкладку "Пользователи"</li>
+          <li>Администраторы имеют доступ только к: CRM, График, База знаний и Пользователи</li>
+          <li>Администраторы могут создавать только персонал: аниматоры, ведущие, DJ</li>
           <li>Отзыв доступа происходит мгновенно и может быть восстановлен в любой момент</li>
-          <li>Вы можете выдавать следующие модули: CRM, ERP, График, База знаний, Пользователи</li>
         </ul>
       </div>
     </div>
