@@ -133,11 +133,11 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewKnowledgeBase" as const,
       },
       { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
-      { id: "access", label: "Доступ", icon: Shield, path: "/access", module: "canViewAccess" as const },
     ]
 
     const personnelItems = [
-      { id: "schedule", label: "Мои Смены", icon: Calendar, path: "/shifts", module: "canViewDashboard" as const },
+      { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
+      { id: "schedule", label: "Мой График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",

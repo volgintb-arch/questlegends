@@ -87,6 +87,7 @@ export async function POST(req: NextRequest) {
       clientEmail,
       gameDate,
       gameTime,
+      gameDuration = 3, // Added gameDuration field with default 3 hours
       playersCount = 1,
       pricePerPerson = 1500,
       prepayment = 0,
@@ -112,14 +113,14 @@ export async function POST(req: NextRequest) {
 
     const [lead] = await sql`
       INSERT INTO "GameLead" (
-        "clientName", "clientPhone", "clientEmail", "gameDate", "gameTime",
+        "clientName", "clientPhone", "clientEmail", "gameDate", "gameTime", "gameDuration",
         "playersCount", "pricePerPerson", "totalAmount", "prepayment",
         "notes", "source", "responsibleId", "pipelineId", "stageId", "franchiseeId",
         "animatorsCount", "animatorRate", "hostsCount", "hostRate", "djsCount", "djRate"
       )
       VALUES (
         ${clientName}, ${clientPhone || null}, ${clientEmail || null}, 
-        ${gameDate || null}, ${gameTime || null},
+        ${gameDate || null}, ${gameTime || null}, ${gameDuration},
         ${playersCount}, ${pricePerPerson}, ${totalAmount}, ${prepayment},
         ${notes || null}, ${source || null}, ${responsibleId || null}, 
         ${pipelineId}, ${stageId}, ${franchiseeId},

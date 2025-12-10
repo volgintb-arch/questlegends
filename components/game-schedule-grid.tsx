@@ -24,6 +24,7 @@ interface ScheduleItem {
   leadId: string
   gameDate: string
   gameTime: string
+  gameDuration: number // Added game duration in hours
   clientName: string
   playersCount: number
   totalAmount: number
@@ -165,7 +166,15 @@ export function GameScheduleGrid() {
     return scheduleItems.filter((item) => {
       const itemDateStr = normalizeDate(item.gameDate)
       const itemTimeSlot = getTimeSlotHour(item.gameTime)
-      const matches = itemDateStr === dateStr && itemTimeSlot === time
+
+      const duration = item.gameDuration || 3 // Default 3 hours
+      const itemHour = Number.parseInt(itemTimeSlot.split(":")[0], 10)
+      const slotHour = Number.parseInt(time.split(":")[0], 10)
+
+      // Game spans from itemHour to itemHour + duration
+      const isInTimeRange = slotHour >= itemHour && slotHour < itemHour + duration
+      const matches = itemDateStr === dateStr && isInTimeRange
+
       if (matches) {
         console.log("[v0] Found item for slot:", dateStr, time, item.clientName)
       }
@@ -319,6 +328,19 @@ export function GameScheduleGrid() {
     setCurrentWeekStart(newDate)
   }
 
+  const isFirstSlot = (item: ScheduleItem, time: string) => {
+    const itemTimeSlot = getTimeSlotHour(item.gameTime)
+    return itemTimeSlot === time
+  }
+
+  const getRowSpan = (item: ScheduleItem) => {
+    return item.gameDuration || 3 // Default 3 hours
+  }
+
+  const getStaffCount = (item: ScheduleItem, role: string) => {
+    return item.staff?.filter((s) => s.role === role).length || 0
+  }
+
   useEffect(() => {
     if (user?.franchiseeId) {
       console.log("[v0] Schedule grid: Starting data fetch for franchisee:", user.franchiseeId)
@@ -439,77 +461,75 @@ export function GameScheduleGrid() {
             {/* Time slots */}
             {timeSlots.map((time) => (
               <div key={time} className="grid grid-cols-8 gap-1 mb-1">
-                <div className="p-2 text-center text-sm text-muted-foreground">{time}</div>
-                {weekDays.map((day, dayIdx) => {
+                <div className="bg-muted p-2 text-center text-sm font-medium rounded">{time}</div>
+
+                {weekDays.map((day, dayIndex) => {
                   const items = getItemsForSlot(day, time)
+
+                  const visibleItems = items.filter((item) => isFirstSlot(item, time))
+
                   return (
-                    <div
-                      key={dayIdx}
-                      className={cn(
-                        "min-h-[60px] p-1 border rounded bg-card",
-                        draggedPerson && "border-dashed border-primary/50",
-                      )}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => items[0] && handleDrop(items[0])}
-                    >
-                      {items.map((item) => {
-                        const complete = isStaffComplete(item)
-                        const animatorsAssigned = item.staff?.filter((s) => s.role === "animator").length || 0
-                        const hostsAssigned = item.staff?.filter((s) => s.role === "host").length || 0
-                        const djsAssigned = item.staff?.filter((s) => s.role === "dj").length || 0
+                    <div key={`${dayIndex}-${time}`} className="relative min-h-[80px] bg-card border rounded p-1">
+                      {visibleItems.map((item) => {
+                        const staffStatus = isStaffComplete(item)
+                        const rowSpan = getRowSpan(item)
 
                         return (
                           <div
                             key={item.id}
                             onClick={() => openStaffModal(item)}
                             className={cn(
-                              "p-2 rounded text-xs cursor-pointer transition-colors",
-                              complete
-                                ? "bg-green-500/20 border border-green-500/50 hover:bg-green-500/30"
-                                : "bg-red-500/20 border border-red-500/50 hover:bg-red-500/30",
+                              "absolute inset-0 p-2 rounded cursor-pointer transition-all hover:shadow-md",
+                              "overflow-hidden",
                             )}
+                            style={{
+                              height: `calc(${rowSpan * 100}% + ${(rowSpan - 1) * 4}px)`,
+                              zIndex: 10,
+                            }}
                           >
-                            <div className="font-medium truncate">{item.clientName || "Игра"}</div>
-                            <div className="text-muted-foreground">
-                              {item.gameTime} • {item.playersCount || 0} чел.
-                            </div>
-                            <div className="flex gap-1 mt-1 flex-wrap">
-                              {(item.animatorsNeeded || 0) > 0 && (
+                            <div
+                              className={cn(
+                                "h-full flex flex-col gap-1 p-2 rounded border-2",
+                                staffStatus ? "bg-green-500/10 border-green-500" : "bg-red-500/10 border-red-500",
+                              )}
+                            >
+                              <p className="text-xs font-semibold truncate">{item.clientName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {item.gameTime} ({item.gameDuration || 3}ч)
+                              </p>
+                              <p className="text-xs text-muted-foreground">{item.playersCount} чел.</p>
+                              <div className="flex gap-1 flex-wrap">
                                 <span
                                   className={cn(
-                                    "px-1 rounded text-[10px]",
-                                    animatorsAssigned >= (item.animatorsNeeded || 0)
-                                      ? "bg-green-500/30 text-green-400"
-                                      : "bg-red-500/30 text-red-400",
+                                    "text-xs px-1 py-0.5 rounded",
+                                    getStaffCount(item, "animator") >= item.animatorsNeeded
+                                      ? "bg-green-500/20 text-green-700"
+                                      : "bg-red-500/20 text-red-700",
                                   )}
                                 >
-                                  А:{animatorsAssigned}/{item.animatorsNeeded}
+                                  А:{getStaffCount(item, "animator")}/{item.animatorsNeeded}
                                 </span>
-                              )}
-                              {(item.hostsNeeded || 0) > 0 && (
                                 <span
                                   className={cn(
-                                    "px-1 rounded text-[10px]",
-                                    hostsAssigned >= (item.hostsNeeded || 0)
-                                      ? "bg-green-500/30 text-green-400"
-                                      : "bg-red-500/30 text-red-400",
+                                    "text-xs px-1 py-0.5 rounded",
+                                    getStaffCount(item, "host") >= item.hostsNeeded
+                                      ? "bg-green-500/20 text-green-700"
+                                      : "bg-red-500/20 text-red-700",
                                   )}
                                 >
-                                  В:{hostsAssigned}/{item.hostsNeeded}
+                                  В:{getStaffCount(item, "host")}/{item.hostsNeeded}
                                 </span>
-                              )}
-                              {(item.djsNeeded || 0) > 0 && (
                                 <span
                                   className={cn(
-                                    "px-1 rounded text-[10px]",
-                                    djsAssigned >= (item.djsNeeded || 0)
-                                      ? "bg-green-500/30 text-green-400"
-                                      : "bg-red-500/30 text-red-400",
+                                    "text-xs px-1 py-0.5 rounded",
+                                    getStaffCount(item, "dj") >= item.djsNeeded
+                                      ? "bg-green-500/20 text-green-700"
+                                      : "bg-red-500/20 text-red-700",
                                   )}
                                 >
-                                  DJ:{djsAssigned}/{item.djsNeeded}
+                                  DJ:{getStaffCount(item, "dj")}/{item.djsNeeded}
                                 </span>
-                              )}
+                              </div>
                             </div>
                           </div>
                         )

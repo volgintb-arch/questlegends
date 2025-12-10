@@ -21,7 +21,7 @@ interface DelegatedUser {
 }
 
 export function AccessManagementFranchisee() {
-  const { user } = useAuth()
+  const { user, getAuthHeaders } = useAuth()
   const [users, setUsers] = useState<DelegatedUser[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
@@ -35,16 +35,27 @@ export function AccessManagementFranchisee() {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/permissions?franchiseeId=${user?.franchiseeId}`)
-      if (!response.ok) throw new Error("Failed to fetch users")
-      const data = await response.json()
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      }
 
-      const formattedUsers = data.users
+      const response = await fetch(`/api/permissions?franchiseeId=${user?.franchiseeId}`, { headers })
+
+      if (!response.ok) {
+        console.error("[v0] Failed to fetch users, status:", response.status)
+        throw new Error("Failed to fetch users")
+      }
+
+      const data = await response.json()
+      console.log("[v0] Permissions API response:", data)
+
+      const formattedUsers = (data.users || [])
         .filter((u: any) => u.role === "admin" && u.franchiseeId === user?.franchiseeId)
         .map((u: any) => ({
           id: u.id,
           name: u.name,
-          email: u.telegram || u.phone,
+          email: u.telegram || u.phone || "Не указан",
           role: u.description || "Администратор",
           status: u.isActive ? "active" : "revoked",
           rights: [
@@ -52,26 +63,31 @@ export function AccessManagementFranchisee() {
               id: "crm",
               name: "CRM",
               description: "Управление сделками и клиентами",
-              enabled: u.userPermissions?.canViewDeals ?? false,
+              enabled: u.userPermissions?.canViewCrm ?? true,
             },
             {
               id: "expenses",
-              name: "Расходы",
+              name: "ERP",
               description: "Управление расходами локации",
-              enabled: u.userPermissions?.canAddExpenses ?? false,
+              enabled: u.userPermissions?.canViewErp ?? true,
             },
             {
               id: "schedules",
               name: "График",
               description: "Управление графиком сотрудников",
-              enabled: u.userPermissions?.canManageSchedule ?? false,
+              enabled: u.userPermissions?.canViewDashboard ?? true,
             },
-            { id: "kb", name: "База Знаний", description: "Доступ к документации (всегда включено)", enabled: true },
+            {
+              id: "kb",
+              name: "База Знаний",
+              description: "Доступ к документации (всегда включено)",
+              enabled: true,
+            },
             {
               id: "users",
               name: "Пользователи",
               description: "Управление пользователями-персоналом",
-              enabled: u.userPermissions?.canManageUsers ?? false,
+              enabled: u.userPermissions?.canViewUsers ?? false,
             },
           ],
         }))
@@ -79,6 +95,7 @@ export function AccessManagementFranchisee() {
       setUsers(formattedUsers)
     } catch (error) {
       console.error("[v0] Error fetching users:", error)
+      setUsers([])
     } finally {
       setLoading(false)
     }
@@ -87,23 +104,28 @@ export function AccessManagementFranchisee() {
   const handleToggleRight = async (userId: string, rightId: string) => {
     if (rightId === "kb") return
 
-    const user = users.find((u) => u.id === userId)
-    if (!user) return
+    const targetUser = users.find((u) => u.id === userId)
+    if (!targetUser) return
 
-    const right = user.rights.find((r) => r.id === rightId)
+    const right = targetUser.rights.find((r) => r.id === rightId)
     if (!right) return
 
     const permissionMap = {
-      crm: "canViewDeals",
-      expenses: "canAddExpenses",
-      schedules: "canManageSchedule",
-      users: "canManageUsers",
+      crm: "canViewCrm",
+      expenses: "canViewErp",
+      schedules: "canViewDashboard",
+      users: "canViewUsers",
     }
 
     try {
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      }
+
       const response = await fetch("/api/permissions", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           userId,
           permissions: {
@@ -123,9 +145,14 @@ export function AccessManagementFranchisee() {
 
   const handleRevokeAccess = async (userId: string) => {
     try {
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      }
+
       const response = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ isActive: false }),
       })
 
@@ -259,7 +286,7 @@ export function AccessManagementFranchisee() {
           <li>База Знаний всегда доступна для всех администраторов и не может быть отключена</li>
           <li>Для создания новых пользователей перейдите во вкладку "Пользователи"</li>
           <li>Отзыв доступа происходит мгновенно и может быть восстановлен в любой момент</li>
-          <li>Вы можете выдавать следующие модули: CRM, Расходы, График, База знаний, Пользователи</li>
+          <li>Вы можете выдавать следующие модули: CRM, ERP, График, База знаний, Пользователи</li>
         </ul>
       </div>
     </div>

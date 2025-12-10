@@ -137,6 +137,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    if (targetUser.franchiseeId) {
+      await sql`DELETE FROM "Personnel" WHERE "franchiseeId" = ${targetUser.franchiseeId} AND name = ${targetUser.name}`
+    }
+
     await sql`DELETE FROM "User" WHERE id = ${id}`
     return NextResponse.json({ success: true })
   } catch (error) {

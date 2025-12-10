@@ -21,6 +21,7 @@ import { DashboardEmployee } from "@/components/dashboard-employee"
 import { AccessManagementUK } from "@/components/access-management-uk"
 import { AccessManagementFranchisee } from "@/components/access-management-franchisee"
 import { AccessManagementAdmin } from "@/components/access-management-admin"
+import { DashboardPersonnel } from "@/components/dashboard-personnel"
 
 type View =
   | "dashboard"
@@ -63,6 +64,7 @@ export default function Dashboard() {
         if (user.role === "uk" || user.role === "uk_employee") return <DashboardUK />
         if (user.role === "franchisee") return <DashboardFranchisee />
         if (user.role === "admin") return <DashboardAdmin />
+        if (user.role === "animator" || user.role === "host" || user.role === "dj") return <DashboardPersonnel />
         if (user.role === "employee") return <DashboardEmployee />
         return <DashboardUK />
       case "deals":

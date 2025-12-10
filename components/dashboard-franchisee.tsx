@@ -88,6 +88,7 @@ export function DashboardFranchisee() {
     }
 
     const headers = getAuthHeaders()
+    console.log("[v0] Dashboard: Fetching data for franchisee:", user.franchiseeId)
 
     try {
       const results = await Promise.allSettled([
@@ -95,7 +96,7 @@ export function DashboardFranchisee() {
         fetch(`/api/franchisees/${user.franchiseeId}`, { headers }),
         fetch(`/api/game-leads?franchiseeId=${user.franchiseeId}`, { headers }),
         fetch(`/api/kpi?franchiseeId=${user.franchiseeId}`, { headers }),
-        fetch(`/api/notifications?unreadOnly=true`, { headers }),
+        fetch(`/api/notifications`, { headers }), // Removed unreadOnly parameter to get all notifications
       ])
 
       const transactionsRes = results[0]
@@ -117,11 +118,18 @@ export function DashboardFranchisee() {
 
       const kpiData = results[3].status === "fulfilled" && results[3].value.ok ? await results[3].value.json() : null
 
-      const notificationsData =
-        results[4].status === "fulfilled" && results[4].value.ok ? await results[4].value.json() : null
+      const notificationsRes = results[4]
+      let notificationsList: Notification[] = []
+      if (notificationsRes.status === "fulfilled" && notificationsRes.value.ok) {
+        const notificationsData = await notificationsRes.value.json()
+        // API returns { success: true, data: { notifications: [...] } }
+        notificationsList = notificationsData?.data?.notifications || []
+        console.log("[v0] Dashboard: Notifications fetched:", notificationsList.length)
+      } else {
+        console.error("[v0] Dashboard: Failed to fetch notifications")
+      }
 
       const royaltyPercent = franchiseeData?.data?.royaltyPercent ?? franchiseeData?.royaltyPercent ?? 7
-      const notificationsList = notificationsData?.data || notificationsData?.notifications || []
 
       // Calculate stats from transactions
       const revenue = transactions
@@ -161,6 +169,13 @@ export function DashboardFranchisee() {
         setKpiProgress(currentKpi.targetValue > 0 ? Math.min(100, (revenue / currentKpi.targetValue) * 100) : 0)
       }
 
+      const sortedNotifications = Array.isArray(notificationsList)
+        ? notificationsList.sort((a, b) => {
+            if (a.isRead !== b.isRead) return a.isRead ? 1 : -1
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          })
+        : []
+
       setStats({
         totalRevenue: revenue,
         totalGames: leads.length,
@@ -170,11 +185,11 @@ export function DashboardFranchisee() {
         royaltyPercent,
         royaltyAmount,
         profit,
-        unreadNotifications: notificationsList.filter((n: Notification) => !n.isRead).length,
+        unreadNotifications: sortedNotifications.filter((n: Notification) => !n.isRead).length,
       })
 
       setUpcomingGames(upcoming.slice(0, 5))
-      setNotifications(notificationsList.slice(0, 5))
+      setNotifications(sortedNotifications.slice(0, 5))
     } catch (error) {
       console.error("[v0] Dashboard: Error fetching data:", error)
     } finally {
