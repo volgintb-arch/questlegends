@@ -39,8 +39,8 @@ export async function GET(request: Request) {
 
     let transactions
 
-    if (user.role === "franchisee" || user.role === "admin") {
-      // Franchisee/admin sees only their transactions
+    if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
+      // Franchisee/own_point/admin sees only their transactions
       if (user.franchiseeId) {
         transactions = await sql`
           SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",

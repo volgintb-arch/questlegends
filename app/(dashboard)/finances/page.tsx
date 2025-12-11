@@ -11,7 +11,7 @@ export default function FinancesPage() {
     return <FinancesAdmin />
   }
 
-  if (user.role === "franchisee") {
+  if (user.role === "franchisee" || user.role === "own_point") {
     return <FinancesFranchisee />
   }
 

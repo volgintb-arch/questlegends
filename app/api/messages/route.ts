@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const id = crypto.randomUUID()
+    const id = globalThis.crypto.randomUUID()
     const now = new Date().toISOString()
 
     await sql`
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
     `
 
     // Create notification for receiver
-    const notifId = crypto.randomUUID()
+    const notifId = globalThis.crypto.randomUUID()
     await sql`
       INSERT INTO "Notification" (id, type, title, message, "senderId", "recipientId", "isRead", "isArchived", "createdAt", "updatedAt")
       VALUES (
@@ -151,6 +151,34 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("[v0] Messages POST error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const partnerId = searchParams.get("partnerId")
+
+    if (!partnerId) {
+      return NextResponse.json({ error: "Missing partnerId" }, { status: 400 })
+    }
+
+    // Delete all messages in conversation
+    await sql`
+      DELETE FROM "Message"
+      WHERE (("senderId" = ${user.id} AND "receiverId" = ${partnerId})
+         OR ("senderId" = ${partnerId} AND "receiverId" = ${user.id}))
+    `
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("[v0] Messages DELETE error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

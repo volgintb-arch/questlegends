@@ -55,6 +55,7 @@ interface GameTask {
   deadline?: string
   completed: boolean // Added completed status
   createdAt: string
+  type?: string // Added task type
 }
 
 interface StaffAssignment {
@@ -163,7 +164,7 @@ export function GameCardFranchisee({
   const [activeTab, setActiveTab] = useState<"note" | "task">("note")
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showTaskModal, setShowTaskModal] = useState(false)
-  const [newTask, setNewTask] = useState({ title: "", description: "", assigneeId: "", deadline: "" })
+  const [newTask, setNewTask] = useState({ title: "", description: "", assigneeId: "", deadline: "", type: "general" })
   const [isSaving, setIsSaving] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [franchiseeUsers, setFranchiseeUsers] = useState<any[]>([])
@@ -418,7 +419,7 @@ export function GameCardFranchisee({
         body: JSON.stringify(newTask),
       })
       if (res.ok) {
-        setNewTask({ title: "", description: "", assigneeId: "", deadline: "" })
+        setNewTask({ title: "", description: "", assigneeId: "", deadline: "", type: "general" })
         setShowTaskModal(false)
         loadTasks()
         loadEvents()
@@ -1121,6 +1122,26 @@ export function GameCardFranchisee({
             <DialogTitle className="text-sm">Новая задача</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Тип задачи</Label>
+              <Select
+                value={newTask.type || "general"}
+                onValueChange={(value) => setNewTask({ ...newTask, type: value })}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Выберите тип задачи" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">Общая задача</SelectItem>
+                  <SelectItem value="call">Звонок</SelectItem>
+                  <SelectItem value="meeting">Встреча</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="follow_up">Следующий шаг</SelectItem>
+                  <SelectItem value="document">Подготовка документов</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {/* </CHANGE> */}
             <div className="space-y-1">
               <Label className="text-xs">Название</Label>
               <Input

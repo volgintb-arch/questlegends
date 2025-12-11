@@ -3,7 +3,7 @@
 import { createContext, useContext, type ReactNode, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 
-export type UserRole = "super_admin" | "uk" | "uk_employee" | "franchisee" | "admin" | "employee"
+export type UserRole = "super_admin" | "uk" | "uk_employee" | "franchisee" | "own_point" | "admin" | "employee"
 
 export const ROLE_PERMISSIONS = {
   super_admin: {
@@ -18,7 +18,7 @@ export const ROLE_PERMISSIONS = {
     kb: true,
     analytics: true,
     createFranchisee: true,
-    createUsers: ["franchisee", "uk_employee", "uk", "admin", "employee"],
+    createUsers: ["franchisee", "own_point", "uk_employee", "uk", "admin", "employee"],
     viewAllLocations: true,
     canManageKPI: true,
     canManageAll: true,
@@ -35,7 +35,7 @@ export const ROLE_PERMISSIONS = {
     kb: true,
     analytics: true,
     createFranchisee: true,
-    createUsers: ["franchisee", "uk_employee"],
+    createUsers: ["franchisee", "own_point", "uk_employee"],
     viewAllLocations: true,
     canManageKPI: true,
   },
@@ -64,6 +64,23 @@ export const ROLE_PERMISSIONS = {
     addExpenses: true,
     manageAdminPermissions: true,
     editTelegramTemplates: true,
+  },
+  own_point: {
+    dashboard: true,
+    crm: true,
+    erp: true,
+    finances: true,
+    personnel: true,
+    schedules: true,
+    access: true,
+    kb: true,
+    analytics: true,
+    createUsers: ["admin", "employee"],
+    viewOwnLocations: true,
+    addExpenses: true,
+    manageAdminPermissions: true,
+    editTelegramTemplates: true,
+    noRoyalty: true, // Собственная точка не платит роялти
   },
   admin: {
     dashboard: true,
@@ -300,7 +317,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (user.role === "uk" || user.role === "super_admin") {
       return franchisees
-    } else if ((user.role === "franchisee" || user.role === "admin") && user.franchiseeId) {
+    } else if (
+      (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") &&
+      user.franchiseeId
+    ) {
       return franchisees.filter((f) => f.id === user.franchiseeId)
     }
     return []

@@ -126,7 +126,7 @@ export function DashboardUK() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log("[v0] DashboardUK: Fetching data...")
+        console.log("[v0] DashboardUK: Fetching data for role:", user?.role)
         const headers = getAuthHeaders()
         const [franchisesRes, transactionsRes, gamesRes] = await Promise.all([
           fetch("/api/franchisees", { headers, cache: "no-store" }),
@@ -142,7 +142,15 @@ export function DashboardUK() {
           const data = await franchisesRes.json()
           franchisesData = Array.isArray(data) ? data : data.data || []
           setFranchises(franchisesData)
-          console.log("[v0] DashboardUK: Loaded franchises:", franchisesData.length)
+          console.log("[v0] DashboardUK: Loaded franchises:", franchisesData.length, "for role:", user?.role)
+          if (isUkEmployee) {
+            console.log(
+              "[v0] DashboardUK: Delegated franchisees for uk_employee:",
+              franchisesData.map((f) => f.name),
+            )
+          }
+        } else {
+          console.error("[v0] DashboardUK: Failed to load franchises:", franchisesRes.status)
         }
 
         if (transactionsRes.ok) {
@@ -196,7 +204,33 @@ export function DashboardUK() {
     fetchData()
     const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
-  }, [getAuthHeaders])
+  }, [getAuthHeaders, user?.role, isUkEmployee])
+
+  useEffect(() => {
+    if (franchises.length > 0) {
+      const totalFranchisees = franchises.length
+      const totalActualRevenue = metrics.totalRevenue
+      const avgRevenuePerFranchisee = totalFranchisees > 0 ? totalActualRevenue / totalFranchisees : 0
+      const targetPerFranchisee = 500000 // Target revenue per franchisee
+      const totalTargetRevenue = totalFranchisees * targetPerFranchisee
+      const franchiseesMeetingTargets = franchises.filter((f) => {
+        const fRevenue = transactions
+          .filter((t) => t.franchiseeId === f.id && (t.type === "income" || t.type === "revenue"))
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+        return fRevenue >= targetPerFranchisee
+      }).length
+
+      setNetworkStats({
+        totalFranchisees,
+        averageRating: 4.5,
+        satisfactionRate: Math.round((franchiseesMeetingTargets / totalFranchisees) * 100) || 0,
+        franchiseesMeetingTargets,
+        planFulfillment: totalTargetRevenue > 0 ? Math.round((totalActualRevenue / totalTargetRevenue) * 100) : 0,
+        totalActualRevenue,
+        totalTargetRevenue,
+      })
+    }
+  }, [franchises, metrics.totalRevenue, transactions])
 
   const handleSaveKPIs = (newKPISettings: any) => {
     setKpiData(

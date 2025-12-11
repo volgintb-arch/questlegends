@@ -209,6 +209,8 @@ export function DashboardFranchisee() {
   }
 
   const handleNotificationClick = async (notification: Notification) => {
+    console.log("[v0] Dashboard: Notification clicked:", notification.id, notification.relatedDealId)
+
     if (notification.relatedDealId) {
       // Mark as read
       try {
@@ -220,15 +222,22 @@ export function DashboardFranchisee() {
           },
           body: JSON.stringify({ isRead: true }),
         })
+        console.log("[v0] Dashboard: Notification marked as read")
       } catch (e) {
-        // Ignore errors
+        console.error("[v0] Dashboard: Error marking notification as read:", e)
       }
 
       // Navigate to CRM with deal and task
       const taskParam = notification.relatedTaskId ? `&taskId=${notification.relatedTaskId}` : ""
-      router.push(`/crm?dealId=${notification.relatedDealId}${taskParam}`)
+      const url = `/crm?dealId=${notification.relatedDealId}${taskParam}`
+      console.log("[v0] Dashboard: Navigating to:", url)
+      router.push(url)
+    } else {
+      console.log("[v0] Dashboard: No relatedDealId in notification")
     }
   }
+
+  const isOwnPoint = user?.role === "own_point"
 
   if (authLoading || loading) {
     return (
@@ -244,7 +253,10 @@ export function DashboardFranchisee() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">Дашборд</h1>
-          <p className="text-muted-foreground">Обзор ключевых показателей</p>
+          <p className="text-muted-foreground">
+            Обзор ключевых показателей
+            {isOwnPoint && <span className="ml-2 text-blue-500">(Собственная точка)</span>}
+          </p>
         </div>
         <Button variant="outline" size="icon" onClick={handleRefresh} disabled={refreshing}>
           <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
@@ -252,7 +264,7 @@ export function DashboardFranchisee() {
       </div>
 
       {/* Main Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className={cn("grid gap-4 md:grid-cols-2", isOwnPoint ? "lg:grid-cols-3" : "lg:grid-cols-4")}>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Доход</CardTitle>
@@ -271,22 +283,29 @@ export function DashboardFranchisee() {
           </CardHeader>
           <CardContent>
             <div className={cn("text-2xl font-bold", stats.profit >= 0 ? "text-blue-600" : "text-red-600")}>
-              {stats.profit.toLocaleString("ru-RU")} ₽
+              {isOwnPoint
+                ? (stats.totalRevenue - stats.totalFot).toLocaleString("ru-RU")
+                : stats.profit.toLocaleString("ru-RU")}{" "}
+              ₽
             </div>
-            <p className="text-xs text-muted-foreground">После вычета ФОТ и роялти</p>
+            <p className="text-xs text-muted-foreground">
+              {isOwnPoint ? "После вычета ФОТ" : "После вычета ФОТ и роялти"}
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Роялти ({stats.royaltyPercent}%)</CardTitle>
-            <Percent className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{stats.royaltyAmount.toLocaleString("ru-RU")} ₽</div>
-            <p className="text-xs text-muted-foreground">К оплате УК</p>
-          </CardContent>
-        </Card>
+        {!isOwnPoint && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Роялти ({stats.royaltyPercent}%)</CardTitle>
+              <Percent className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">{stats.royaltyAmount.toLocaleString("ru-RU")} ₽</div>
+              <p className="text-xs text-muted-foreground">К оплате УК</p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

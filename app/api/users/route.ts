@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { jwtVerify } from "jose"
-
-console.log("[v0] Users API module loaded")
+import bcrypt from "bcryptjs"
+import { v4 as uuidv4 } from "uuid"
 
 async function getCurrentUser(request: Request) {
   const authHeader = request.headers.get("Authorization")
   const token = authHeader?.replace("Bearer ", "")
-
-  console.log("[v0] Token from header:", token ? "exists" : "missing")
 
   if (!token) {
     return null
@@ -17,7 +15,6 @@ async function getCurrentUser(request: Request) {
   try {
     const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
     const { payload } = await jwtVerify(token, secret)
-    console.log("[v0] JWT verified, userId:", payload.userId)
     return {
       id: payload.userId,
       phone: payload.phone,
@@ -26,17 +23,13 @@ async function getCurrentUser(request: Request) {
       franchiseeId: payload.franchiseeId,
     }
   } catch (error: any) {
-    console.log("[v0] JWT verify error:", error.message)
     return null
   }
 }
 
 export async function GET(request: Request) {
-  console.log("[v0] Users API GET started")
-
   try {
     const user = await getCurrentUser(request)
-    console.log("[v0] Current user:", user ? user.id : "none")
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -48,22 +41,11 @@ export async function GET(request: Request) {
     const roleFilter = searchParams.get("role")
     const rolesFilter = searchParams.get("roles")
 
-    console.log(
-      "[v0] User role:",
-      user.role,
-      "franchiseeId:",
-      user.franchiseeId,
-      "roleFilter:",
-      roleFilter,
-      "rolesFilter:",
-      rolesFilter,
-    )
-
     let users
 
     if (rolesFilter) {
       const roles = rolesFilter.split(",")
-      if (user.role === "franchisee" || user.role === "admin") {
+      if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
         users = await sql`
           SELECT 
             u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
@@ -98,7 +80,7 @@ export async function GET(request: Request) {
         WHERE u.role IN ('uk', 'uk_employee')
         ORDER BY u."createdAt" DESC
       `
-    } else if (user.role === "franchisee" || user.role === "admin") {
+    } else if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
       users = await sql`
         SELECT 
           u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
@@ -132,8 +114,6 @@ export async function GET(request: Request) {
       `
     }
 
-    console.log("[v0] Found users:", users.length)
-
     const formattedUsers = users.map((u: any) => ({
       id: u.id,
       phone: u.phone,
@@ -163,21 +143,17 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    console.log("[v0] Creating new user - start")
-
-    const bcrypt = await import("bcryptjs")
-    const { v4: uuidv4 } = await import("uuid")
+    console.log("[v0] Users POST: Request received")
 
     const user = await getCurrentUser(request)
+    console.log("[v0] Users POST: Current user:", user)
+
     if (!user) {
-      console.log("[v0] No session found")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("[v0] Session user:", user.id, user.role)
-
     const body = await request.json()
-    console.log("[v0] Request body:", JSON.stringify(body, null, 2))
+    console.log("[v0] Users POST: Request body:", body)
 
     const {
       phone,
@@ -198,8 +174,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Name and role are required" }, { status: 400 })
     }
 
-    if (role === "franchisee" && !city) {
-      return NextResponse.json({ error: "City is required for franchisee role" }, { status: 400 })
+    if ((role === "franchisee" || role === "own_point") && !city) {
+      return NextResponse.json({ error: "City is required for franchisee/own_point role" }, { status: 400 })
     }
 
     if (["animator", "host", "dj", "admin"].includes(role) && !franchiseeId && !user.franchiseeId) {
@@ -215,23 +191,43 @@ export async function POST(request: Request) {
       }
     }
 
-    if (user.role === "franchisee") {
+    if (user.role === "franchisee" || user.role === "own_point") {
       if (!["admin", "animator", "host", "dj"].includes(role)) {
-        return NextResponse.json({ error: "Franchisee can only create admin and personnel roles" }, { status: 403 })
+        return NextResponse.json(
+          { error: "Franchisee/Own point can only create admin and personnel roles" },
+          { status: 403 },
+        )
       }
     }
 
     if (user.role === "uk") {
-      if (!["franchisee", "uk_employee"].includes(role)) {
-        return NextResponse.json({ error: "UK can only create franchisee and uk_employee roles" }, { status: 403 })
+      if (!["franchisee", "own_point", "uk_employee"].includes(role)) {
+        return NextResponse.json(
+          { error: "UK can only create franchisee, own_point and uk_employee roles" },
+          { status: 403 },
+        )
       }
     }
 
-    if (user.role === "super_admin") {
-      // No restrictions for super_admin
+    if (user.role === "uk_employee") {
+      if (!["franchisee", "own_point"].includes(role)) {
+        return NextResponse.json(
+          { error: "UK employee can only create franchisee and own_point roles" },
+          { status: 403 },
+        )
+      }
     }
 
     const sql = neon(process.env.DATABASE_URL!)
+
+    if (phone) {
+      const existingUser = await sql`
+        SELECT id FROM "User" WHERE phone = ${phone}
+      `
+      if (existingUser.length > 0) {
+        return NextResponse.json({ error: "Пользователь с таким номером телефона уже существует" }, { status: 400 })
+      }
+    }
 
     const userEmail =
       email ||
@@ -239,25 +235,33 @@ export async function POST(request: Request) {
         ? `${phone.replace(/\D/g, "")}@questlegends.com`
         : `${name.toLowerCase().replace(/\s+/g, ".")}@questlegends.com`)
 
-    const tempPassword = password || Math.random().toString(36).slice(-8)
-    const passwordHash = await bcrypt.hash(tempPassword, 10)
+    const existingEmail = await sql`
+      SELECT id FROM "User" WHERE email = ${userEmail}
+    `
+    if (existingEmail.length > 0) {
+      return NextResponse.json({ error: "Пользователь с таким email уже существует" }, { status: 400 })
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10)
+    const tempPassword = password
 
     let userFranchiseeId = franchiseeId || user.franchiseeId
 
-    if (role === "franchisee" && city && (user.role === "uk" || user.role === "super_admin")) {
-      console.log("[v0] Creating franchisee record for city:", city)
-
+    if (
+      (role === "franchisee" || role === "own_point") &&
+      city &&
+      (user.role === "uk" || user.role === "super_admin" || user.role === "uk_employee")
+    ) {
       const franchiseeUUID = uuidv4()
-      const franchiseeName = `${city} - ${name}`
+      const franchiseeName = role === "own_point" ? `Собственная точка - ${city} - ${name}` : `${city} - ${name}`
       const franchiseeAddress = `г. ${city}`
 
       const newFranchisee = await sql`
-        INSERT INTO "Franchisee" (id, name, city, address, "updatedAt")
-        VALUES (${franchiseeUUID}, ${franchiseeName}, ${city}, ${franchiseeAddress}, NOW())
+        INSERT INTO "Franchisee" (id, name, city, address, "royaltyPercent", "updatedAt")
+        VALUES (${franchiseeUUID}, ${franchiseeName}, ${city}, ${franchiseeAddress}, ${role === "own_point" ? 0 : 10}, NOW())
         RETURNING id
       `
 
-      console.log("[v0] Franchisee created:", newFranchisee[0].id)
       userFranchiseeId = newFranchisee[0].id
     }
 
@@ -267,25 +271,19 @@ export async function POST(request: Request) {
 
     const finalRole = ["animator", "host", "dj"].includes(role) ? "employee" : role
 
-    console.log("[v0] Creating user with role:", finalRole, "email:", userEmail, "franchiseeId:", userFranchiseeId)
-
     const userUUID = uuidv4()
     const newUser = await sql`
       INSERT INTO "User" (id, phone, email, "passwordHash", password, name, role, telegram, whatsapp, "telegramId", description, "franchiseeId", "isActive", "createdAt", "updatedAt")
-      VALUES (${userUUID}, ${phone || null}, ${userEmail}, ${passwordHash}, ${passwordHash}, ${name}, ${finalRole}, ${telegram || null}, ${whatsapp || null}, ${telegramId || null}, ${description || null}, ${userFranchiseeId}, true, NOW(), NOW())
+      VALUES (${userUUID}, ${phone || null}, ${userEmail}, ${passwordHash}, ${password}, ${name}, ${finalRole}, ${telegram || null}, ${whatsapp || null}, ${telegramId || null}, ${description || null}, ${userFranchiseeId}, true, NOW(), NOW())
       RETURNING id, phone, email, name, role, telegram, whatsapp, "telegramId"
     `
 
-    console.log("[v0] User created successfully:", newUser[0].id)
-
     if (["animator", "host", "dj"].includes(role) && userFranchiseeId) {
-      console.log("[v0] Creating personnel record for user:", newUser[0].id)
       const personnelUUID = uuidv4()
       await sql`
         INSERT INTO "Personnel" (id, "franchiseeId", name, role, phone, telegram, whatsapp, "userId")
         VALUES (${personnelUUID}, ${userFranchiseeId}, ${name}, ${role}, ${phone || null}, ${telegram || null}, ${whatsapp || null}, ${newUser[0].id})
       `
-      console.log("[v0] Personnel record created")
     }
 
     if (role === "admin" && permissions) {

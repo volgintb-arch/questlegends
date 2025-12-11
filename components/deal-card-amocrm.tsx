@@ -23,6 +23,9 @@ import {
   Briefcase,
   Trash2,
   Users,
+  CalendarIcon,
+  CheckCircle2,
+  Circle,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -43,6 +46,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { format } from "date-fns"
+import { ru } from "date-fns/locale"
 
 // Types
 interface FeedEvent {
@@ -64,6 +72,7 @@ interface DealTask {
   deadline?: string
   completed: boolean
   createdAt: string
+  type?: string
 }
 
 interface DealFile {
@@ -139,7 +148,13 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [showTaskModal, setShowTaskModal] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [newTask, setNewTask] = useState({ title: "", description: "", assigneeId: "", deadline: "" })
+  const [selectedTask, setSelectedTask] = useState<DealTask | null>(null)
+  const [showTaskDetails, setShowTaskDetails] = useState(false)
+  const [showDeleteTaskDialog, setShowDeleteTaskDialog] = useState(false)
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null)
+  const [deadlineDate, setDeadlineDate] = useState<Date | undefined>(undefined)
+  const [deadlineTime, setDeadlineTime] = useState<string>("12:00")
+  const [newTask, setNewTask] = useState({ title: "", description: "", assigneeId: "", deadline: "", type: "general" })
   const [isSaving, setIsSaving] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -173,11 +188,27 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
   }
 
   const loadEvents = async () => {
+    console.log("[v0] loadEvents called for deal:", deal.id)
     try {
-      const res = await fetch(`/api/deals/${deal.id}/events`, { headers: getAuthHeaders() })
+      const headers = getAuthHeaders()
+      console.log("[v0] loadEvents headers:", Object.keys(headers))
+
+      const res = await fetch(`/api/deals/${deal.id}/events`, { headers })
+      console.log("[v0] loadEvents response status:", res.status)
+
       if (res.ok) {
         const data = await res.json()
-        setEvents(data.events || [])
+        console.log("[v0] loadEvents data:", data)
+        const allEvents = data.events || []
+        console.log("[v0] loadEvents found events:", allEvents.length)
+        setEvents(
+          allEvents.sort(
+            (a: FeedEvent, b: FeedEvent) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          ),
+        )
+      } else {
+        const errorText = await res.text()
+        console.error("[v0] loadEvents error response:", errorText)
       }
     } catch (e) {
       console.error("[v0] Error loading events:", e)
@@ -198,13 +229,16 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
 
   const loadFiles = async () => {
     try {
-      const res = await fetch(`/api/deals/${deal.id}/files`, { headers: getAuthHeaders() })
-      if (res.ok) {
-        const data = await res.json()
-        setFiles(data.files || [])
+      const response = await fetch(`/api/deals/${deal.id}/files`, {
+        headers: getAuthHeaders(),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setFiles(data.data || [])
       }
-    } catch (e) {
-      console.error("[v0] Error loading files:", e)
+    } catch (error) {
+      console.error("[v0] Error loading files:", error)
     }
   }
 
@@ -292,6 +326,26 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
     }
   }
 
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      const res = await fetch(`/api/deals/${deal.id}/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      })
+
+      if (res.ok) {
+        await loadTasks()
+        await loadEvents()
+        setShowDeleteTaskDialog(false)
+        setTaskToDelete(null)
+        setShowTaskDetails(false)
+        setSelectedTask(null)
+      }
+    } catch (e) {
+      console.error("Error deleting task:", e)
+    }
+  }
+
   const renderEditableField = (
     fieldKey: keyof DealData,
     label: string,
@@ -343,53 +397,63 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
   // Add note
   const handleAddNote = async () => {
     if (!messageInput.trim()) return
+
     try {
       const res = await fetch(`/api/deals/${deal.id}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ type: "note", content: messageInput }),
       })
+
       if (res.ok) {
         setMessageInput("")
-        loadEvents()
+        await loadEvents()
       }
     } catch (e) {
-      console.error("[v0] Error adding note:", e)
+      console.error("Error adding note:", e)
     }
   }
 
   // Add task
-  const handleAddTask = async () => {
+  const handleCreateTask = async () => {
     if (!newTask.title.trim()) return
+
+    setIsSaving(true)
     try {
       const res = await fetch(`/api/deals/${deal.id}/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(newTask),
       })
+
       if (res.ok) {
-        setNewTask({ title: "", description: "", assigneeId: "", deadline: "" })
+        setNewTask({ title: "", description: "", assigneeId: "", deadline: "", type: "general" })
         setShowTaskModal(false)
-        loadTasks()
-        loadEvents()
+        await loadTasks()
+        await loadEvents()
       }
     } catch (e) {
-      console.error("[v0] Error adding task:", e)
+      console.error("Error creating task:", e)
+    } finally {
+      setIsSaving(false)
     }
   }
 
   // Toggle task
-  const handleToggleTask = async (taskId: string, completed: boolean) => {
+  const handleTaskComplete = async (taskId: string) => {
     try {
-      await fetch(`/api/deals/${deal.id}/tasks/${taskId}`, {
+      const res = await fetch(`/api/deals/${deal.id}/tasks/${taskId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({ completed }),
+        body: JSON.stringify({ status: "completed" }),
       })
-      loadTasks()
-      loadEvents()
+
+      if (res.ok) {
+        await loadTasks()
+        await loadEvents()
+      }
     } catch (e) {
-      console.error("[v0] Error toggling task:", e)
+      console.error("Error completing task:", e)
     }
   }
 
@@ -398,21 +462,105 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
     const file = e.target.files?.[0]
     if (!file) return
 
-    const formData = new FormData()
-    formData.append("file", file)
-
     try {
-      const res = await fetch(`/api/deals/${deal.id}/files`, {
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const uploadResponse = await fetch("/api/upload", {
         method: "POST",
-        headers: getAuthHeaders(),
         body: formData,
       })
-      if (res.ok) {
-        loadFiles()
-        loadEvents()
+
+      if (!uploadResponse.ok) {
+        throw new Error("Failed to upload file to storage")
       }
-    } catch (e) {
-      console.error("[v0] Error uploading file:", e)
+
+      const uploadedFile = await uploadResponse.json()
+
+      const saveResponse = await fetch(`/api/deals/${deal.id}/files`, {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: file.name,
+          url: uploadedFile.url,
+          type: file.type,
+          size: file.size,
+        }),
+      })
+
+      if (!saveResponse.ok) {
+        throw new Error("Failed to save file reference")
+      }
+
+      await loadFiles()
+      await loadEvents()
+
+      if (e.target) {
+        e.target.value = ""
+      }
+    } catch (error: any) {
+      console.error("[v0] Error uploading file:", error.message)
+      alert(`Ошибка загрузки файла: ${error.message}`)
+    }
+  }
+
+  // Download file
+  const handleDownloadFile = async (fileId: string, fileName: string) => {
+    try {
+      const response = await fetch(`/api/files/${fileId}`, {
+        headers: getAuthHeaders(),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to download file")
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error("Error downloading file:", error)
+      alert("Ошибка при скачивании файла")
+    }
+  }
+
+  // Delete file
+  const handleDeleteFile = async (fileId: string) => {
+    if (!confirm("Удалить файл?")) return
+
+    try {
+      const response = await fetch(`/api/files/${fileId}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete file")
+      }
+
+      // Reload files list
+      const filesResponse = await fetch(`/api/deals/${deal.id}/files`, {
+        headers: getAuthHeaders(),
+      })
+      if (filesResponse.ok) {
+        const data = await filesResponse.json()
+        setFiles(data.data || [])
+      }
+
+      // Reload events
+      loadEvents()
+    } catch (error) {
+      console.error("Error deleting file:", error)
+      alert("Ошибка при удалении файла")
     }
   }
 
@@ -457,12 +605,46 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
 
   const canDelete = user?.role === "super_admin" || user?.role === "uk" || user?.role === "uk_employee"
 
+  // The following handleDeleteTask function is a redeclaration and will be removed.
+  // const handleDeleteTask = async (taskId: string) => {
+  //   try {
+  //     const res = await fetch(`/api/deals/${deal.id}/tasks/${taskId}`, {
+  //       method: "DELETE",
+  //       headers: getAuthHeaders(),
+  //     })
+
+  //     if (res.ok) {
+  //       await loadTasks()
+  //       await loadEvents()
+  //       setShowDeleteTaskDialog(false)
+  //       setTaskToDelete(null)
+  //       setShowTaskDetails(false)
+  //       setSelectedTask(null)
+  //     }
+  //   } catch (e) {
+  //     console.error("Error deleting task:", e)
+  //   }
+  // }
+
+  const handleOpenTaskDetails = (task: DealTask) => {
+    setSelectedTask(task)
+    setShowTaskDetails(true)
+  }
+
+  useEffect(() => {
+    if (deadlineDate) {
+      const dateStr = format(deadlineDate, "yyyy-MM-dd")
+      setNewTask((prev) => ({ ...prev, deadline: `${dateStr}T${deadlineTime}` }))
+    }
+  }, [deadlineDate, deadlineTime])
+
   if (!isOpen) return null
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-        <div ref={containerRef} className="bg-background rounded-lg shadow-xl w-full max-w-5xl h-[85vh] flex flex-col">
+      {/* Replace div with Sheet */}
+      <Sheet open={isOpen} onOpenChange={onClose}>
+        <SheetContent className="w-full max-w-6xl sm:max-w-6xl p-0 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between p-3 border-b">
             <div className="flex items-center gap-3">
@@ -671,10 +853,18 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
                 </div>
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {tasks.map((task) => (
-                    <div key={task.id} className="flex items-start gap-2 p-2 bg-muted/30 rounded text-xs">
+                    <div
+                      key={task.id}
+                      className="flex items-start gap-2 p-2 bg-muted/30 rounded text-xs hover:bg-muted/50 cursor-pointer group"
+                      onClick={() => handleOpenTaskDetails(task)}
+                    >
                       <Checkbox
                         checked={task.completed}
-                        onCheckedChange={(checked) => handleToggleTask(task.id, !!checked)}
+                        onCheckedChange={(checked) => {
+                          // Prevent opening details when clicking checkbox
+                          handleTaskComplete(task.id)
+                        }}
+                        onClick={(e) => e.stopPropagation()}
                         className="h-3 w-3 mt-0.5"
                       />
                       <div className="flex-1 min-w-0">
@@ -687,6 +877,18 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
                           </p>
                         )}
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setTaskToDelete(task.id)
+                          setShowDeleteTaskDialog(true)
+                        }}
+                      >
+                        <Trash2 size={12} className="text-destructive" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -694,18 +896,40 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
 
               {/* Files */}
               <div className="space-y-2">
-                <h3 className="text-xs font-semibold flex items-center gap-1">
-                  <FileText size={12} />
-                  Файлы ({files.length})
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold flex items-center gap-1">
+                    <FileText size={12} />
+                    Файлы ({files.length})
+                  </h3>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 text-xs"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Plus size={12} className="mr-1" />
+                    Добавить
+                  </Button>
+                </div>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
                   {files.map((file) => (
                     <div key={file.id} className="flex items-center gap-2 p-2 bg-muted/30 rounded text-xs">
                       <FileText size={12} className="text-muted-foreground" />
                       <span className="flex-1 truncate">{file.name}</span>
-                      <a href={file.url} download className="hover:text-primary">
+                      <button
+                        onClick={() => handleDownloadFile(file.id, file.name)}
+                        className="hover:text-primary"
+                        title="Скачать"
+                      >
                         <Download size={12} />
-                      </a>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteFile(file.id)}
+                        className="hover:text-destructive"
+                        title="Удалить"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -746,6 +970,21 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
                             <div className="flex items-center gap-1 text-xs text-blue-500">
                               <CheckSquare size={12} />
                               <span>{event.content}</span>
+                            </div>
+                          ) : event.type === "task_completed" ? (
+                            <div className="flex items-center gap-1 text-xs text-green-500">
+                              <CheckSquare size={12} />
+                              <span>Выполнил задачу: {event.content}</span>
+                            </div>
+                          ) : event.type === "file" ? (
+                            <div className="flex items-center gap-1 text-xs text-purple-500">
+                              <FileText size={12} />
+                              <span>Добавил файл: {event.content}</span>
+                            </div>
+                          ) : event.type === "note" ? (
+                            <div className="flex items-center gap-1 text-xs">
+                              <MessageSquare size={12} className="mr-1" />
+                              <p className="bg-muted/50 p-2 rounded">{event.content}</p>
                             </div>
                           ) : (
                             <p className="text-xs bg-muted/50 p-2 rounded">{event.content}</p>
@@ -812,16 +1051,44 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </SheetContent>
+      </Sheet>
 
-      {/* Task Modal */}
-      <Dialog open={showTaskModal} onOpenChange={setShowTaskModal}>
+      {/* Task Modal - Replace datetime-local with Calendar */}
+      <Dialog
+        open={showTaskModal}
+        onOpenChange={(open) => {
+          setShowTaskModal(open)
+          if (!open) {
+            setDeadlineDate(undefined)
+            setDeadlineTime("12:00")
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-sm">Новая задача</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Тип задачи</Label>
+              <Select
+                value={newTask.type || "general"}
+                onValueChange={(value) => setNewTask({ ...newTask, type: value })}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Выберите тип задачи" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">Общая задача</SelectItem>
+                  <SelectItem value="call">Звонок</SelectItem>
+                  <SelectItem value="meeting">Встреча</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="follow_up">Следующий шаг</SelectItem>
+                  <SelectItem value="document">Подготовка документов</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label className="text-xs">Название</Label>
               <Input
@@ -860,24 +1127,163 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
             </div>
             <div>
               <Label className="text-xs">Срок выполнения</Label>
-              <Input
-                type="datetime-local"
-                value={newTask.deadline}
-                onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}
-                className="h-8 text-xs"
-              />
+              <div className="flex gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="h-8 text-xs flex-1 justify-start text-left font-normal bg-transparent"
+                    >
+                      <CalendarIcon size={12} className="mr-2" />
+                      {deadlineDate ? format(deadlineDate, "dd.MM.yyyy", { locale: ru }) : "Выберите дату"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={deadlineDate}
+                      onSelect={setDeadlineDate}
+                      locale={ru}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Input
+                  type="time"
+                  value={deadlineTime}
+                  onChange={(e) => setDeadlineTime(e.target.value)}
+                  className="h-8 text-xs w-24"
+                />
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setShowTaskModal(false)}>
                 Отмена
               </Button>
-              <Button size="sm" onClick={handleAddTask}>
+              <Button size="sm" onClick={handleCreateTask}>
                 Создать
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={showTaskDetails} onOpenChange={setShowTaskDetails}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm flex items-center gap-2">
+              {selectedTask?.completed ? (
+                <CheckCircle2 size={16} className="text-green-500" />
+              ) : (
+                <Circle size={16} className="text-muted-foreground" />
+              )}
+              Детали задачи
+            </DialogTitle>
+          </DialogHeader>
+          {selectedTask && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">Тип</Label>
+                <p className="text-sm font-medium">
+                  {selectedTask.type === "call" && "Звонок"}
+                  {selectedTask.type === "meeting" && "Встреча"}
+                  {selectedTask.type === "email" && "Email"}
+                  {selectedTask.type === "follow_up" && "Следующий шаг"}
+                  {selectedTask.type === "document" && "Подготовка документов"}
+                  {(!selectedTask.type || selectedTask.type === "general") && "Общая задача"}
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Название</Label>
+                <p className="text-sm font-medium">{selectedTask.title}</p>
+              </div>
+              {selectedTask.description && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Описание</Label>
+                  <p className="text-sm">{selectedTask.description}</p>
+                </div>
+              )}
+              {selectedTask.assigneeName && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Исполнитель</Label>
+                  <p className="text-sm">{selectedTask.assigneeName}</p>
+                </div>
+              )}
+              {selectedTask.deadline && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Срок выполнения</Label>
+                  <p className="text-sm flex items-center gap-1">
+                    <CalendarIcon size={12} />
+                    {formatDate(selectedTask.deadline)}
+                  </p>
+                </div>
+              )}
+              <div>
+                <Label className="text-xs text-muted-foreground">Статус</Label>
+                <p className={`text-sm font-medium ${selectedTask.completed ? "text-green-600" : "text-orange-500"}`}>
+                  {selectedTask.completed ? "Выполнена" : "В работе"}
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Дата создания</Label>
+                <p className="text-sm">{formatDate(selectedTask.createdAt)}</p>
+              </div>
+              <div className="flex justify-between pt-2 border-t">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setTaskToDelete(selectedTask.id)
+                    setShowDeleteTaskDialog(true)
+                  }}
+                >
+                  <Trash2 size={12} className="mr-1" />
+                  Удалить
+                </Button>
+                <div className="flex gap-2">
+                  {!selectedTask.completed && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => {
+                        handleTaskComplete(selectedTask.id)
+                        setShowTaskDetails(false)
+                        setSelectedTask(null)
+                      }}
+                    >
+                      <CheckCircle2 size={12} className="mr-1" />
+                      Выполнить
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => setShowTaskDetails(false)}>
+                    Закрыть
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showDeleteTaskDialog} onOpenChange={setShowDeleteTaskDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить задачу?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Это действие нельзя отменить. Задача будет удалена безвозвратно.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setTaskToDelete(null)}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => taskToDelete && handleDeleteTask(taskToDelete)}
+            >
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>

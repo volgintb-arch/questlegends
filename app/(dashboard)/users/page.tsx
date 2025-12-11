@@ -57,8 +57,10 @@ export default function UsersPage() {
       // Filter based on current user role
       let filteredUsers = allUsers
       if (user?.role === "uk") {
-        filteredUsers = allUsers.filter((u: User) => u.role === "uk_employee" || u.role === "franchisee")
-      } else if (user?.role === "franchisee") {
+        filteredUsers = allUsers.filter(
+          (u: User) => u.role === "uk_employee" || u.role === "franchisee" || u.role === "own_point",
+        )
+      } else if (user?.role === "franchisee" || user?.role === "own_point") {
         filteredUsers = allUsers.filter(
           (u: User) =>
             u.franchisee?.id === user.franchiseeId && ["admin", "employee", "animator", "host", "dj"].includes(u.role),
@@ -107,6 +109,7 @@ export default function UsersPage() {
       uk: { label: "УК", variant: "default" as const },
       uk_employee: { label: "Сотрудник УК", variant: "secondary" as const },
       franchisee: { label: "Франчайзи", variant: "secondary" as const },
+      own_point: { label: "Собственная точка", variant: "secondary" as const },
       admin: { label: "Администратор", variant: "outline" as const },
       employee: { label: "Сотрудник", variant: "outline" as const },
       animator: { label: "Аниматор", variant: "outline" as const },

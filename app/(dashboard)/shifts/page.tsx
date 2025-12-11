@@ -14,8 +14,7 @@ export default function ShiftsPage() {
   const [selectedShift, setSelectedShift] = useState<Shift | undefined>()
   const [selectedDate, setSelectedDate] = useState<Date>()
 
-  // Get current location based on user role
-  const currentLocationId = user?.role === "uk" ? "" : user?.franchiseeIds?.[0] || ""
+  const currentLocationId = user?.role === "uk" || user?.role === "uk_employee" ? "" : user?.franchiseeIds?.[0] || ""
 
   const { data: personnelData } = usePersonnel({
     locationId: currentLocationId,

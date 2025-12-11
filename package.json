@@ -55,6 +55,7 @@
     "@tanstack/react-query-devtools": "latest",
     "@types/bcryptjs": "^2.4.6",
     "@vercel/analytics": "latest",
+    "@vercel/blob": "latest",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "latest",
     "class-variance-authority": "^0.7.1",

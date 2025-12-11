@@ -7,7 +7,7 @@ import { GamesCRMFranchisee } from "@/components/games-crm-franchisee"
 export default function CRMPage() {
   const { user } = useAuth()
 
-  if (user?.role === "franchisee" || user?.role === "admin") {
+  if (user?.role === "franchisee" || user?.role === "admin" || user?.role === "own_point") {
     return <GamesCRMFranchisee />
   }
 

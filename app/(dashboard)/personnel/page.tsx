@@ -12,7 +12,7 @@ export default function PersonnelPage() {
     return <PersonnelScheduleAdmin />
   }
 
-  if (user.role === "franchisee") {
+  if (user.role === "franchisee" || user.role === "own_point") {
     return <PersonnelFranchisee />
   }
 

@@ -151,6 +151,15 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
     return b.profit - a.profit
   })
 
+  console.log("[v0] FranchiseFinancialView: Sorting by", sortBy, "Franchises count:", sorted.length)
+  if (sorted.length > 0) {
+    console.log(
+      "[v0] First franchise:",
+      sorted[0].name,
+      sortBy === "revenue" ? `Revenue: ${sorted[0].revenue}` : `Profit: ${sorted[0].profit}`,
+    )
+  }
+
   const canEditRoyalty = user?.role === "uk" || user?.role === "super_admin"
 
   return (
@@ -213,24 +222,30 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
                 <h3 className="text-lg font-semibold text-foreground">Финансовые показатели по франчайзи</h3>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setSortBy("revenue")}
-                    className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                    onClick={() => {
+                      console.log("[v0] Sorting by revenue")
+                      setSortBy("revenue")
+                    }}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                       sortBy === "revenue"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
                     }`}
                   >
-                    По выручке
+                    {sortBy === "revenue" && "✓ "}По выручке
                   </button>
                   <button
-                    onClick={() => setSortBy("profit")}
-                    className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                    onClick={() => {
+                      console.log("[v0] Sorting by profit")
+                      setSortBy("profit")
+                    }}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                       sortBy === "profit"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
                     }`}
                   >
-                    По прибыли
+                    {sortBy === "profit" && "✓ "}По прибыли
                   </button>
                 </div>
               </div>

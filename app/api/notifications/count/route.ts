@@ -19,6 +19,17 @@ async function getCurrentUser(request: NextRequest) {
   }
 }
 
+async function queryWithRetry(sql: ReturnType<typeof neon>, query: () => Promise<any>, retries = 2) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await query()
+    } catch (error) {
+      if (i === retries) throw error
+      await new Promise((resolve) => setTimeout(resolve, 100 * (i + 1)))
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser(request)
@@ -28,18 +39,20 @@ export async function GET(request: NextRequest) {
 
     const sql = neon(process.env.DATABASE_URL!)
 
-    // Count unread notifications for the user
-    const result = await sql`
+    const result = await queryWithRetry(
+      sql,
+      () => sql`
       SELECT COUNT(*) as count
       FROM "Notification"
       WHERE "recipientId" = ${user.id}
         AND "isRead" = false
         AND "isArchived" = false
-    `
+    `,
+    )
 
     return NextResponse.json({ count: Number.parseInt(result[0]?.count || "0") })
   } catch (error) {
-    console.error("[v0] Error counting notifications:", error)
+    // Return 0 on error to not break the UI
     return NextResponse.json({ count: 0 })
   }
 }

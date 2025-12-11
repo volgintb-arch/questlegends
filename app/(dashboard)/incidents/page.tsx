@@ -12,7 +12,10 @@ export default function IncidentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedIncident, setSelectedIncident] = useState<Incident | undefined>()
 
-  const currentLocationId = user?.role === "uk" ? "" : user?.franchiseeIds?.[0] || ""
+  const currentLocationId =
+    user?.role === "uk" || user?.role === "uk_employee" || user?.role === "super_admin"
+      ? ""
+      : user?.franchiseeIds?.[0] || ""
 
   const { data: personnelData } = usePersonnel({
     locationId: currentLocationId,

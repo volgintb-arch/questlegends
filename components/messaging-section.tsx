@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -9,9 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Paperclip, ArrowLeft, Search, MessageSquare, Trash2, Download } from "lucide-react"
-import { format } from "date-fns"
-import { ru } from "date-fns/locale"
+import { Send, Paperclip, ArrowLeft, Search, MessageSquare, Trash2, MoreVertical, Pencil } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface Message {
   id: string
@@ -23,6 +21,7 @@ interface Message {
   isRead: boolean
   createdAt: string
   senderName?: string
+  isEdited?: boolean
 }
 
 interface Conversation {
@@ -46,6 +45,9 @@ export function MessagingSection() {
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+  const [editingText, setEditingText] = useState("")
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchConversations()
@@ -192,6 +194,29 @@ export function MessagingSection() {
     }
   }
 
+  const handleEditMessage = async (messageId: string) => {
+    if (!editingText.trim()) return
+
+    try {
+      const response = await fetch(`/api/messages/${messageId}`, {
+        method: "PATCH",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content: editingText }),
+      })
+
+      if (response.ok) {
+        setMessages(messages.map((m) => (m.id === messageId ? { ...m, content: editingText, isEdited: true } : m)))
+        setEditingMessageId(null)
+        setEditingText("")
+      }
+    } catch (error) {
+      console.error("[v0] Error editing message:", error)
+    }
+  }
+
   const handleDeleteMessage = async (messageId: string) => {
     if (!confirm("Удалить это сообщение?")) return
 
@@ -203,10 +228,30 @@ export function MessagingSection() {
 
       if (response.ok) {
         setMessages(messages.filter((m) => m.id !== messageId))
+        setOpenMenuId(null)
         fetchConversations()
       }
     } catch (error) {
       console.error("[v0] Error deleting message:", error)
+    }
+  }
+
+  const handleClearChat = async () => {
+    if (!selectedPartner) return
+    if (!confirm(`Очистить всю переписку с ${selectedPartner.name}?`)) return
+
+    try {
+      const response = await fetch(`/api/messages?partnerId=${selectedPartner.id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      })
+
+      if (response.ok) {
+        setMessages([])
+        fetchConversations()
+      }
+    } catch (error) {
+      console.error("[v0] Error clearing chat:", error)
     }
   }
 
@@ -226,6 +271,24 @@ export function MessagingSection() {
 
     setIsLoading(true)
     try {
+      console.log("[v0] Uploading file:", file.name, file.size)
+
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const uploadResponse = await fetch("/api/upload", {
+        method: "POST",
+        body: formData, // Send FormData, not raw file
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error("File upload failed")
+      }
+
+      const { url } = await uploadResponse.json()
+      console.log("[v0] File uploaded to:", url)
+
+      // Send message with file attachment
       const response = await fetch("/api/messages", {
         method: "POST",
         headers: {
@@ -234,17 +297,23 @@ export function MessagingSection() {
         },
         body: JSON.stringify({
           receiverId: selectedPartner.id,
-          content: `[Файл: ${file.name}]`,
+          content: `Прикреплён файл: ${file.name}`,
+          fileUrl: url,
           fileName: file.name,
         }),
       })
 
       if (response.ok) {
+        console.log("[v0] Message with attachment sent successfully")
         fetchMessages(selectedPartner.id)
         fetchConversations()
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ""
+        }
       }
     } catch (error) {
       console.error("[v0] Error uploading file:", error)
+      alert("Ошибка при загрузке файла. Попробуйте ещё раз.")
     } finally {
       setIsLoading(false)
     }
@@ -271,6 +340,21 @@ export function MessagingSection() {
       dj: { label: "DJ", variant: "outline" },
     }
     return roleMap[role] || { label: role, variant: "outline" as const }
+  }
+
+  const getRoleLabel = (role: string) => {
+    const roleMap: Record<string, string> = {
+      uk: "УК",
+      uk_employee: "Сотрудник УК",
+      super_admin: "Супер-админ",
+      franchisee: "Франчайзи",
+      admin: "Админ",
+      employee: "Сотрудник",
+      animator: "Аниматор",
+      host: "Ведущий",
+      dj: "DJ",
+    }
+    return roleMap[role] || role
   }
 
   const groupedUsers = {
@@ -438,67 +522,118 @@ export function MessagingSection() {
         {selectedPartner ? (
           <>
             {/* Chat Header */}
-            <div className="p-3 border-b flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden h-8 w-8"
-                onClick={() => setSelectedPartner(null)}
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="text-[10px]">
-                  {selectedPartner.name?.slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="text-sm font-medium">{selectedPartner.name}</p>
-                <Badge {...getRoleBadge(selectedPartner.role)} className="text-[9px] h-4">
-                  {getRoleBadge(selectedPartner.role).label}
-                </Badge>
+            <div className="p-3 border-b flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" size="icon" onClick={() => setSelectedPartner(null)}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div>
+                  <h3 className="font-medium text-sm">{selectedPartner.name}</h3>
+                  <p className="text-xs text-muted-foreground">{getRoleLabel(selectedPartner.role)}</p>
+                </div>
               </div>
+              {/* Clear chat button */}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleClearChat} title="Очистить чат">
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
             </div>
 
             {/* Messages */}
             <ScrollArea className="flex-1 p-3">
               <div className="space-y-3">
                 {messages.map((msg) => {
-                  const isOwn = msg.senderId === user?.id
-                  const hasAttachment = msg.fileUrl || msg.fileName
+                  const isOwnMessage = msg.senderId === user?.id
+                  const isEditing = editingMessageId === msg.id
+
                   return (
-                    <div key={msg.id} className={`flex ${isOwn ? "justify-end" : "justify-start"} group`}>
-                      <div
-                        className={`max-w-[70%] rounded-lg p-2 relative ${
-                          isOwn ? "bg-primary text-primary-foreground" : "bg-muted"
-                        }`}
-                      >
-                        <p className="text-xs">{msg.content}</p>
-                        {hasAttachment && msg.fileUrl && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 mt-1 text-[10px] gap-1"
-                            onClick={() => handleDownloadAttachment(msg.fileUrl!, msg.fileName || "file")}
-                          >
-                            <Download className="h-3 w-3" />
-                            Скачать
-                          </Button>
-                        )}
-                        <p
-                          className={`text-[9px] mt-1 ${isOwn ? "text-primary-foreground/70" : "text-muted-foreground"}`}
+                    <div key={msg.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"} group`}>
+                      <div className={`flex items-start gap-2 max-w-[70%] ${isOwnMessage ? "flex-row-reverse" : ""}`}>
+                        <div
+                          className={`rounded-lg p-3 relative ${
+                            isOwnMessage ? "bg-primary text-primary-foreground" : "bg-muted"
+                          }`}
                         >
-                          {format(new Date(msg.createdAt), "HH:mm", { locale: ru })}
-                        </p>
-                        {isOwn && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute -right-8 top-0 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => handleDeleteMessage(msg.id)}
+                          {isEditing ? (
+                            <div className="flex flex-col gap-2">
+                              <Input
+                                value={editingText}
+                                onChange={(e) => setEditingText(e.target.value)}
+                                className="min-w-[200px]"
+                                autoFocus
+                              />
+                              <div className="flex gap-2 justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setEditingMessageId(null)
+                                    setEditingText("")
+                                  }}
+                                >
+                                  Отмена
+                                </Button>
+                                <Button size="sm" onClick={() => handleEditMessage(msg.id)}>
+                                  Сохранить
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                              {msg.isEdited && <span className="text-xs opacity-70 italic">(изменено)</span>}
+                              {msg.fileUrl && (
+                                <a
+                                  href={msg.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs underline mt-2 inline-flex items-center gap-1"
+                                >
+                                  <Paperclip className="h-3 w-3" />
+                                  Скачать файл
+                                </a>
+                              )}
+                              <p className="text-xs opacity-70 mt-1">
+                                {new Date(msg.createdAt).toLocaleString("ru-RU")}
+                              </p>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Context menu dropdown */}
+                        {isOwnMessage && !isEditing && (
+                          <DropdownMenu
+                            open={openMenuId === msg.id}
+                            onOpenChange={(open) => setOpenMenuId(open ? msg.id : null)}
                           >
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </Button>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align={isOwnMessage ? "end" : "start"}>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setEditingMessageId(msg.id)
+                                  setEditingText(msg.content)
+                                  setOpenMenuId(null)
+                                }}
+                              >
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Редактировать
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDeleteMessage(msg.id)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Удалить
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                       </div>
                     </div>

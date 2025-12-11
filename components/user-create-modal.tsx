@@ -35,9 +35,13 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
 
   const availableRoles: Array<{ value: string; label: string }> = []
 
-  if (currentUser.role === "uk" || currentUser.role === "super_admin") {
-    availableRoles.push({ value: "franchisee", label: "Франчайзи" }, { value: "uk_employee", label: "Сотрудник УК" })
-  } else if (currentUser.role === "franchisee") {
+  if (currentUser.role === "uk" || currentUser.role === "super_admin" || currentUser.role === "uk_employee") {
+    availableRoles.push({ value: "franchisee", label: "Франчайзи" }, { value: "own_point", label: "Собственная Точка" })
+    // Only uk and super_admin can create uk_employee
+    if (currentUser.role === "uk" || currentUser.role === "super_admin") {
+      availableRoles.push({ value: "uk_employee", label: "Сотрудник УК" })
+    }
+  } else if (currentUser.role === "franchisee" || currentUser.role === "own_point") {
     availableRoles.push(
       { value: "admin", label: "Администратор" },
       { value: "animator", label: "Аниматор" },
@@ -57,7 +61,12 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    console.log("[v0] User create form submitted")
+    console.log("[v0] Form data:", formData)
+    console.log("[v0] Current user:", currentUser)
+
     if (!formData.name || !formData.phone || !formData.role) {
+      console.log("[v0] Validation failed: missing required fields")
       toast({
         title: "Ошибка",
         description: "Заполните все обязательные поля",
@@ -66,10 +75,11 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
       return
     }
 
-    if (formData.role === "franchisee" && !formData.city) {
+    if ((formData.role === "franchisee" || formData.role === "own_point") && !formData.city) {
+      console.log("[v0] Validation failed: missing city for franchisee/own_point")
       toast({
         title: "Ошибка",
-        description: "Укажите город для франчайзи",
+        description: "Укажите город",
         variant: "destructive",
       })
       return
@@ -80,6 +90,9 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
       !formData.franchisee_id &&
       !currentUser?.franchiseeId
     ) {
+      console.log("[v0] Validation failed: missing franchisee for employee role")
+      console.log("[v0] formData.franchisee_id:", formData.franchisee_id)
+      console.log("[v0] currentUser.franchiseeId:", currentUser?.franchiseeId)
       toast({
         title: "Ошибка",
         description: "Укажите локацию для создания сотрудника",
@@ -89,6 +102,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
     }
 
     const password = formData.password || generatePassword()
+    console.log("[v0] Validation passed, sending request...")
 
     setIsLoading(true)
 
@@ -154,15 +168,24 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
     })
   }
 
+  const getModalTitle = () => {
+    if (currentUser.role === "uk" || currentUser.role === "super_admin") {
+      return "Создать франчайзи, собственную точку или сотрудника УК"
+    }
+    if (currentUser.role === "franchisee" || currentUser.role === "own_point") {
+      return "Создать администратора или сотрудника"
+    }
+    if (currentUser.role === "admin") {
+      return "Создать сотрудника"
+    }
+    return "Создать пользователя"
+  }
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {(currentUser.role === "uk" || currentUser.role === "super_admin") && "Создать франчайзи или сотрудника УК"}
-            {currentUser.role === "franchisee" && "Создать администратора или сотрудника"}
-            {currentUser.role === "admin" && "Создать сотрудника"}
-          </DialogTitle>
+          <DialogTitle className="text-sm">{getModalTitle()}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -222,30 +245,34 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
             </Select>
           </div>
 
-          {(currentUser.role === "uk" || currentUser.role === "super_admin") && formData.role === "franchisee" && (
-            <div className="space-y-1">
-              <Label htmlFor="city" className="text-xs">
-                Город <span className="text-red-500">*</span>
-              </Label>
-              <div className="relative">
-                <MapPin className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground z-10 pointer-events-none" />
-                <Select value={formData.city} onValueChange={(value) => setFormData({ ...formData, city: value })}>
-                  <SelectTrigger className="pl-7 h-8 text-xs">
-                    <SelectValue placeholder="Выберите город" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[200px]">
-                    {RF_CITIES.map((city) => (
-                      <SelectItem key={city} value={city} className="text-xs">
-                        {city}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          {(currentUser.role === "uk" || currentUser.role === "super_admin" || currentUser.role === "uk_employee") &&
+            (formData.role === "franchisee" || formData.role === "own_point") && (
+              <div className="space-y-1">
+                <Label htmlFor="city" className="text-xs">
+                  Город <span className="text-red-500">*</span>
+                </Label>
+                <div className="relative">
+                  <MapPin className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground z-10 pointer-events-none" />
+                  <Select value={formData.city} onValueChange={(value) => setFormData({ ...formData, city: value })}>
+                    <SelectTrigger className="pl-7 h-8 text-xs">
+                      <SelectValue placeholder="Выберите город" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[200px]">
+                      {RF_CITIES.map((city) => (
+                        <SelectItem key={city} value={city} className="text-xs">
+                          {city}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formData.role === "own_point" && (
+                  <p className="text-[10px] text-blue-500">Собственная точка не платит роялти</p>
+                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {currentUser.role === "franchisee" &&
+          {(currentUser.role === "franchisee" || currentUser.role === "own_point") &&
             ["admin", "animator", "host", "dj"].includes(formData.role) &&
             franchisees.length > 1 && (
               <div className="space-y-1">

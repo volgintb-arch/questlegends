@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { DollarSign, TrendingUp, TrendingDown, Download, Users, Plus, X } from "lucide-react"
+import { DollarSign, TrendingUp, TrendingDown, Download, Users, Plus, X, Building2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useExpenses, useCreateExpense } from "@/hooks/use-expenses"
 import { useTransactions } from "@/hooks/use-transactions"
@@ -17,7 +17,7 @@ const EXPENSE_CATEGORIES = [
 ]
 
 export function FinancesFranchisee() {
-  const { user } = useAuth()
+  const { user, hasPermission } = useAuth()
   const [dateFilter, setDateFilter] = useState("current-month")
   const [showExpenseForm, setShowExpenseForm] = useState(false)
   const [newExpense, setNewExpense] = useState({
@@ -37,8 +37,10 @@ export function FinancesFranchisee() {
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
 
   const revenue = transactions.reduce((sum, t) => sum + t.revenue, 0)
-  const royalty = transactions.reduce((sum, t) => sum + t.royalty, 0)
   const fot = transactions.reduce((sum, t) => sum + t.fot, 0)
+
+  const isOwnPoint = user?.role === "own_point" || hasPermission("noRoyalty")
+  const royalty = isOwnPoint ? 0 : transactions.reduce((sum, t) => sum + t.royalty, 0)
   const netProfit = revenue - royalty - fot - totalExpenses
 
   // Group transactions and expenses by month for chart
@@ -106,7 +108,15 @@ export function FinancesFranchisee() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Финансы / Расходы & Отчеты</h1>
-          <p className="text-sm text-muted-foreground mt-1">Анализ расходов и P&L отчет</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Анализ расходов и P&L отчет
+            {isOwnPoint && (
+              <span className="ml-2 inline-flex items-center gap-1 text-blue-500">
+                <Building2 className="w-3 h-3" />
+                Собственная точка (без роялти)
+              </span>
+            )}
+          </p>
         </div>
 
         <button className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors">
@@ -116,7 +126,7 @@ export function FinancesFranchisee() {
       </div>
 
       {/* P&L Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${isOwnPoint ? "md:grid-cols-3" : "md:grid-cols-4"}`}>
         <div className="bg-card border border-border rounded-lg p-4">
           <div className="flex items-center gap-2 mb-2">
             <DollarSign className="w-4 h-4 text-green-500" />
@@ -133,13 +143,15 @@ export function FinancesFranchisee() {
           <p className="text-xl font-bold text-foreground">{totalExpenses.toLocaleString("ru-RU")} ₽</p>
         </div>
 
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="w-4 h-4 text-yellow-500" />
-            <p className="text-xs text-muted-foreground">ФОТ</p>
+        {!isOwnPoint && (
+          <div className="bg-card border border-border rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Users className="w-4 h-4 text-yellow-500" />
+              <p className="text-xs text-muted-foreground">Роялти</p>
+            </div>
+            <p className="text-xl font-bold text-foreground">{royalty.toLocaleString("ru-RU")} ₽</p>
           </div>
-          <p className="text-xl font-bold text-foreground">{fot.toLocaleString("ru-RU")} ₽</p>
-        </div>
+        )}
 
         <div className="bg-card border border-primary rounded-lg p-4 border-2">
           <div className="flex items-center gap-2 mb-2">

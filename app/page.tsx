@@ -63,7 +63,7 @@ export default function Dashboard() {
     switch (view) {
       case "dashboard":
         if (user.role === "uk") return <DashboardUK />
-        if (user.role === "franchisee") return <DashboardFranchisee />
+        if (user.role === "franchisee" || user.role === "own_point") return <DashboardFranchisee />
         if (user.role === "admin") return <DashboardAdmin />
         if (user.role === "employee") return <DashboardEmployee />
         return <DashboardUK />
@@ -73,14 +73,14 @@ export default function Dashboard() {
         return <TransactionsERP role={user.role} />
       case "finances":
         if (user.role === "admin") return <FinancesAdmin />
-        if (user.role === "franchisee") return <FinancesFranchisee />
+        if (user.role === "franchisee" || user.role === "own_point") return <FinancesFranchisee />
         return <TransactionsERP role={user.role} />
       case "schedule":
         if (user.role === "admin") return <PersonnelScheduleAdmin />
         return <PersonnelSection role={user.role} />
       case "personnel":
         if (user.role === "admin") return <PersonnelScheduleAdmin />
-        if (user.role === "franchisee") return <PersonnelFranchisee />
+        if (user.role === "franchisee" || user.role === "own_point") return <PersonnelFranchisee />
         return <PersonnelSection role={user.role} />
       case "knowledge":
         if (user.role === "employee") return <KnowledgeBaseSection role="employee" />
@@ -89,7 +89,7 @@ export default function Dashboard() {
         return <NotificationsSection role={user.role} />
       case "access":
         if (user.role === "uk") return <AccessManagementUK />
-        if (user.role === "franchisee") return <AccessManagementFranchisee />
+        if (user.role === "franchisee" || user.role === "own_point") return <AccessManagementFranchisee />
         if (user.role === "admin") return <AccessManagementAdmin />
         return <DashboardUK />
       default:
@@ -101,6 +101,19 @@ export default function Dashboard() {
           <DashboardFranchisee />
         )
     }
+  }
+
+  const getRoleLabel = () => {
+    const labels: Record<string, string> = {
+      uk: "Управляющая Компания",
+      admin: "Администратор",
+      employee: "Сотрудник",
+      franchisee: "Франчайзи",
+      own_point: "Собственная Точка",
+      super_admin: "Супер Администратор",
+      uk_employee: "Сотрудник УК",
+    }
+    return labels[user.role] || "Франчайзи"
   }
 
   return (
@@ -119,15 +132,7 @@ export default function Dashboard() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header
           userName={user.name}
-          role={
-            user.role === "uk"
-              ? "Управляющая Компания"
-              : user.role === "admin"
-                ? "Администратор"
-                : user.role === "employee"
-                  ? "Сотрудник"
-                  : "Франчайзи"
-          }
+          role={getRoleLabel()}
           onViewChange={setView}
           onMobileMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
         />

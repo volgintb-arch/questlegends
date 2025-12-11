@@ -33,7 +33,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
     ]
 
-    const superAdminItems = [
+    const ukItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
@@ -82,6 +82,8 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         path: "/knowledge",
         module: "canViewKnowledgeBase" as const,
       },
+      { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
+      { id: "access", label: "Доступ", icon: Users, path: "/access", module: "canViewAccess" as const },
       {
         id: "notifications",
         label: "Уведомления",
@@ -121,6 +123,28 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       },
     ]
 
+    const ownPointItems = [
+      { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
+      { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
+      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
+      { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+      {
+        id: "knowledge",
+        label: "База Знаний",
+        icon: BookOpen,
+        path: "/knowledge",
+        module: "canViewKnowledgeBase" as const,
+      },
+      { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
+      {
+        id: "notifications",
+        label: "Уведомления",
+        icon: Bell,
+        path: "/notifications",
+        module: "canViewNotifications" as const,
+      },
+    ]
+
     const adminItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
@@ -146,10 +170,11 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       },
     ]
 
-    if (role === "super_admin") return superAdminItems
-    if (role === "uk" || role === "uk_employee") {
+    if (role === "super_admin" || role === "uk") return ukItems
+    if (role === "uk_employee") {
       return ukEmployeeItems.filter((item) => canViewModule(item.module))
     }
+    if (role === "own_point") return ownPointItems
     if (role === "franchisee") return franchiseeItems
     if (role === "admin") return adminItems
     if (role === "employee" || role === "animator" || role === "host" || role === "dj") return personnelItems
@@ -179,6 +204,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       uk: "Управляющая Компания",
       uk_employee: "Сотрудник УК",
       franchisee: "Франчайзи",
+      own_point: "Собственная Точка",
       admin: "Администратор",
       employee: "Сотрудник",
       animator: "Аниматор",

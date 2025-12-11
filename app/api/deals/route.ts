@@ -36,15 +36,41 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    console.log("[v0] Deals API GET: user role:", user.role, "franchiseeId:", user.franchiseeId)
+
     const sql = neon(process.env.DATABASE_URL!)
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
     const stage = searchParams.get("stage")
     const pipelineId = searchParams.get("pipelineId")
+    const includeTasks = searchParams.get("includeTasks") === "true"
+
+    console.log("[v0] Deals API GET: pipelineId:", pipelineId, "franchiseeId param:", franchiseeId)
 
     let deals: any[]
 
-    if (user.role === "franchisee" || user.role === "admin" || user.role === "employee") {
+    const taskCountsSubquery = includeTasks
+      ? sql`
+      LEFT JOIN LATERAL (
+        SELECT 
+          COUNT(*) as "taskCount",
+          COUNT(*) FILTER (WHERE dt."isCompleted" = true) as "completedTaskCount",
+          COUNT(*) FILTER (WHERE dt."isCompleted" = false AND dt."dueDate" < NOW()) as "overdueTaskCount"
+        FROM "DealTask" dt
+        WHERE dt."dealId" = d.id
+      ) tc ON true
+    `
+      : sql``
+
+    const taskFields = includeTasks
+      ? sql`
+      , COALESCE(tc."taskCount", 0)::int as "taskCount"
+      , COALESCE(tc."completedTaskCount", 0)::int as "completedTaskCount"
+      , COALESCE(tc."overdueTaskCount", 0)::int as "overdueTaskCount"
+    `
+      : sql``
+
+    if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin" || user.role === "employee") {
       if (user.franchiseeId) {
         deals = await sql`
           SELECT 
@@ -52,9 +78,11 @@ export async function GET(request: Request) {
             u.name as "responsibleUserName",
             f.name as "franchiseeName",
             f.city as "franchiseeCity"
+            ${taskFields}
           FROM "Deal" d
           LEFT JOIN "User" u ON d."responsibleId" = u.id
           LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+          ${taskCountsSubquery}
           WHERE d."franchiseeId" = ${user.franchiseeId}
           ${pipelineId ? sql`AND d."pipelineId" = ${pipelineId}::uuid` : sql``}
           ${stage ? sql`AND d.stage = ${stage}` : sql``}
@@ -67,9 +95,11 @@ export async function GET(request: Request) {
             u.name as "responsibleUserName",
             f.name as "franchiseeName",
             f.city as "franchiseeCity"
+            ${taskFields}
           FROM "Deal" d
           LEFT JOIN "User" u ON d."responsibleId" = u.id
           LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+          ${taskCountsSubquery}
           ${pipelineId ? sql`WHERE d."pipelineId" = ${pipelineId}::uuid` : sql``}
           ${stage && pipelineId ? sql`AND d.stage = ${stage}` : stage ? sql`WHERE d.stage = ${stage}` : sql``}
           ORDER BY d."createdAt" DESC
@@ -82,9 +112,11 @@ export async function GET(request: Request) {
           u.name as "responsibleUserName",
           f.name as "franchiseeName",
           f.city as "franchiseeCity"
+          ${taskFields}
         FROM "Deal" d
         LEFT JOIN "User" u ON d."responsibleId" = u.id
         LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+        ${taskCountsSubquery}
         WHERE d."franchiseeId" = ${franchiseeId}
         ${pipelineId ? sql`AND d."pipelineId" = ${pipelineId}::uuid` : sql``}
         ${stage ? sql`AND d.stage = ${stage}` : sql``}
@@ -97,14 +129,18 @@ export async function GET(request: Request) {
           u.name as "responsibleUserName",
           f.name as "franchiseeName",
           f.city as "franchiseeCity"
+          ${taskFields}
         FROM "Deal" d
         LEFT JOIN "User" u ON d."responsibleId" = u.id
         LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
+        ${taskCountsSubquery}
         ${pipelineId ? sql`WHERE d."pipelineId" = ${pipelineId}::uuid` : sql``}
         ${stage && pipelineId ? sql`AND d.stage = ${stage}` : stage ? sql`WHERE d.stage = ${stage}` : sql``}
         ORDER BY d."createdAt" DESC
       `
     }
+
+    console.log("[v0] Deals API GET: Found", deals.length, "deals")
 
     const formattedDeals = deals.map((deal: any) => ({
       ...deal,

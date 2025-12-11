@@ -38,13 +38,14 @@ interface Transaction {
 }
 
 interface TransactionsERPProps {
-  role: "uk" | "franchisee" | "admin" | "uk_employee" | "super_admin"
+  role: "uk" | "franchisee" | "own_point" | "admin" | "uk_employee" | "super_admin"
 }
 
 interface FranchiseeData {
   id: string
   name: string
   royaltyPercent: number
+  isOwnPoint?: boolean
 }
 
 export function TransactionsERP({ role }: TransactionsERPProps) {
@@ -430,8 +431,12 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
   const profit = totalRevenue - totalExpenses
 
-  const royaltyPercent = franchiseeData?.royaltyPercent || 7
-  const royaltyAmount = Math.round(totalRevenue * (royaltyPercent / 100))
+  const isOwnPoint = role === "own_point" || user?.role === "own_point"
+
+  const royaltyPercent = isOwnPoint ? 0 : franchiseeData?.royaltyPercent || 7
+  const royaltyAmount = isOwnPoint ? 0 : Math.round(totalRevenue * (royaltyPercent / 100))
+
+  const isFranchiseeOrAdmin = role === "franchisee" || role === "admin"
 
   if (role === "uk" || role === "uk_employee" || role === "super_admin") {
     return (
@@ -540,11 +545,13 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
           <p className="text-xs text-muted-foreground mt-2">Аниматоры, ведущие, DJ</p>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          <p className="text-sm font-medium text-muted-foreground mb-2">Роялти к оплате</p>
-          <p className="text-3xl font-bold text-blue-500">{royaltyAmount.toLocaleString()} ₽</p>
-          <p className="text-xs text-muted-foreground mt-2">{royaltyPercent}% от дохода</p>
-        </div>
+        {!isOwnPoint && isFranchiseeOrAdmin && (
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+            <p className="text-sm font-medium text-muted-foreground mb-2">Роялти к оплате</p>
+            <p className="text-3xl font-bold text-blue-500">{royaltyAmount.toLocaleString()} ₽</p>
+            <p className="text-xs text-muted-foreground mt-2">{royaltyPercent}% от дохода</p>
+          </div>
+        )}
 
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <p className="text-sm font-medium text-muted-foreground mb-2">Прибыль</p>

@@ -76,7 +76,7 @@ export async function GET(request: Request) {
             u."createdAt" DESC
         `
       }
-    } else if (currentUser.role === "franchisee" || currentUser.role === "admin") {
+    } else if (currentUser.role === "franchisee" || currentUser.role === "own_point" || currentUser.role === "admin") {
       const fId = currentUser.franchiseeId
       if (!fId) {
         return NextResponse.json({ users: [] })
@@ -140,7 +140,10 @@ export async function PUT(request: Request) {
     }
 
     const canManagePermissions =
-      currentUser.role === "super_admin" || currentUser.role === "uk" || currentUser.role === "franchisee"
+      currentUser.role === "super_admin" ||
+      currentUser.role === "uk" ||
+      currentUser.role === "franchisee" ||
+      currentUser.role === "own_point"
 
     if (!canManagePermissions) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
@@ -155,7 +158,7 @@ export async function PUT(request: Request) {
 
     const sql = neon(process.env.DATABASE_URL!)
 
-    if (currentUser.role === "franchisee") {
+    if (currentUser.role === "franchisee" || currentUser.role === "own_point") {
       const targetUser = await sql`
         SELECT "franchiseeId" FROM "User" WHERE id = ${userId}
       `

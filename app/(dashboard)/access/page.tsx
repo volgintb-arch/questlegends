@@ -12,7 +12,7 @@ export default function AccessPage() {
     return <AccessManagementUK />
   }
 
-  if (user?.role === "franchisee") {
+  if (user?.role === "franchisee" || user?.role === "own_point") {
     return <AccessManagementFranchisee />
   }
 
