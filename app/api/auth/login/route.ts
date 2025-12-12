@@ -7,8 +7,6 @@ export async function POST(request: NextRequest) {
   try {
     const { phone, password } = await request.json()
 
-    console.log("[v0] Login attempt for phone:", phone)
-
     if (!phone || !password) {
       return NextResponse.json({ error: "Phone and password are required" }, { status: 400 })
     }
@@ -19,22 +17,18 @@ export async function POST(request: NextRequest) {
       const existingUsers = await sql`SELECT id FROM "User" WHERE phone = ${phone}`
 
       if (existingUsers.length === 0) {
-        // Create super_admin
         const hashedPassword = await bcrypt.hash("admin123", 10)
         await sql`
           INSERT INTO "User" (id, phone, name, role, "passwordHash", password, "isActive", "createdAt", "updatedAt")
           VALUES ('super-admin-001', '+79000000000', 'Супер Администратор', 'super_admin', ${hashedPassword}, ${hashedPassword}, true, NOW(), NOW())
         `
-        console.log("[v0] Super admin created")
       } else if (password === "admin123") {
-        // Update password hash for super_admin
         const hashedPassword = await bcrypt.hash("admin123", 10)
         await sql`
           UPDATE "User" 
           SET "passwordHash" = ${hashedPassword}, password = ${hashedPassword}
           WHERE phone = '+79000000000'
         `
-        console.log("[v0] Super admin password updated")
       }
     }
 
@@ -48,8 +42,6 @@ export async function POST(request: NextRequest) {
       LIMIT 1
     `
 
-    console.log("[v0] User query result:", users.length > 0 ? "User found" : "User not found")
-
     if (users.length === 0) {
       return NextResponse.json({ error: "Invalid phone or password" }, { status: 401 })
     }
@@ -62,13 +54,10 @@ export async function POST(request: NextRequest) {
 
     const storedPassword = user.passwordHash || user.password
     if (!storedPassword) {
-      console.log("[v0] No password stored for user")
       return NextResponse.json({ error: "Invalid phone or password" }, { status: 401 })
     }
 
     const isPasswordValid = await bcrypt.compare(password, storedPassword)
-
-    console.log("[v0] Password check:", isPasswordValid ? "Valid" : "Invalid")
 
     if (!isPasswordValid) {
       return NextResponse.json({ error: "Invalid phone or password" }, { status: 401 })
@@ -88,8 +77,6 @@ export async function POST(request: NextRequest) {
       .setExpirationTime("7d")
       .sign(secret)
 
-    console.log("[v0] JWT token created successfully")
-
     return NextResponse.json({
       success: true,
       token,
@@ -104,7 +91,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error: any) {
-    console.error("[v0] Login error:", error)
+    console.error("Login error:", error)
     return NextResponse.json({ error: "Internal server error", details: error.message }, { status: 500 })
   }
 }

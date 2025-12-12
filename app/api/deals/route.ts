@@ -156,7 +156,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data: formattedDeals })
   } catch (error: any) {
-    console.error("[v0] DEALS_GET error:", error)
+    console.error("DEALS_GET error:", error)
     return NextResponse.json({ error: "Failed to fetch deals", details: error.message }, { status: 500 })
   }
 }
@@ -218,7 +218,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(deal, { status: 201 })
   } catch (error: any) {
-    console.error("[v0] DEALS_POST error:", error)
+    console.error("DEALS_POST error:", error)
     return NextResponse.json({ error: "Failed to create deal", details: error.message }, { status: 500 })
   }
 }

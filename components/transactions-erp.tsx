@@ -244,21 +244,38 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
       const franchiseeSheet = XLSX.utils.json_to_sheet(franchiseeData)
       XLSX.utils.book_append_sheet(workbook, franchiseeSheet, "По франчайзи")
     } else {
-      // For Franchisee: Summary without royalties
       const totalRevenue = transactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
       const totalExpenses = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
-      const totalProfit = totalRevenue - totalExpenses
+
+      // Calculate royalty only if not own_point
+      const royaltyPercent =
+        role === "own_point" || user?.role === "own_point" ? 0 : franchiseeData?.royaltyPercent || 7
+      const totalRoyalty =
+        role === "own_point" || user?.role === "own_point" ? 0 : Math.round(totalRevenue * (royaltyPercent / 100))
+      const totalProfit = totalRevenue - totalExpenses - totalRoyalty
 
       const franchiseeSummary = [
         { Показатель: "Выручка", Значение: totalRevenue, Единица: "₽" },
         { Показатель: "Расходы", Значение: totalExpenses, Единица: "₽" },
+      ]
+
+      // Add royalty row only if not own_point
+      if (role !== "own_point" && user?.role !== "own_point") {
+        franchiseeSummary.push({
+          Показатель: `Роялти (${royaltyPercent}%)`,
+          Значение: totalRoyalty,
+          Единица: "₽",
+        })
+      }
+
+      franchiseeSummary.push(
         { Показатель: "Прибыль", Значение: totalProfit, Единица: "₽" },
         {
           Показатель: "Маржа прибыли",
           Значение: totalRevenue > 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}%` : "0%",
           Единица: "",
         },
-      ]
+      )
 
       const summarySheet = XLSX.utils.json_to_sheet(franchiseeSummary)
       XLSX.utils.book_append_sheet(workbook, summarySheet, "Сводная аналитика")

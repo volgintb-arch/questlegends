@@ -59,8 +59,8 @@ export function PersonnelSection({ role }: PersonnelSectionProps) {
           phone: user.phone,
           email: user.email || "Не указан",
           location: user.franchisee?.location || user.city || "Не указана",
-          schedule: "Пн-Пт 9:00-18:00", // TODO: Add schedule to user model
-          status: "active", // TODO: Add status to user model
+          schedule: "Пн-Пт 9:00-18:00",
+          status: "active",
           joinDate: user.createdAt,
         }))
         setStaff(mappedStaff)
@@ -268,8 +268,6 @@ export function PersonnelSection({ role }: PersonnelSectionProps) {
         staff={editingStaff}
         onClose={() => setIsModalOpen(false)}
         onSave={async (data) => {
-          console.log("[v0] Saving personnel:", data)
-          // Reload staff after save
           await fetchStaff()
           setIsModalOpen(false)
         }}

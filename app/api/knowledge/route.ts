@@ -2,8 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { jwtVerify } from "jose"
 
-console.log("[v0] Knowledge API module loaded")
-
 async function getCurrentUser(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")
@@ -21,17 +19,13 @@ async function getCurrentUser(request: NextRequest) {
       role: payload.role as string,
     }
   } catch (error) {
-    console.error("[v0] Knowledge API auth error:", error)
     return null
   }
 }
 
 export async function GET(request: NextRequest) {
-  console.log("[v0] Knowledge API: GET request started")
-
   try {
     if (!process.env.DATABASE_URL) {
-      console.error("[v0] Knowledge API: DATABASE_URL not set")
       return NextResponse.json({ articles: [] })
     }
 
@@ -41,8 +35,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get("category")
     const search = searchParams.get("search")
-
-    console.log("[v0] Knowledge API: category:", category, "search:", search)
 
     let articles
 
@@ -79,7 +71,6 @@ export async function GET(request: NextRequest) {
           FROM "KnowledgeFile" WHERE "articleId" = ${article.id}
         `
 
-        // Проверяем статус прочтения для текущего пользователя
         let isCompleted = false
         let completedAt = null
 
@@ -103,8 +94,6 @@ export async function GET(request: NextRequest) {
           size: f.size,
         }))
 
-        console.log("[v0] Knowledge API: Article", article.id, "has", mappedFiles.length, "files")
-
         return {
           ...article,
           files: mappedFiles,
@@ -114,18 +103,14 @@ export async function GET(request: NextRequest) {
       }),
     )
 
-    console.log("[v0] Knowledge API: Found", articlesWithExtras.length, "articles")
-
     return NextResponse.json({ articles: articlesWithExtras })
   } catch (error: any) {
-    console.error("[v0] Knowledge articles fetch error:", error)
+    console.error("Knowledge articles fetch error:", error)
     return NextResponse.json({ articles: [], error: error.message }, { status: 200 })
   }
 }
 
 export async function POST(request: NextRequest) {
-  console.log("[v0] Knowledge API: POST request started")
-
   try {
     const user = await getCurrentUser(request)
     if (!user) {
@@ -143,10 +128,6 @@ export async function POST(request: NextRequest) {
     const sql = neon(process.env.DATABASE_URL)
     const body = await request.json()
     const { title, category, content, type, tags, videoUrl, files } = body
-
-    console.log("[v0] Knowledge API POST: Creating article with", files?.length || 0, "files")
-    console.log("[v0] Knowledge API POST: videoUrl:", videoUrl)
-    console.log("[v0] Knowledge API POST: files:", JSON.stringify(files))
 
     if (!title || !category || !content) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -168,15 +149,12 @@ export async function POST(request: NextRequest) {
           INSERT INTO "KnowledgeFile" (id, "articleId", name, url, size, "mimeType", type, "uploadedAt")
           VALUES (${fileId}, ${id}, ${file.name}, ${file.url}, ${file.size || "0"}, ${file.mimeType || null}, ${file.type || "other"}, NOW())
         `
-        console.log("[v0] Knowledge API: Saved file", file.name, "with type", file.type)
       }
     }
 
-    console.log("[v0] Knowledge API: Article created:", id)
-
     return NextResponse.json({ article: result[0] }, { status: 201 })
   } catch (error: any) {
-    console.error("[v0] Knowledge article creation error:", error)
+    console.error("Knowledge article creation error:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
