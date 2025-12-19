@@ -15,15 +15,15 @@ Complete REST API documentation for QuestLegends franchise management system.
 **Endpoint:** `POST /auth/login`
 
 **Request:**
-\`\`\`json
+```json
 {
   "email": "user@example.com",
   "password": "password123"
 }
-\`\`\`
+```
 
 **Response:**
-\`\`\`json
+```json
 {
   "success": true,
   "data": {
@@ -37,7 +37,7 @@ Complete REST API documentation for QuestLegends franchise management system.
     "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
-\`\`\`
+```
 
 **Access Token TTL:** 15 minutes  
 **Refresh Token TTL:** 7 days
@@ -47,11 +47,11 @@ Complete REST API documentation for QuestLegends franchise management system.
 **Endpoint:** `POST /auth/refresh`
 
 **Request:**
-\`\`\`json
+```json
 {
   "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
-\`\`\`
+```
 
 ## Deals (CRM)
 
@@ -67,10 +67,10 @@ Complete REST API documentation for QuestLegends franchise management system.
 - `limit` (integer, default: 50) - Items per page
 
 **Example:**
-\`\`\`bash
+```bash
 curl -H "Authorization: Bearer TOKEN" \
   "https://api.questlegends.com/v2/deals?locationId=xxx&stage=Переговоры&page=1"
-\`\`\`
+```
 
 ### Update Deal Stage (with Transaction Creation)
 
@@ -81,14 +81,14 @@ curl -H "Authorization: Bearer TOKEN" \
 - `Idempotency-Key: unique-key` (optional, for transaction idempotency)
 
 **Request:**
-\`\`\`json
+```json
 {
   "stage": "Игра проведена"
 }
-\`\`\`
+```
 
 **Response:**
-\`\`\`json
+```json
 {
   "success": true,
   "data": {
@@ -102,7 +102,7 @@ curl -H "Authorization: Bearer TOKEN" \
     }
   }
 }
-\`\`\`
+```
 
 **Important:** When stage is "Игра проведена", a transaction is automatically created with idempotency support.
 
@@ -126,7 +126,7 @@ curl -H "Authorization: Bearer TOKEN" \
 - `Idempotency-Key: unique-key` (recommended)
 
 **Request:**
-\`\`\`json
+```json
 {
   "date": "2025-01-15",
   "deal_id": "uuid",
@@ -138,7 +138,7 @@ curl -H "Authorization: Bearer TOKEN" \
   "host_rate": 5000,
   "dj_rate": 4000
 }
-\`\`\`
+```
 
 **Note:** Calculations (total_revenue, royalty, FOT) are done automatically on the server.
 
@@ -154,13 +154,13 @@ curl -H "Authorization: Bearer TOKEN" \
 - `endDate` (date, required)
 
 **Example:**
-\`\`\`bash
+```bash
 curl -H "Authorization: Bearer TOKEN" \
   "https://api.questlegends.com/v2/analytics/pnl?locationId=xxx&startDate=2025-01-01&endDate=2025-01-31"
-\`\`\`
+```
 
 **Response:**
-\`\`\`json
+```json
 {
   "success": true,
   "data": {
@@ -174,7 +174,7 @@ curl -H "Authorization: Bearer TOKEN" \
     "avgCheck": 12500
   }
 }
-\`\`\`
+```
 
 ### Compare Franchisees (UK Only)
 
@@ -206,7 +206,7 @@ Returns CSV file with all audit logs matching filters.
 
 All errors follow standard format:
 
-\`\`\`json
+```json
 {
   "success": false,
   "error": {
@@ -220,7 +220,7 @@ All errors follow standard format:
     ]
   }
 }
-\`\`\`
+```
 
 **Error Codes:**
 - `VALIDATION_ERROR` (400) - Input validation failed
@@ -248,7 +248,7 @@ The system sends webhooks for key events:
 - `franchisee.created` - New franchisee activated
 
 **Webhook Payload:**
-\`\`\`json
+```json
 {
   "event": "deal.completed",
   "timestamp": "2025-01-15T10:30:00Z",
@@ -258,7 +258,7 @@ The system sends webhooks for key events:
     "amount": 50000
   }
 }
-\`\`\`
+```
 
 **Webhook Security:**
 - HMAC-SHA256 signature in `X-Webhook-Signature` header
@@ -268,13 +268,13 @@ The system sends webhooks for key events:
 
 For safety-critical operations (transaction creation), use idempotency keys:
 
-\`\`\`bash
+```bash
 curl -X POST \
   -H "Authorization: Bearer TOKEN" \
   -H "Idempotency-Key: unique-key-123" \
   -d '{ ... }' \
   https://api.questlegends.com/v2/transactions
-\`\`\`
+```
 
 Duplicate requests with same idempotency key return the original result.
 

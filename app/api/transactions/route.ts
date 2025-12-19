@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
+import { requireApiAuth, sanitizeBody, withRateLimit, validateUUIDs } from "@/lib/api-auth"
+import { jwtVerify } from "jose/jwt/verify"
 
 async function getCurrentUser(request: Request) {
   const authHeader = request.headers.get("authorization")
@@ -23,12 +24,14 @@ async function getCurrentUser(request: Request) {
 }
 
 export async function GET(request: Request) {
-  try {
-    const user = await getCurrentUser(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+  const rateLimitError = await withRateLimit(request, 100, 60000)
+  if (rateLimitError) return rateLimitError
 
+  const authResult = await requireApiAuth(request)
+  if (authResult instanceof NextResponse) return authResult
+  const { user } = authResult
+
+  try {
     if (!process.env.DATABASE_URL) {
       return NextResponse.json({ transactions: [], data: [] })
     }
@@ -36,6 +39,11 @@ export async function GET(request: Request) {
     const sql = neon(process.env.DATABASE_URL)
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
+
+    if (franchiseeId) {
+      const validationError = validateUUIDs({ franchiseeId })
+      if (validationError) return validationError
+    }
 
     let transactions
 
@@ -125,20 +133,35 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  try {
-    const user = await getCurrentUser(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+  const rateLimitError = await withRateLimit(request, 20, 60000)
+  if (rateLimitError) return rateLimitError
 
+  const authResult = await requireApiAuth(request)
+  if (authResult instanceof NextResponse) return authResult
+  const { user } = authResult
+
+  try {
     if (!process.env.DATABASE_URL) {
       return NextResponse.json({ error: "Database not configured" }, { status: 500 })
     }
 
     const sql = neon(process.env.DATABASE_URL)
-    const body = await request.json()
+    const rawBody = await request.json()
+    const body = sanitizeBody(rawBody)
 
     const { dealId, franchiseeId, type, amount, description, date, category, gameLeadId } = body
+
+    const idsToValidate: Record<string, string> = {}
+    if (dealId) idsToValidate.dealId = dealId
+    if (franchiseeId) idsToValidate.franchiseeId = franchiseeId
+    if (gameLeadId) idsToValidate.gameLeadId = gameLeadId
+
+    const validationError = validateUUIDs(idsToValidate)
+    if (validationError) return validationError
+
+    if (amount && (typeof amount !== "number" || amount < 0)) {
+      return NextResponse.json({ error: "Неверная сумма транзакции" }, { status: 400 })
+    }
 
     const actualFranchiseeId = franchiseeId || user.franchiseeId
 

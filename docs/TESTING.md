@@ -3,12 +3,12 @@
 ## Running Tests
 
 ### Unit Tests
-\`\`\`bash
+```bash
 npm test                    # Run all tests
 npm test -- --coverage      # Run with coverage report
 npm test calculations       # Run specific test file
 npm test -- --watch        # Watch mode for development
-\`\`\`
+```
 
 ### Test Coverage Requirements
 - Minimum 85% coverage for critical modules
@@ -46,10 +46,10 @@ Located in `tests/performance/` directory.
 ## Test Data
 
 ### Seed Data
-\`\`\`bash
+```bash
 npm run seed              # Load test data
 npm run seed:clean        # Clean and reload
-\`\`\`
+```
 
 ### Test Scenarios
 

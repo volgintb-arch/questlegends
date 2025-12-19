@@ -22,14 +22,14 @@ async function getCurrentUser(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ franchiseeId: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: { franchiseeId: string } }) {
   try {
     const user = await getCurrentUser(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { franchiseeId } = await params
+    const { franchiseeId } = params
     const sql = neon(process.env.DATABASE_URL!)
 
     const franchisees = await sql`
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ franchiseeId: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: { franchiseeId: string } }) {
   try {
     const user = await getCurrentUser(request)
     if (!user) {
@@ -74,32 +74,56 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const { franchiseeId } = await params
+    const { franchiseeId } = params
     const body = await request.json()
     const sql = neon(process.env.DATABASE_URL!)
 
-    // Update only provided fields
+    const updates: string[] = []
+    const values: any[] = []
+    let paramIndex = 1
+
     if (body.name !== undefined) {
-      await sql`UPDATE "Franchisee" SET name = ${body.name}, "updatedAt" = NOW() WHERE id = ${franchiseeId}`
+      updates.push(`name = $${paramIndex++}`)
+      values.push(body.name)
     }
     if (body.city !== undefined) {
-      await sql`UPDATE "Franchisee" SET city = ${body.city}, "updatedAt" = NOW() WHERE id = ${franchiseeId}`
+      updates.push(`city = $${paramIndex++}`)
+      values.push(body.city)
     }
     if (body.address !== undefined) {
-      await sql`UPDATE "Franchisee" SET address = ${body.address}, "updatedAt" = NOW() WHERE id = ${franchiseeId}`
+      updates.push(`address = $${paramIndex++}`)
+      values.push(body.address)
     }
     if (body.phone !== undefined) {
-      await sql`UPDATE "Franchisee" SET phone = ${body.phone}, "updatedAt" = NOW() WHERE id = ${franchiseeId}`
+      updates.push(`phone = $${paramIndex++}`)
+      values.push(body.phone)
     }
     if (body.telegram !== undefined) {
-      await sql`UPDATE "Franchisee" SET telegram = ${body.telegram}, "updatedAt" = NOW() WHERE id = ${franchiseeId}`
+      updates.push(`telegram = $${paramIndex++}`)
+      values.push(body.telegram)
     }
     if (body.royaltyPercent !== undefined) {
-      await sql`UPDATE "Franchisee" SET "royaltyPercent" = ${body.royaltyPercent}, "updatedAt" = NOW() WHERE id = ${franchiseeId}`
+      updates.push(`"royaltyPercent" = $${paramIndex++}`)
+      values.push(Number(body.royaltyPercent))
     }
 
-    const result = await sql`SELECT * FROM "Franchisee" WHERE id = ${franchiseeId}`
+    if (updates.length > 0) {
+      updates.push(`"updatedAt" = NOW()`)
+      values.push(franchiseeId)
 
+      const query = `UPDATE "Franchisee" SET ${updates.join(", ")} WHERE id = $${paramIndex} RETURNING *`
+      const result = await sql(query, values)
+
+      if (result.length === 0) {
+        return NextResponse.json({ error: "Franchisee not found" }, { status: 404 })
+      }
+
+      console.log("[v0] Franchisee updated successfully:", result[0])
+      return NextResponse.json({ success: true, data: result[0] })
+    }
+
+    // If no updates, just return current data
+    const result = await sql`SELECT * FROM "Franchisee" WHERE id = ${franchiseeId}`
     if (result.length === 0) {
       return NextResponse.json({ error: "Franchisee not found" }, { status: 404 })
     }
@@ -111,7 +135,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ franchiseeId: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: { franchiseeId: string } }) {
   try {
     const user = await getCurrentUser(request)
     if (!user) {
@@ -123,7 +147,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const { franchiseeId } = await params
+    const { franchiseeId } = params
     const sql = neon(process.env.DATABASE_URL!)
 
     await sql`DELETE FROM "Franchisee" WHERE id = ${franchiseeId}`

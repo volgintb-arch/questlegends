@@ -123,17 +123,15 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         setCrmStats(data)
       }
     } catch (error) {
-      console.error("[v0] Error fetching CRM stats:", error)
+      console.error("Error fetching CRM stats:", error)
     }
   }
 
   useEffect(() => {
     const fetchPipelines = async () => {
       try {
-        console.log("[v0] Fetching pipelines...")
         const res = await fetch("/api/pipelines", { headers: getAuthHeaders() })
         const data = await res.json()
-        console.log("[v0] Pipelines response:", data)
         if (data.data && data.data.length > 0) {
           setPipelines(data.data)
           const defaultPipeline = data.data.find((p: Pipeline) => p.isDefault) || data.data[0]
@@ -142,7 +140,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
           setLoading(false)
         }
       } catch (error) {
-        console.error("[v0] Error fetching pipelines:", error)
+        console.error("Error fetching pipelines:", error)
         setLoading(false)
       }
     }
@@ -155,13 +153,11 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   useEffect(() => {
     const fetchDeals = async () => {
       if (!selectedPipeline) {
-        console.log("[v0] DealsKanban: No pipeline selected, skipping fetch")
         return
       }
 
       try {
         setLoading(true)
-        console.log("[v0] DealsKanban: Fetching deals for pipeline:", selectedPipeline.id, "role:", role)
 
         const params = new URLSearchParams()
         params.append("pipelineId", selectedPipeline.id)
@@ -174,24 +170,20 @@ export function DealsKanban({ role }: DealsKanbanProps) {
           role !== "own_point"
         ) {
           params.append("franchiseeId", user.franchiseeId)
-          console.log("[v0] DealsKanban: Adding franchiseeId filter:", user.franchiseeId)
         }
 
         const response = await fetch(`/api/deals?${params.toString()}`, {
           headers: getAuthHeaders(),
         })
 
-        console.log("[v0] DealsKanban: Response status:", response.status)
-
         if (!response.ok) {
           const errorText = await response.text()
-          console.error("[v0] DealsKanban: Error response:", errorText)
+          console.error("Error fetching deals:", errorText)
           throw new Error("Failed to fetch deals")
         }
 
         const responseData = await response.json()
         const deals = responseData.data || []
-        console.log("[v0] DealsKanban: Loaded deals:", deals.length)
 
         const grouped: BoardData = {}
         selectedPipeline.stages.forEach((stage) => {
@@ -230,7 +222,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
 
         fetchCrmStats(selectedPipeline.id)
       } catch (error) {
-        console.error("[v0] DealsKanban: Error fetching deals:", error)
+        console.error("Error fetching deals:", error)
       } finally {
         setLoading(false)
       }
@@ -279,31 +271,28 @@ export function DealsKanban({ role }: DealsKanbanProps) {
 
       fetchCrmStats(selectedPipeline.id)
     } catch (error) {
-      console.error("[v0] Error updating deal stage:", error)
+      console.error("Error updating deal stage:", error)
     }
   }
 
   const handleViewDeal = async (dealId: string) => {
     try {
-      console.log("[v0] Opening deal card for dealId:", dealId)
       const response = await fetch(`/api/deals/${dealId}`, {
         headers: getAuthHeaders(),
       })
       if (response.ok) {
         const data = await response.json()
-        console.log("[v0] Deal data loaded:", data)
         setViewingDeal(data.success ? data : data)
         setIsViewModalOpen(true)
       } else {
-        console.log("[v0] Failed to fetch deal:", response.status)
+        console.error("Failed to fetch deal:", response.status)
       }
     } catch (error) {
-      console.error("[v0] Error fetching deal:", error)
+      console.error("Error fetching deal:", error)
     }
   }
 
   const handleDealCreated = async (deal: any) => {
-    console.log("[v0] Deal created, opening card:", deal)
     setIsCreateModalOpen(false)
 
     if (selectedPipeline && deal) {
@@ -357,7 +346,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
       }
       setShowSettings(false)
     } catch (error) {
-      console.error("[v0] Error refreshing pipelines:", error)
+      console.error("Error refreshing pipelines:", error)
     }
   }
 

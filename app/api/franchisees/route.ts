@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
+import { requireApiAuth, requireRoles, sanitizeBody, withRateLimit } from "@/lib/api-auth"
+import { jwtVerify } from "jose/jwt/verify"
 
 async function getCurrentUser(request: Request) {
   const authHeader = request.headers.get("authorization")
@@ -23,12 +24,14 @@ async function getCurrentUser(request: Request) {
 }
 
 export async function GET(request: Request) {
-  try {
-    const user = await getCurrentUser(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+  const rateLimitError = await withRateLimit(request, 100, 60000)
+  if (rateLimitError) return rateLimitError
 
+  const authResult = await requireApiAuth(request)
+  if (authResult instanceof NextResponse) return authResult
+  const { user } = authResult
+
+  try {
     if (!process.env.DATABASE_URL) {
       return NextResponse.json([])
     }
@@ -41,7 +44,8 @@ export async function GET(request: Request) {
         SELECT f.*, 
           COALESCE(f."royaltyPercent", 7) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
-          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount"
+          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id AND u.role != 'own_point') as "usersCount",
+          (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role IN ('franchisee', 'own_point') LIMIT 1) as "ownerRole"
         FROM "Franchisee" f
         ORDER BY f.name ASC
       `
@@ -50,7 +54,8 @@ export async function GET(request: Request) {
         SELECT f.*, 
           COALESCE(f."royaltyPercent", 7) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
-          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount"
+          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id AND u.role != 'own_point') as "usersCount",
+          (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role IN ('franchisee', 'own_point') LIMIT 1) as "ownerRole"
         FROM "Franchisee" f
         INNER JOIN "UserFranchiseeAssignment" ufa ON f.id = ufa."franchiseeId"
         WHERE ufa."userId" = ${user.id}
@@ -61,7 +66,8 @@ export async function GET(request: Request) {
         SELECT f.*,
           COALESCE(f."royaltyPercent", 7) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
-          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount"
+          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount",
+          (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role IN ('franchisee', 'own_point') LIMIT 1) as "ownerRole"
         FROM "Franchisee" f
         WHERE f.id = ${user.franchiseeId}
       `
@@ -84,22 +90,24 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const rateLimitError = await withRateLimit(request, 10, 60000)
+  if (rateLimitError) return rateLimitError
+
+  const authResult = await requireApiAuth(request)
+  if (authResult instanceof NextResponse) return authResult
+  const { user } = authResult
+
+  const rolesError = requireRoles(user, ["super_admin", "uk", "uk_employee"])
+  if (rolesError) return rolesError
+
   try {
-    const user = await getCurrentUser(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    if (user.role !== "super_admin" && user.role !== "uk" && user.role !== "uk_employee") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
     if (!process.env.DATABASE_URL) {
       return NextResponse.json({ error: "Database not configured" }, { status: 500 })
     }
 
     const sql = neon(process.env.DATABASE_URL)
-    const body = await request.json()
+    const rawBody = await request.json()
+    const body = sanitizeBody(rawBody)
 
     const result = await sql`
       INSERT INTO "Franchisee" (

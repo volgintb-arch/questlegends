@@ -13,7 +13,6 @@ import {
   Shield,
   UserCog,
   MessageSquare,
-  Target,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -37,7 +36,6 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
-      { id: "kpi", label: "KPI", icon: Target, path: "/kpi", module: "canViewKpi" as const },
       {
         id: "messages",
         label: "Сообщения",
@@ -67,7 +65,6 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
-      { id: "kpi", label: "KPI", icon: Target, path: "/kpi", module: "canViewKpi" as const },
       {
         id: "messages",
         label: "Сообщения",

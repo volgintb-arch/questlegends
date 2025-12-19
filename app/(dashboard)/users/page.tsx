@@ -61,9 +61,15 @@ export default function UsersPage() {
           (u: User) => u.role === "uk_employee" || u.role === "franchisee" || u.role === "own_point",
         )
       } else if (user?.role === "franchisee" || user?.role === "own_point") {
+        // Franchisee sees only their own franchise users
         filteredUsers = allUsers.filter(
           (u: User) =>
             u.franchisee?.id === user.franchiseeId && ["admin", "employee", "animator", "host", "dj"].includes(u.role),
+        )
+      } else if (user?.role === "admin") {
+        filteredUsers = allUsers.filter(
+          (u: User) =>
+            u.franchisee?.id === user.franchiseeId && ["employee", "animator", "host", "dj"].includes(u.role),
         )
       } else if (user?.role === "super_admin") {
         // Super admin sees everyone except themselves

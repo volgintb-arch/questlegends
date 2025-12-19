@@ -5,7 +5,6 @@ import {
   Calendar,
   TrendingUp,
   Gamepad2,
-  Target,
   CreditCard,
   CalendarDays,
   CheckCircle2,
@@ -16,9 +15,8 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -78,8 +76,6 @@ export function DashboardFranchisee() {
   })
   const [upcomingGames, setUpcomingGames] = useState<GameLead[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [kpiTarget, setKpiTarget] = useState(0)
-  const [kpiProgress, setKpiProgress] = useState(0)
 
   const fetchDashboardData = useCallback(async () => {
     if (!user?.franchiseeId) {
@@ -95,8 +91,7 @@ export function DashboardFranchisee() {
         fetch(`/api/transactions?franchiseeId=${user.franchiseeId}`, { headers }),
         fetch(`/api/franchisees/${user.franchiseeId}`, { headers }),
         fetch(`/api/game-leads?franchiseeId=${user.franchiseeId}`, { headers }),
-        fetch(`/api/kpi?franchiseeId=${user.franchiseeId}`, { headers }),
-        fetch(`/api/notifications`, { headers }), // Removed unreadOnly parameter to get all notifications
+        fetch(`/api/notifications`, { headers }),
       ])
 
       const transactionsRes = results[0]
@@ -116,22 +111,15 @@ export function DashboardFranchisee() {
         leads = leadsData.data || []
       }
 
-      const kpiData = results[3].status === "fulfilled" && results[3].value.ok ? await results[3].value.json() : null
-
-      const notificationsRes = results[4]
+      const notificationsRes = results[3]
       let notificationsList: Notification[] = []
       if (notificationsRes.status === "fulfilled" && notificationsRes.value.ok) {
         const notificationsData = await notificationsRes.value.json()
-        // API returns { success: true, data: { notifications: [...] } }
         notificationsList = notificationsData?.data?.notifications || []
-        console.log("[v0] Dashboard: Notifications fetched:", notificationsList.length)
-      } else {
-        console.error("[v0] Dashboard: Failed to fetch notifications")
       }
 
       const royaltyPercent = franchiseeData?.data?.royaltyPercent ?? franchiseeData?.royaltyPercent ?? 7
 
-      // Calculate stats from transactions
       const revenue = transactions
         .filter((t: any) => t.type === "income")
         .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
@@ -155,19 +143,6 @@ export function DashboardFranchisee() {
           l.stageType !== "completed" &&
           !l.stageName?.toLowerCase().includes("завершен"),
       )
-
-      // KPI
-      const currentMonth = new Date().getMonth() + 1
-      const currentYear = new Date().getFullYear()
-      const kpis = kpiData?.data || []
-      const currentKpi = kpis.find(
-        (k: any) => k.periodType === "month" && k.periodNumber === currentMonth && k.periodYear === currentYear,
-      )
-
-      if (currentKpi) {
-        setKpiTarget(currentKpi.targetValue || 0)
-        setKpiProgress(currentKpi.targetValue > 0 ? Math.min(100, (revenue / currentKpi.targetValue) * 100) : 0)
-      }
 
       const sortedNotifications = Array.isArray(notificationsList)
         ? notificationsList.sort((a, b) => {
@@ -212,7 +187,6 @@ export function DashboardFranchisee() {
     console.log("[v0] Dashboard: Notification clicked:", notification.id, notification.relatedDealId)
 
     if (notification.relatedDealId) {
-      // Mark as read
       try {
         await fetch(`/api/notifications/${notification.id}`, {
           method: "PATCH",
@@ -227,7 +201,6 @@ export function DashboardFranchisee() {
         console.error("[v0] Dashboard: Error marking notification as read:", e)
       }
 
-      // Navigate to CRM with deal and task
       const taskParam = notification.relatedTaskId ? `&taskId=${notification.relatedTaskId}` : ""
       const url = `/crm?dealId=${notification.relatedDealId}${taskParam}`
       console.log("[v0] Dashboard: Navigating to:", url)
@@ -351,26 +324,6 @@ export function DashboardFranchisee() {
           </CardContent>
         </Card>
       </div>
-
-      {/* KPI Progress */}
-      {kpiTarget > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="h-5 w-5" />
-              Выполнение плана
-            </CardTitle>
-            <CardDescription>Цель: {kpiTarget.toLocaleString("ru-RU")} ₽</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Progress value={kpiProgress} className="h-3" />
-            <p className="text-sm text-muted-foreground mt-2">
-              {stats.totalRevenue.toLocaleString("ru-RU")} ₽ из {kpiTarget.toLocaleString("ru-RU")} ₽ (
-              {kpiProgress.toFixed(1)}%)
-            </p>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Two columns: Upcoming Games and Notifications */}
       <div className="grid gap-4 md:grid-cols-2">

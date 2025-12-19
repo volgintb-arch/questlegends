@@ -15,13 +15,18 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
+  console.log("[v0] Login page rendered")
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setLoading(true)
 
+    console.log("[v0] Attempting login with phone:", phone)
+
     try {
       await login(phone, password)
+      console.log("[v0] Login successful")
     } catch (err: any) {
       console.error("[v0] Login error:", err)
       setError(err.message || "Ошибка при входе в систему")

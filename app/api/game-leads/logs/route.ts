@@ -8,6 +8,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const franchiseeId = searchParams.get("franchiseeId")
 
+    console.log("[v0] Game logs API: franchiseeId =", franchiseeId)
+
     let logs
     if (franchiseeId) {
       logs = await sql`
@@ -28,7 +30,7 @@ export async function GET(req: NextRequest) {
           g."clientName"
         FROM "GameLeadLog" l
         LEFT JOIN "GameLead" g ON l."leadId" = g.id
-        WHERE g."franchiseeId" = ${franchiseeId} OR g."franchiseeId" IS NULL
+        WHERE g."franchiseeId" = ${franchiseeId}
         ORDER BY l."createdAt" DESC
         LIMIT 100
       `
@@ -56,9 +58,18 @@ export async function GET(req: NextRequest) {
       `
     }
 
+    console.log(`[v0] Game logs API: Found ${logs.length} logs`)
+
     return NextResponse.json({ success: true, data: logs })
-  } catch (error) {
+  } catch (error: any) {
     console.error("[v0] Error fetching game logs:", error)
-    return NextResponse.json({ success: true, data: [] })
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message || "Failed to fetch game logs",
+        data: [],
+      },
+      { status: 500 },
+    )
   }
 }

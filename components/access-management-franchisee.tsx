@@ -69,7 +69,7 @@ export function AccessManagementFranchisee() {
               id: "schedules",
               name: "График",
               description: "Управление графиком персонала",
-              enabled: u.userPermissions?.canViewDashboard ?? true,
+              enabled: u.userPermissions?.canManageSchedule ?? true,
             },
             {
               id: "kb",
@@ -81,7 +81,7 @@ export function AccessManagementFranchisee() {
               id: "users",
               name: "Пользователи",
               description: "Создание персонала (аниматоры, ведущие, DJ)",
-              enabled: u.userPermissions?.canViewUsers ?? false,
+              enabled: u.userPermissions?.canManagePersonnel ?? false,
             },
           ],
         }))
@@ -106,8 +106,8 @@ export function AccessManagementFranchisee() {
 
     const permissionMap = {
       crm: "canViewCrm",
-      schedules: "canViewDashboard",
-      users: "canViewUsers",
+      schedules: "canManageSchedule",
+      users: "canManagePersonnel",
     }
 
     try {

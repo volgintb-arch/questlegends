@@ -6,7 +6,7 @@ This document contains sequence diagrams for all critical business scenarios in 
 
 This diagram shows the complete flow when a game is completed, including transaction creation, activity logging, and notifications.
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
     actor User
     participant Frontend
@@ -78,7 +78,7 @@ sequenceDiagram
             end
         end
     end
-\`\`\`
+```
 
 **Key Points:**
 - Database transaction ensures atomicity of deal update and transaction creation
@@ -93,7 +93,7 @@ sequenceDiagram
 
 This diagram shows how personnel is assigned to a game and notified via Telegram.
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
     actor Admin
     participant Frontend
@@ -159,7 +159,7 @@ sequenceDiagram
     
     AssignmentsController-->>Frontend: 201 Created
     Frontend-->>Admin: Success + real-time update
-\`\`\`
+```
 
 **Key Points:**
 - Telegram notifications sent asynchronously via queue
@@ -174,7 +174,7 @@ sequenceDiagram
 
 This diagram shows how historical rates are preserved when rates change.
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
     actor UK
     participant Frontend
@@ -228,7 +228,7 @@ sequenceDiagram
     AnalyticsService->>AnalyticsService: Calculate totals from stored values
     AnalyticsService-->>Frontend: Accurate historical report
     Frontend-->>UK: Report shows correct FOT for each period
-\`\`\`
+```
 
 **Key Points:**
 - Historical rates snapshot saved on transaction creation
@@ -242,7 +242,7 @@ sequenceDiagram
 
 This diagram shows the conversion from B2B lead to active franchisee.
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
     actor UK
     participant Frontend
@@ -297,7 +297,7 @@ sequenceDiagram
     
     DealsController-->>Frontend: 200 OK
     Frontend-->>UK: Franchisee created successfully
-\`\`\`
+```
 
 **Key Points:**
 - Atomic creation of franchisee, user, and access rights
@@ -311,7 +311,7 @@ sequenceDiagram
 
 This diagram shows optimized P&L calculation using SQL aggregations.
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
     actor Franchisee
     participant Frontend
@@ -352,7 +352,7 @@ sequenceDiagram
     
     AnalyticsController-->>Frontend: 200 OK { pnl data }
     Frontend-->>Franchisee: Display P&L dashboard
-\`\`\`
+```
 
 **Key Points:**
 - Single SQL query with aggregations (no N+1 problem)
@@ -366,7 +366,7 @@ sequenceDiagram
 
 This diagram shows the robust webhook delivery system.
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
     participant EventSource
     participant WebhookQueue
@@ -429,7 +429,7 @@ sequenceDiagram
         WebhookWorker->>DLQ: Move to DLQ (no retry on 4xx)
         Note over WebhookWorker: Client errors are not retried
     end
-\`\`\`
+```
 
 **Key Points:**
 - HMAC signature for webhook authentication
@@ -444,7 +444,7 @@ sequenceDiagram
 
 This diagram shows how all data changes are automatically logged.
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
     actor User
     participant Frontend
@@ -498,7 +498,7 @@ sequenceDiagram
     AuditService-->>Controller: Formatted history
     Controller-->>Frontend: 200 OK [audit logs]
     Frontend-->>User: Display timeline of all changes
-\`\`\`
+```
 
 **Key Points:**
 - Automatic logging via middleware
@@ -507,4 +507,4 @@ sequenceDiagram
 - Immutable audit trail for compliance
 - Easy to query and display change history
 
-\`\`\`
+```

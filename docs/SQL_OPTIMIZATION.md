@@ -4,7 +4,7 @@
 
 ### 1. P&L Calculation (Single Query)
 
-\`\`\`sql
+```sql
 -- Optimized P&L query with subquery for expenses
 -- Uses indexes: transactions(location_id, date), expenses(location_id, date)
 -- Performance: ~50ms for 100k transactions
@@ -28,11 +28,11 @@ WHERE t.location_id = $1
   AND t.date BETWEEN $2 AND $3
   AND t.status = 'completed'
 GROUP BY t.location_id;
-\`\`\`
+```
 
 ### 2. Revenue Time Series (Daily/Weekly/Monthly)
 
-\`\`\`sql
+```sql
 -- Revenue analytics with time grouping
 -- Uses composite index: transactions(location_id, date, status)
 -- Performance: ~100ms for 100k transactions
@@ -56,11 +56,11 @@ WHERE t.location_id = $1
   AND t.status = 'completed'
 GROUP BY period
 ORDER BY period ASC;
-\`\`\`
+```
 
 ### 3. Franchisee Comparison (UK Dashboard)
 
-\`\`\`sql
+```sql
 -- Compare all franchisees performance
 -- Uses indexes: transactions(location_id, date), franchisees(is_active)
 -- Performance: ~200ms for 1000 locations
@@ -97,11 +97,11 @@ LEFT JOIN transactions t ON t.location_id = f.id
 WHERE f.is_active = true
 GROUP BY f.id, f.name, f.location
 ORDER BY total_revenue DESC;
-\`\`\`
+```
 
 ### 4. Best Franchisee (Fastest Query)
 
-\`\`\`sql
+```sql
 -- Get top performing franchisee
 -- Uses index: transactions(date, status, total_revenue)
 -- Performance: ~30ms
@@ -121,13 +121,13 @@ WHERE t.date BETWEEN $1 AND $2
 GROUP BY f.id, f.name, f.location
 ORDER BY total_revenue DESC
 LIMIT 1;
-\`\`\`
+```
 
 ## Index Strategy
 
 ### Critical Indexes
 
-\`\`\`sql
+```sql
 -- Transactions table indexes
 CREATE INDEX idx_transactions_location_date ON transactions(location_id, date);
 CREATE INDEX idx_transactions_date_status ON transactions(date, status);
@@ -140,13 +140,13 @@ CREATE INDEX idx_expenses_location_date_status ON expenses(location_id, date, st
 
 -- Franchisees table indexes
 CREATE INDEX idx_franchisees_active ON franchisees(is_active);
-\`\`\`
+```
 
 ## Materialized Views (Advanced Optimization)
 
 For very large datasets (1M+ transactions), consider materialized views:
 
-\`\`\`sql
+```sql
 -- Daily aggregated metrics (refreshed nightly)
 CREATE MATERIALIZED VIEW daily_metrics AS
 SELECT
@@ -164,7 +164,7 @@ CREATE INDEX idx_daily_metrics_location_date ON daily_metrics(location_id, date)
 
 -- Refresh strategy
 REFRESH MATERIALIZED VIEW CONCURRENTLY daily_metrics;
-\`\`\`
+```
 
 ## Performance Benchmarks
 
@@ -186,7 +186,7 @@ Cache frequently accessed analytics:
 - Yearly reports: 24 hours TTL
 - Real-time data: No cache
 
-\`\`\`typescript
+```typescript
 // Example caching implementation
 const cacheKey = `pnl:${locationId}:${startDate}:${endDate}`
 const cached = await redis.get(cacheKey)

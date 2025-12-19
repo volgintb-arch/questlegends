@@ -3,6 +3,7 @@ import { neon } from "@neondatabase/serverless"
 import { jwtVerify } from "jose"
 import bcrypt from "bcryptjs"
 import { v4 as uuidv4 } from "uuid"
+import { requireApiAuth, requireRoles, sanitizeBody, withRateLimit } from "@/lib/api-auth"
 
 async function getCurrentUser(request: Request) {
   const authHeader = request.headers.get("Authorization")
@@ -28,13 +29,14 @@ async function getCurrentUser(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const rateLimitError = await withRateLimit(request, 60, 60000)
+  if (rateLimitError) return rateLimitError
+
+  const authResult = await requireApiAuth(request)
+  if (authResult instanceof NextResponse) return authResult
+  const { user } = authResult
+
   try {
-    const user = await getCurrentUser(request)
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const sql = neon(process.env.DATABASE_URL!)
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
@@ -142,17 +144,21 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const rateLimitError = await withRateLimit(request, 10, 60000)
+  if (rateLimitError) return rateLimitError
+
+  const authResult = await requireApiAuth(request)
+  if (authResult instanceof NextResponse) return authResult
+  const { user } = authResult
+
+  const rolesError = requireRoles(user, ["super_admin", "uk", "uk_employee", "franchisee", "own_point", "admin"])
+  if (rolesError) return rolesError
+
   try {
     console.log("[v0] Users POST: Request received")
 
-    const user = await getCurrentUser(request)
-    console.log("[v0] Users POST: Current user:", user)
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const body = await request.json()
+    const rawBody = await request.json()
+    const body = sanitizeBody(rawBody)
     console.log("[v0] Users POST: Request body:", body)
 
     const {

@@ -135,7 +135,6 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
   }
 
   const canManageArticles = role === "uk" || role === "super_admin" || role === "uk_employee"
-  //
   const isUkUser = user?.role === "uk" || user?.role === "super_admin" || user?.role === "uk_employee"
 
   const canOnlyView = role === "franchisee" || role === "admin" || role === "employee"
@@ -207,13 +206,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
   }
 
   const handleSaveArticle = async () => {
-    console.log("[v0] handleSaveArticle called")
-    console.log("[v0] editingArticle:", editingArticle)
-    console.log("[v0] editingArticle?.title:", editingArticle?.title)
-    console.log("[v0] editingArticle?.content:", editingArticle?.content)
-
     if (!editingArticle || !editingArticle.title || !editingArticle.content) {
-      console.log("[v0] handleSaveArticle: validation failed, returning early")
       return
     }
 
@@ -243,8 +236,6 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
         files: preparedFiles,
       }
 
-      console.log("[v0] Saving article with payload:", JSON.stringify(payload, null, 2))
-
       const response = await fetch(endpoint, {
         method,
         headers: {
@@ -254,18 +245,16 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
         body: JSON.stringify(payload),
       })
 
-      console.log("[v0] Save response status:", response.status)
-
       if (response.ok) {
         await loadArticles()
         setShowCreateDialog(false)
         setEditingArticle(null)
       } else {
         const errorData = await response.json()
-        console.error("[v0] Failed to save article:", errorData)
+        console.error("Failed to save article:", errorData)
       }
     } catch (error) {
-      console.error("[v0] Error saving article:", error)
+      console.error("Error saving article:", error)
     } finally {
       setIsLoading(false)
     }
@@ -295,7 +284,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
         }
       }
     } catch (error) {
-      console.error("[v0] Error deleting article:", error)
+      console.error("Error deleting article:", error)
       alert("Ошибка при удалении статьи")
     }
   }
@@ -335,7 +324,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
         files: [...(editingArticle.files || []), newFile],
       })
     } catch (error) {
-      console.error("[v0] Error uploading file:", error)
+      console.error("Error uploading file:", error)
       alert("Ошибка при загрузке файла")
     } finally {
       setUploadingFile(false)
@@ -378,19 +367,18 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
         await loadArticles()
       }
     } catch (error) {
-      console.error("[v0] Error marking article as completed:", error)
+      console.error("Error marking article as completed:", error)
     }
   }
 
   const handleViewArticle = async (article: KnowledgeArticle) => {
-    // Увеличиваем счетчик просмотров
     try {
       await fetch(`/api/knowledge/${article.id}/view`, {
         method: "POST",
         headers: getAuthHeaders(),
       })
     } catch (error) {
-      console.error("[v0] Error incrementing view:", error)
+      console.error("Error incrementing view:", error)
     }
     setSelectedArticle(article)
   }

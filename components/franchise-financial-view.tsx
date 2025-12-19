@@ -91,6 +91,8 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
   const handleSaveRoyalty = async (franchiseeId: string) => {
     try {
       setSavingRoyalty(true)
+      console.log("[v0] Saving royalty:", franchiseeId, editRoyaltyValue)
+
       const response = await fetch(`/api/franchisees/${franchiseeId}`, {
         method: "PATCH",
         headers: {
@@ -101,6 +103,9 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
       })
 
       if (response.ok) {
+        const result = await response.json()
+        console.log("[v0] Royalty saved successfully:", result)
+
         // Update local state
         setFranchiseData((prev) =>
           prev.map((f) => {
@@ -117,9 +122,13 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
           }),
         )
         setEditingRoyalty(null)
+
+        await loadFranchiseFinancials()
+      } else {
+        console.error("[v0] Failed to save royalty:", await response.text())
       }
     } catch (error) {
-      console.error("Error saving royalty:", error)
+      console.error("[v0] Error saving royalty:", error)
     } finally {
       setSavingRoyalty(false)
     }

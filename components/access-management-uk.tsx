@@ -17,7 +17,6 @@ interface UserPermissions {
   dashboard: boolean
   crm: boolean
   erp: boolean
-  kpi: boolean
   messages: boolean
   knowledgeBase: boolean
   notifications: boolean
@@ -41,7 +40,6 @@ const permissionLabels: Record<keyof UserPermissions, string> = {
   dashboard: "Дашборд",
   crm: "CRM",
   erp: "ERP",
-  kpi: "KPI",
   messages: "Сообщения",
   knowledgeBase: "База Знаний",
   notifications: "Уведомления",
@@ -95,7 +93,6 @@ export function AccessManagementUK() {
           dashboard: u.userPermissions?.canViewDashboard ?? true,
           crm: u.userPermissions?.canViewCrm ?? true,
           erp: u.userPermissions?.canViewErp ?? true,
-          kpi: u.userPermissions?.canViewKpi ?? true,
           messages: u.userPermissions?.canViewMessages ?? true,
           knowledgeBase: u.userPermissions?.canViewKnowledgeBase ?? true,
           notifications: u.userPermissions?.canViewNotifications ?? true,
@@ -136,6 +133,11 @@ export function AccessManagementUK() {
   }
 
   const handleTogglePermission = async (userId: string, permission: keyof UserPermissions) => {
+    if (currentUser?.role !== "super_admin" && currentUser?.role !== "uk") {
+      alert("Только супер-админ может изменять права доступа")
+      return
+    }
+
     const user = users.find((u) => u.id === userId)
     if (!user) return
 
@@ -157,11 +159,11 @@ export function AccessManagementUK() {
             canViewDashboard: newPermissions.dashboard,
             canViewCrm: newPermissions.crm,
             canViewErp: newPermissions.erp,
-            canViewKpi: newPermissions.kpi,
+            canViewKpi: false,
             canViewMessages: newPermissions.messages,
             canViewKnowledgeBase: newPermissions.knowledgeBase,
-            canViewUsers: false, // Always false for UK employees
-            canViewAccess: false, // Always false for UK employees
+            canViewUsers: false,
+            canViewAccess: false,
             canViewNotifications: newPermissions.notifications,
           },
         }),
@@ -171,12 +173,17 @@ export function AccessManagementUK() {
 
       setUsers(users.map((u) => (u.id === userId ? { ...u, permissions: newPermissions } : u)))
     } catch (error) {
-      console.error("[v0] Error updating permissions:", error)
+      console.error("Error updating permissions:", error)
       alert("Ошибка при обновлении прав доступа")
     }
   }
 
   const handleToggleFranchisee = async (userId: string, franchiseeId: string) => {
+    if (currentUser?.role !== "super_admin" && currentUser?.role !== "uk") {
+      alert("Только супер-админ может изменять доступ к франшизам")
+      return
+    }
+
     const user = users.find((u) => u.id === userId)
     if (!user) return
 
@@ -206,7 +213,7 @@ export function AccessManagementUK() {
     }
   }
 
-  const canEdit = currentUser?.role === "super_admin"
+  const canEdit = currentUser?.role === "super_admin" || currentUser?.role === "uk"
 
   if (authLoading || loading) {
     return (
@@ -289,7 +296,7 @@ export function AccessManagementUK() {
                       Права доступа к модулям:
                       {!canEdit && <span className="text-muted-foreground ml-1">(только просмотр)</span>}
                     </p>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       {(Object.keys(permissionLabels) as Array<keyof UserPermissions>).map((key) => (
                         <div key={key} className="flex items-center gap-1">
                           <Checkbox
@@ -298,7 +305,7 @@ export function AccessManagementUK() {
                             onCheckedChange={() => handleTogglePermission(user.id, key)}
                             disabled={!canEdit}
                           />
-                          <Label className="text-[10px]">{permissionLabels[key]}</Label>
+                          <Label className="text-[10px] cursor-pointer">{permissionLabels[key]}</Label>
                         </div>
                       ))}
                     </div>
@@ -343,7 +350,7 @@ export function AccessManagementUK() {
             <h3 className="text-xs font-medium">Система прав доступа</h3>
             <p className="text-[10px] text-muted-foreground mt-0.5">
               Сотрудники УК имеют полный доступ к CRM и другим модулям. Управление пользователями и доступом доступно
-              только супер-админу.
+              только супер-админу и директору УК.
             </p>
           </div>
         </div>

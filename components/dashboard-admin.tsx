@@ -30,8 +30,6 @@ export function DashboardAdmin() {
     if (!user?.franchiseeId) return
 
     try {
-      console.log("[v0] Admin dashboard: Loading metrics for franchisee:", user.franchiseeId)
-
       const transactionsRes = await fetch(`/api/transactions?franchiseeId=${user.franchiseeId}`, {
         headers: getAuthHeaders(),
       })
@@ -44,14 +42,11 @@ export function DashboardAdmin() {
         const transactionsData = await transactionsRes.json()
         const transactions = transactionsData.data || transactionsData.transactions || transactionsData || []
 
-        console.log("[v0] Admin dashboard: Loaded transactions:", transactions.length)
-
         transactions.forEach((t: any) => {
           const amount = Number(t.amount) || 0
           if (t.type === "income") {
             revenue += amount
           } else if (t.type === "expense") {
-            // Separate payroll from general expenses
             const isFOT =
               t.category?.toLowerCase().includes("fot") ||
               t.category?.toLowerCase().includes("зарплат") ||
@@ -66,10 +61,9 @@ export function DashboardAdmin() {
         })
       }
 
-      console.log("[v0] Admin dashboard: Metrics calculated -", { revenue, expenses, payroll })
       setMetrics({ revenue, expenses, payroll })
     } catch (error) {
-      console.error("[v0] Error loading metrics:", error)
+      console.error("Error loading metrics:", error)
     } finally {
       setLoading(false)
     }
@@ -87,7 +81,6 @@ export function DashboardAdmin() {
         const data = await response.json()
         const schedules = data.data || data || []
 
-        // Filter games that need staff assignment
         const needsAssignment = schedules.filter((game: any) => {
           const animatorsNeeded = game.animatorsNeeded || game.animatorsCount || 0
           const hostsNeeded = game.hostsNeeded || game.hostsCount || 0
@@ -95,15 +88,13 @@ export function DashboardAdmin() {
           const staffAssigned = (game.staff || game.assignedStaff || []).length
           const totalNeeded = animatorsNeeded + hostsNeeded + djsNeeded
 
-          console.log("[v0] Game check:", game.clientName, "needs:", totalNeeded, "assigned:", staffAssigned)
           return totalNeeded > staffAssigned
         })
 
-        console.log("[v0] Games requiring assignment:", needsAssignment.length)
         setGamesRequiringAssignment(needsAssignment)
       }
     } catch (error) {
-      console.error("[v0] Error loading games:", error)
+      console.error("Error loading games:", error)
     }
   }
 
@@ -123,22 +114,19 @@ export function DashboardAdmin() {
         }
       }
     } catch (error) {
-      console.error("[v0] Error loading pipeline:", error)
+      console.error("Error loading pipeline:", error)
     }
   }
 
   const handleTransactionCreated = async () => {
-    console.log("[v0] Admin: Transaction created, reloading metrics")
     setShowTransactionForm(false)
     await loadMetrics()
   }
 
   const handleGameCreated = async (game: any) => {
-    console.log("[v0] Admin created new game lead:", game)
     setShowGameModal(false)
     await loadGamesRequiringAssignment()
 
-    // Navigate to CRM card detail
     if (game.id) {
       window.location.href = `/crm?cardId=${game.id}`
     }

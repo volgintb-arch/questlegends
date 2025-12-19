@@ -75,12 +75,70 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
   })
 
   useEffect(() => {
-    fetchTransactions()
-    loadLocations()
-    if (user?.franchiseeId) {
-      loadFranchiseeData()
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+
+        // Fetch transactions
+        const queryParams = user?.franchiseeId ? `?franchiseeId=${user.franchiseeId}` : ""
+        const response = await fetch(`/api/transactions${queryParams}`, {
+          headers: getAuthHeaders(),
+        })
+        if (!response.ok) throw new Error("Failed to fetch transactions")
+
+        const data = await response.json()
+        setTransactions(data.transactions || [])
+
+        let franchiseeData: FranchiseeData | null = null
+        const isUK = role === "uk" || role === "uk_employee" || role === "super_admin"
+        if (!isUK && user?.franchiseeId) {
+          const franchiseeRes = await fetch(`/api/franchisees/${user.franchiseeId}`, {
+            headers: getAuthHeaders(),
+          })
+          if (franchiseeRes.ok) {
+            const franchiseeResult = await franchiseeRes.json()
+            franchiseeData = franchiseeResult.data || franchiseeResult
+
+            // Check if this is an own_point by looking at the owner's role
+            const usersRes = await fetch(`/api/users?franchiseeId=${user.franchiseeId}`, {
+              headers: getAuthHeaders(),
+            })
+            if (usersRes.ok) {
+              const usersData = await usersRes.json()
+              const usersList = usersData.data || usersData
+              const owner = usersList.find((u: any) => u.role === "own_point" || u.role === "franchisee")
+              if (owner && owner.role === "own_point") {
+                franchiseeData.isOwnPoint = true
+              }
+            }
+
+            console.log("[v0] Franchisee data loaded:", franchiseeData)
+          }
+        }
+
+        setFranchiseeData(franchiseeData)
+
+        // Load locations
+        const locationResponse = await fetch("/api/franchisees", {
+          headers: getAuthHeaders(),
+        })
+        if (locationResponse.ok) {
+          const franchisees = await locationResponse.json()
+          const locs = franchisees.map((f: any) => ({
+            id: f.id,
+            name: f.name,
+          }))
+          setLocations(locs)
+        }
+      } catch (error) {
+        console.error("[v0] Error fetching data:", error)
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [user])
+
+    fetchData()
+  }, [user, role])
 
   const fetchTransactions = async () => {
     try {
@@ -248,10 +306,8 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
       const totalExpenses = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
 
       // Calculate royalty only if not own_point
-      const royaltyPercent =
-        role === "own_point" || user?.role === "own_point" ? 0 : franchiseeData?.royaltyPercent || 7
-      const totalRoyalty =
-        role === "own_point" || user?.role === "own_point" ? 0 : Math.round(totalRevenue * (royaltyPercent / 100))
+      const royaltyPercent = franchiseeData?.royaltyPercent || 7
+      const totalRoyalty = Math.round(totalRevenue * (royaltyPercent / 100))
       const totalProfit = totalRevenue - totalExpenses - totalRoyalty
 
       const franchiseeSummary = [
@@ -260,7 +316,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
       ]
 
       // Add royalty row only if not own_point
-      if (role !== "own_point" && user?.role !== "own_point") {
+      if (!franchiseeData?.isOwnPoint) {
         franchiseeSummary.push({
           Показатель: `Роялти (${royaltyPercent}%)`,
           Значение: totalRoyalty,
@@ -448,8 +504,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
   const profit = totalRevenue - totalExpenses
 
-  const isOwnPoint = role === "own_point" || user?.role === "own_point"
-
+  const isOwnPoint = role === "own_point" || user?.role === "own_point" || franchiseeData?.isOwnPoint
   const royaltyPercent = isOwnPoint ? 0 : franchiseeData?.royaltyPercent || 7
   const royaltyAmount = isOwnPoint ? 0 : Math.round(totalRevenue * (royaltyPercent / 100))
 
