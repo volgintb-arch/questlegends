@@ -1,23 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { del } from "@vercel/blob"
-import { jwtVerify } from "jose"
-
-const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "your-secret-key")
-
-async function verifyAuth(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null
-  }
-  try {
-    const token = authHeader.substring(7)
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload.userId as string
-  } catch {
-    return null
-  }
-}
+import { verifyRequest } from "@/lib/simple-auth"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
   try {
@@ -66,8 +50,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
   try {
-    const userId = await verifyAuth(request)
-    if (!userId) {
+    const user = await verifyRequest(request)
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -102,7 +86,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         ${file.dealId},
         'file_deleted',
         ${"Удален файл: " + file.name},
-        ${userId},
+        ${user.userId},
         NOW()
       )
     `

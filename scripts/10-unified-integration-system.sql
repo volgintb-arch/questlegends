@@ -2,21 +2,16 @@
 -- Поддерживает каналы: Telegram, Instagram, VK, WhatsApp, Avito, MAX
 -- Архитектура: канал-агностичная, с маршрутизацией в B2B/B2C CRM
 
--- Drop old tables if exist
-DROP TABLE IF EXISTS SocialMediaConfig CASCADE;
-DROP TABLE IF EXISTS LeadTrigger CASCADE;
-DROP TABLE IF EXISTS LeadTemplate CASCADE;
-DROP TABLE IF EXISTS AutoResponseTemplate CASCADE;
-
 -- Main Integration table
+-- Changed default_assignee_id from UUID to TEXT to match User.id type
 CREATE TABLE IF NOT EXISTS Integration (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_type VARCHAR(20) NOT NULL CHECK (owner_type IN ('uk', 'franchisee')),
-  owner_id UUID, -- NULL для УК, franchisee_id для франчайзи
+  owner_id TEXT, -- NULL для УК, franchisee_id для франчайзи (TEXT to match Franchisee.id)
   channel VARCHAR(50) NOT NULL CHECK (channel IN ('telegram', 'instagram', 'vk', 'whatsapp', 'avito', 'max')),
   
   -- Credentials (encrypted в production)
-  credentials JSONB NOT NULL, -- { bot_token, api_key, access_token, etc }
+  credentials JSONB NOT NULL DEFAULT '{}', -- { bot_token, api_key, access_token, etc }
   
   -- Webhook configuration
   webhook_url TEXT, -- Генерируется автоматически
@@ -28,7 +23,7 @@ CREATE TABLE IF NOT EXISTS Integration (
   
   -- Auto-assignment strategy
   assignment_strategy VARCHAR(50) DEFAULT 'first_admin' CHECK (assignment_strategy IN ('first_admin', 'round_robin', 'default_user')),
-  default_assignee_id UUID REFERENCES "User"(id),
+  default_assignee_id TEXT REFERENCES "User"(id), -- TEXT instead of UUID
   
   -- Metadata
   created_at TIMESTAMP DEFAULT NOW(),
@@ -72,10 +67,10 @@ CREATE TABLE IF NOT EXISTS InboundMessage (
   
   -- Owner context
   owner_type VARCHAR(20) NOT NULL,
-  owner_id UUID,
+  owner_id TEXT, -- TEXT to match Franchisee.id
   
   -- Lead association
-  lead_id UUID, -- NULL если лид не создан
+  lead_id TEXT, -- TEXT to match GameLead.id / B2BDeal.id
   lead_type VARCHAR(10), -- 'b2b' или 'b2c'
   
   -- Raw payload для отладки
@@ -102,7 +97,7 @@ CREATE TABLE IF NOT EXISTS LeadDeduplication (
   external_user_id TEXT NOT NULL,
   phone TEXT,
   
-  lead_id UUID, -- Ссылка на созданный лид (GameLead или B2BDeal)
+  lead_id TEXT, -- TEXT to match GameLead.id / B2BDeal.id
   lead_type VARCHAR(10) NOT NULL, -- 'b2b' или 'b2c'
   
   created_at TIMESTAMP DEFAULT NOW(),
@@ -145,6 +140,9 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Drop trigger if exists before creating
+DROP TRIGGER IF EXISTS integration_updated ON Integration;
 
 CREATE TRIGGER integration_updated
   BEFORE UPDATE ON Integration

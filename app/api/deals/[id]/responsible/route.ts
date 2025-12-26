@@ -1,29 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
+import { verifyRequest } from "@/lib/simple-auth"
 import crypto from "crypto"
-
-async function getCurrentUser(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) return null
-
-  try {
-    const token = authHeader.substring(7)
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      name: payload.name as string,
-      role: payload.role as string,
-    }
-  } catch {
-    return null
-  }
-}
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getCurrentUser(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -50,7 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getCurrentUser(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -65,11 +47,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await sql`DELETE FROM "DealResponsible" WHERE "dealId" = ${dealId}`
 
     // Insert new assignments
-    for (const userId of responsibleIds) {
+    for (const odp of responsibleIds) {
       const id = crypto.randomUUID()
       await sql`
         INSERT INTO "DealResponsible" (id, "dealId", "userId")
-        VALUES (${id}, ${dealId}, ${userId})
+        VALUES (${id}, ${dealId}, ${odp})
       `
 
       // Send notification to new responsible user
@@ -85,7 +67,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ) VALUES (
           ${notifId}, 'deal', 'Назначение ответственным',
           ${`Вы назначены ответственным по сделке "${dealName}"`},
-          ${user.id}, ${userId}, ${dealId}, false, false, ${now}, ${now}
+          ${user.userId}, ${odp}, ${dealId}, false, false, ${now}, ${now}
         )
       `
     }

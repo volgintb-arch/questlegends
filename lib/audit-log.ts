@@ -270,3 +270,12 @@ export async function logLeadChange(
     },
   })
 }
+
+export class AuditLog {
+  static log = logAuditEvent
+  static getLogs = getAuditLogs
+  static logUserLogin = logUserLogin
+  static logRoleChange = logRoleChange
+  static logIntegrationLeadCreated = logIntegrationLeadCreated
+  static logLeadChange = logLeadChange
+}

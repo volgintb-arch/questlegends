@@ -1,29 +1,11 @@
 import { neon } from "@neondatabase/serverless"
 import { type NextRequest, NextResponse } from "next/server"
-import { jwtVerify } from "jose"
+import { verifyRequest } from "@/lib/simple-auth"
 import crypto from "crypto"
-
-async function getUserFromToken(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) return null
-
-  try {
-    const token = authHeader.substring(7)
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      name: payload.name as string,
-      role: payload.role as string,
-    }
-  } catch {
-    return null
-  }
-}
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getUserFromToken(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -48,7 +30,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getUserFromToken(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -83,7 +65,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Create event for task creation
     await sql`
       INSERT INTO "DealEvent" ("dealId", type, content, "userId", "userName", metadata)
-      VALUES (${dealId}, 'task', ${`Создана задача: ${title}`}, ${user.id}, ${user.name}, ${JSON.stringify({ taskId: task.id })})
+      VALUES (${dealId}, 'task', ${`Создана задача: ${title}`}, ${user.userId}, ${user.name}, ${JSON.stringify({ taskId: task.id })})
     `
 
     if (assigneeId) {
@@ -99,7 +81,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         ) VALUES (
           ${notifId}, 'task', 'Новая задача', 
           ${`Вам назначена задача "${title}" по сделке "${dealName}"`},
-          ${user.id}, ${assigneeId}, ${dealId}, ${task.id}, false, false, ${now}, ${now}
+          ${user.userId}, ${assigneeId}, ${dealId}, ${task.id}, false, false, ${now}, ${now}
         )
       `
       console.log("[v0] Notification created for assignee:", assigneeId)

@@ -1,27 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
-
-async function getCurrentUser(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) return null
-
-  try {
-    const token = authHeader.substring(7)
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      role: payload.role as string,
-    }
-  } catch {
-    return null
-  }
-}
+import { verifyRequest } from "@/lib/simple-auth"
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getCurrentUser(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -31,7 +14,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     // Only allow deleting own messages
     const message = await sql`
-      SELECT * FROM "Message" WHERE id = ${id} AND "senderId" = ${user.id}
+      SELECT * FROM "Message" WHERE id = ${id} AND "senderId" = ${user.userId}
     `
 
     if (message.length === 0) {
@@ -49,7 +32,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getCurrentUser(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -65,7 +48,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     // Only allow editing own messages
     const message = await sql`
-      SELECT * FROM "Message" WHERE id = ${id} AND "senderId" = ${user.id}
+      SELECT * FROM "Message" WHERE id = ${id} AND "senderId" = ${user.userId}
     `
 
     if (message.length === 0) {

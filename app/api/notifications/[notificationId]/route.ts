@@ -1,29 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
-
-async function getCurrentUser(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null
-  }
-
-  const token = authHeader.substring(7)
-  try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      role: payload.role as string,
-    }
-  } catch {
-    return null
-  }
-}
+import { verifyRequest } from "@/lib/simple-auth"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ notificationId: string }> }) {
   try {
-    const user = await getCurrentUser(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -38,7 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         s.role as "senderRole"
       FROM "Notification" n
       LEFT JOIN "User" s ON n."senderId" = s.id
-      WHERE n.id = ${notificationId} AND n."recipientId" = ${user.id}
+      WHERE n.id = ${notificationId} AND n."recipientId" = ${user.userId}
     `
 
     if (notifications.length === 0) {
@@ -54,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ notificationId: string }> }) {
   try {
-    const user = await getCurrentUser(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -69,7 +50,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       await sql`
         UPDATE "Notification" 
         SET "isRead" = ${isRead}, "updatedAt" = NOW() 
-        WHERE id = ${notificationId} AND "recipientId" = ${user.id}
+        WHERE id = ${notificationId} AND "recipientId" = ${user.userId}
       `
     }
 
@@ -77,13 +58,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       await sql`
         UPDATE "Notification" 
         SET "isArchived" = ${isArchived}, "updatedAt" = NOW() 
-        WHERE id = ${notificationId} AND "recipientId" = ${user.id}
+        WHERE id = ${notificationId} AND "recipientId" = ${user.userId}
       `
     }
 
     const result = await sql`
       SELECT * FROM "Notification" 
-      WHERE id = ${notificationId} AND "recipientId" = ${user.id}
+      WHERE id = ${notificationId} AND "recipientId" = ${user.userId}
     `
 
     if (result.length === 0) {
@@ -99,7 +80,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ notificationId: string }> }) {
   try {
-    const user = await getCurrentUser(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -109,7 +90,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     await sql`
       DELETE FROM "Notification" 
-      WHERE id = ${notificationId} AND "recipientId" = ${user.id}
+      WHERE id = ${notificationId} AND "recipientId" = ${user.userId}
     `
 
     return NextResponse.json({ success: true, message: "Notification deleted" })

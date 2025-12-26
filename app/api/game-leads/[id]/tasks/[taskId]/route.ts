@@ -1,33 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
-
-async function getCurrentUser(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null
-  }
-  const token = authHeader.substring(7)
-  try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      name: payload.name as string,
-      role: payload.role as string,
-    }
-  } catch {
-    return null
-  }
-}
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string; taskId: string } }) {
   try {
     const { id, taskId } = params
     const body = await req.json()
-    const user = await getCurrentUser(req)
+    const user = await verifyRequest(req)
 
     const [task] = await sql`SELECT * FROM "GameLeadTask" WHERE id = ${taskId} AND "leadId" = ${id}`
     if (!task) {
@@ -42,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       // Log event
       await sql`
         INSERT INTO "GameLeadEvent" ("leadId", type, content, "userId", "userName")
-        VALUES (${id}, 'system', ${body.completed ? "Задача завершена: " + task.title : "Задача открыта заново: " + task.title}, ${user?.id || null}, ${user?.name || null})
+        VALUES (${id}, 'system', ${body.completed ? "Задача завершена: " + task.title : "Задача открыта заново: " + task.title}, ${user?.userId || null}, ${user?.name || null})
       `
     }
 
@@ -72,7 +53,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(req: NextRequest, { params }: { params: { id: string; taskId: string } }) {
   try {
     const { id, taskId } = params
-    const user = await getCurrentUser(req)
+    const user = await verifyRequest(req)
 
     const [task] = await sql`SELECT * FROM "GameLeadTask" WHERE id = ${taskId} AND "leadId" = ${id}`
     if (!task) {
@@ -83,7 +64,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     await sql`
       INSERT INTO "GameLeadEvent" ("leadId", type, content, "userId", "userName")
-      VALUES (${id}, 'system', ${"Задача удалена: " + task.title}, ${user?.id || null}, ${user?.name || null})
+      VALUES (${id}, 'system', ${"Задача удалена: " + task.title}, ${user?.userId || null}, ${user?.name || null})
     `
 
     return NextResponse.json({ success: true })

@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless"
 import { type NextRequest, NextResponse } from "next/server"
-import { jwtVerify } from "jose"
+import { verifyRequest } from "@/lib/simple-auth"
+import { jwtVerify } from "jose/jwt/verify"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -26,14 +27,14 @@ async function getUserFromToken(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getUserFromToken(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = await params
+    const { id } = params
 
     const files = await sql`
       SELECT * FROM "DealFile"
@@ -48,19 +49,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   console.log("[v0] ===== FILES API POST CALLED =====")
 
   try {
-    const user = await getUserFromToken(request)
-    console.log("[v0] User from token:", user ? user.id : "null")
+    const user = await verifyRequest(request)
+    console.log("[v0] User from token:", user ? user.userId : "null")
 
     if (!user) {
       console.log("[v0] Unauthorized - no valid user token")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = await params
+    const { id } = params
     console.log("[v0] Deal ID:", id)
 
     const body = await request.json()
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     console.log("[v0] Inserting file record into database...")
     const [file] = await sql`
       INSERT INTO "DealFile" ("dealId", name, url, type, size, "uploadedById")
-      VALUES (${id}, ${name}, ${url}, ${type || null}, ${size || null}, ${user.id})
+      VALUES (${id}, ${name}, ${url}, ${type || null}, ${size || null}, ${user.userId})
       RETURNING *
     `
     console.log("[v0] File record created:", file.id)
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     console.log("[v0] Creating deal event...")
     await sql`
       INSERT INTO "DealEvent" ("dealId", type, content, "userId", "userName", metadata)
-      VALUES (${id}, 'file', ${`Прикреплен файл: ${name}`}, ${user.id}, ${user.name}, ${JSON.stringify({ fileId: file.id })})
+      VALUES (${id}, 'file', ${`Прикреплен файл: ${name}`}, ${user.userId}, ${user.name}, ${JSON.stringify({ fileId: file.id })})
     `
     console.log("[v0] Deal event created successfully")
 

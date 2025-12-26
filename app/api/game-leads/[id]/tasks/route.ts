@@ -1,27 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
-
-async function getCurrentUser(request: Request) {
-  const authHeader = request.headers.get("Authorization")
-  const token = authHeader?.replace("Bearer ", "")
-  if (!token) return null
-
-  try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      name: payload.name as string,
-      role: payload.role as string,
-      franchiseeId: payload.franchiseeId as string,
-    }
-  } catch {
-    return null
-  }
-}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -45,14 +26,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const user = await getCurrentUser(req)
+    const user = await verifyRequest(req)
     const body = await req.json()
     const { title, description, assigneeId, deadline } = body
 
     const deadlineValue = deadline && deadline !== "" ? deadline : null
 
     let assigneeName = null
-    let recipientId = assigneeId || user?.id // If no assignee specified, task is for creator
+    let recipientId = assigneeId || user?.userId // If no assignee specified, task is for creator
 
     if (assigneeId) {
       const [assignee] = await sql`SELECT name FROM "User" WHERE id = ${assigneeId}`
@@ -60,18 +41,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     } else if (user) {
       // Task is self-assigned
       assigneeName = user.name
-      recipientId = user.id
+      recipientId = user.userId
     }
 
     const [task] = await sql`
       INSERT INTO "GameLeadTask" ("leadId", title, description, "assigneeId", "assigneeName", deadline, "createdById")
-      VALUES (${id}, ${title}, ${description || null}, ${recipientId}, ${assigneeName}, ${deadlineValue}, ${user?.id || null})
+      VALUES (${id}, ${title}, ${description || null}, ${recipientId}, ${assigneeName}, ${deadlineValue}, ${user?.userId || null})
       RETURNING *
     `
 
     await sql`
       INSERT INTO "GameLeadEvent" ("leadId", type, content, "userId", "userName")
-      VALUES (${id}, 'task', ${"Создана задача: " + title + (assigneeName ? " (исполнитель: " + assigneeName + ")" : "")}, ${user?.id || null}, ${user?.name || null})
+      VALUES (${id}, 'task', ${"Создана задача: " + title + (assigneeName ? " (исполнитель: " + assigneeName + ")" : "")}, ${user?.userId || null}, ${user?.name || null})
     `
 
     const [gameLead] = await sql`SELECT "clientName", "franchiseeId" FROM "GameLead" WHERE id = ${id}`
@@ -80,7 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Create notification for the assignee (including self)
     if (recipientId) {
-      const isSelfAssigned = recipientId === user?.id
+      const isSelfAssigned = recipientId === user?.userId
       const notificationTitle = isSelfAssigned ? "Новая задача (для себя)" : "Новая задача"
       const notificationMessage = isSelfAssigned
         ? `Вы создали задачу: ${title} (клиент: ${gameLead?.clientName || "Неизвестно"})`
@@ -96,7 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           'task', 
           ${notificationTitle}, 
           ${notificationMessage},
-          ${user?.id || null},
+          ${user?.userId || null},
           ${recipientId},
           ${id},
           ${task.id},
