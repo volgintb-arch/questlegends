@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
 import bcrypt from "bcryptjs"
 import { v4 as uuidv4 } from "uuid"
-import { requireApiAuth, requireRoles, sanitizeBody, withRateLimit } from "@/lib/api-auth"
+import { verifyRequest } from "@/lib/simple-auth"
 
 async function getCurrentUser(request: Request) {
   const authHeader = request.headers.get("Authorization")
@@ -15,7 +14,7 @@ async function getCurrentUser(request: Request) {
 
   try {
     const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
+    const payload = JSON.parse(atob(token.split(".")[1]))
     return {
       id: payload.userId,
       phone: payload.phone,
@@ -29,14 +28,13 @@ async function getCurrentUser(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const rateLimitError = await withRateLimit(request, 60, 60000)
-  if (rateLimitError) return rateLimitError
-
-  const authResult = await requireApiAuth(request)
-  if (authResult instanceof NextResponse) return authResult
-  const { user } = authResult
-
   try {
+    const user = await verifyRequest(request as any)
+
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    }
+
     const sql = neon(process.env.DATABASE_URL!)
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
@@ -144,22 +142,19 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const rateLimitError = await withRateLimit(request, 10, 60000)
-  if (rateLimitError) return rateLimitError
-
-  const authResult = await requireApiAuth(request)
-  if (authResult instanceof NextResponse) return authResult
-  const { user } = authResult
-
-  const rolesError = requireRoles(user, ["super_admin", "uk", "uk_employee", "franchisee", "own_point", "admin"])
-  if (rolesError) return rolesError
-
   try {
-    console.log("[v0] Users POST: Request received")
+    const user = await verifyRequest(request as any)
+
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    }
+
+    const allowedRoles = ["super_admin", "uk", "uk_employee", "franchisee", "own_point", "admin"]
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
 
     const rawBody = await request.json()
-    const body = sanitizeBody(rawBody)
-    console.log("[v0] Users POST: Request body:", body)
 
     const {
       phone,
@@ -174,7 +169,7 @@ export async function POST(request: Request) {
       franchiseeId,
       email,
       city,
-    } = body
+    } = rawBody
 
     if (!name || !role) {
       return NextResponse.json({ error: "Name and role are required" }, { status: 400 })
@@ -249,7 +244,6 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10)
-    const tempPassword = password
 
     let userFranchiseeId = franchiseeId || user.franchiseeId
 
@@ -294,12 +288,12 @@ export async function POST(request: Request) {
 
     if (role === "admin" && permissions) {
       await sql`
-        INSERT INTO "UserPermission" ("userId", "canViewDeals", "canEditDeals", "canViewFinances", "canViewMarketing", "canViewKnowledgeBase", "canManageSchedule", "canManagePersonnel")
+        INSERT INTO "UserPermission" ("userId", "canViewDeals", "canEditDeals", "canViewFinances", "canViewMarketing", "canViewKb", "canManageSchedule", "canManagePersonnel")
         VALUES (${newUser[0].id}, ${permissions.canViewDeals || false}, ${permissions.canEditDeals || false}, ${permissions.canViewFinances || false}, ${permissions.canViewMarketing || false}, ${permissions.canViewKb || false}, ${permissions.canViewSchedule || false}, ${permissions.canViewPersonnel || false})
       `
     }
 
-    return NextResponse.json({ user: newUser[0], tempPassword })
+    return NextResponse.json({ user: newUser[0], tempPassword: password })
   } catch (error: any) {
     console.error("[v0] USERS_POST error:", error.message)
     return NextResponse.json({ error: "Internal error", details: error.message }, { status: 500 })

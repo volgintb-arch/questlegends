@@ -262,40 +262,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (phone: string, password: string) => {
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, password }),
-    })
+    console.log("[v0] AuthContext.login called with phone:", phone)
 
-    if (!response.ok) {
-      const data = await response.json()
-      throw new Error(data.error || "Login failed")
-    }
-
-    const data = await response.json()
-
-    setStoredToken(data.token)
-    setToken(data.token)
-
-    let permissions: UserPermissions | undefined
-    if (data.user.role === "uk" || data.user.role === "uk_employee") {
-      permissions = await loadUserPermissions(data.user.id, data.token)
-    }
-
-    setUser({ ...data.user, permissions })
-
-    if (data.user.role === "uk" || data.user.role === "super_admin") {
-      const franchiseesRes = await fetch("/api/franchisees", {
-        headers: { Authorization: `Bearer ${data.token}` },
+    try {
+      console.log("[v0] Sending POST request to /api/auth/login")
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, password }),
       })
-      if (franchiseesRes.ok) {
-        const franchiseesData = await franchiseesRes.json()
-        setFranchisees(Array.isArray(franchiseesData) ? franchiseesData : franchiseesData.data || [])
-      }
-    }
 
-    router.push("/")
+      console.log("[v0] Response status:", response.status)
+      console.log("[v0] Response ok:", response.ok)
+
+      if (!response.ok) {
+        const data = await response.json()
+        console.log("[v0] Error response data:", data)
+        throw new Error(data.error || "Login failed")
+      }
+
+      const data = await response.json()
+      console.log("[v0] Login success, token received:", !!data.token)
+
+      setStoredToken(data.token)
+      setToken(data.token)
+
+      let permissions: UserPermissions | undefined
+      if (data.user.role === "uk" || data.user.role === "uk_employee") {
+        permissions = await loadUserPermissions(data.user.id, data.token)
+      }
+
+      setUser({ ...data.user, permissions })
+
+      if (data.user.role === "uk" || data.user.role === "super_admin") {
+        const franchiseesRes = await fetch("/api/franchisees", {
+          headers: { Authorization: `Bearer ${data.token}` },
+        })
+        if (franchiseesRes.ok) {
+          const franchiseesData = await franchiseesRes.json()
+          setFranchisees(Array.isArray(franchiseesData) ? franchiseesData : franchiseesData.data || [])
+        }
+      }
+
+      router.push("/")
+    } catch (error) {
+      console.error("[v0] Login failed:", error)
+    }
   }
 
   const logout = async () => {

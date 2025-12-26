@@ -13,6 +13,7 @@ import {
   Shield,
   UserCog,
   MessageSquare,
+  Share2,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -44,6 +45,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewMessages" as const,
       },
       {
+        id: "social-integrations",
+        label: "Соцсети",
+        icon: Share2,
+        path: "/social-integrations",
+        module: "canViewDashboard" as const,
+      },
+      {
         id: "knowledge",
         label: "База Знаний",
         icon: BookOpen,
@@ -73,6 +81,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewMessages" as const,
       },
       {
+        id: "social-integrations",
+        label: "Соцсети",
+        icon: Share2,
+        path: "/social-integrations",
+        module: "canViewDashboard" as const,
+      },
+      {
         id: "knowledge",
         label: "База Знаний",
         icon: BookOpen,
@@ -100,6 +115,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         icon: MessageSquare,
         path: "/messages",
         module: "canViewMessages" as const,
+      },
+      {
+        id: "social-integrations",
+        label: "Соцсети",
+        icon: Share2,
+        path: "/social-integrations",
+        module: "canViewDashboard" as const,
       },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
       {

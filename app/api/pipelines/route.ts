@@ -1,26 +1,12 @@
 import { neon } from "@neondatabase/serverless"
 import { type NextRequest, NextResponse } from "next/server"
-import * as jose from "jose"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
-async function verifyAuth(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) return null
-
-  const token = authHeader.substring(7)
-  try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "secret")
-    const { payload } = await jose.jwtVerify(token, secret)
-    return payload as { id: string; role: string; name: string }
-  } catch {
-    return null
-  }
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const user = await verifyAuth(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -43,7 +29,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await verifyAuth(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -62,7 +48,7 @@ export async function POST(request: NextRequest) {
     // Create pipeline
     const [pipeline] = await sql`
       INSERT INTO "Pipeline" (name, description, color, "createdById")
-      VALUES (${name}, ${description || null}, ${color || "#3B82F6"}, ${user.id})
+      VALUES (${name}, ${description || null}, ${color || "#3B82F6"}, ${user.userId})
       RETURNING *
     `
 

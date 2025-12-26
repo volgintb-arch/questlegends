@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
+import { verifyRequest } from "@/lib/simple-auth"
 import crypto from "crypto"
 
 async function getCurrentUser(request: NextRequest) {
@@ -11,8 +11,7 @@ async function getCurrentUser(request: NextRequest) {
 
   const token = authHeader.substring(7)
   try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
+    const { payload } = await verifyRequest(token)
     return {
       id: payload.userId as string,
       role: payload.role as string,
@@ -62,14 +61,14 @@ async function logDealAction(
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await getCurrentUser(request)
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = await params
+    const { id } = params
 
     const sql = neon(process.env.DATABASE_URL!)
     const deals = await sql`
@@ -106,14 +105,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await getCurrentUser(request)
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = await params
+    const { id } = params
     const body = await request.json()
 
     const sql = neon(process.env.DATABASE_URL!)
@@ -267,7 +266,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await getCurrentUser(request)
     if (!user) {
@@ -278,7 +277,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 })
     }
 
-    const { id } = await params
+    const { id } = params
 
     const sql = neon(process.env.DATABASE_URL!)
 

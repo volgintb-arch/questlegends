@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { requireApiAuth, sanitizeBody, withRateLimit, validateUUIDs } from "@/lib/api-auth"
-import { jwtVerify } from "jose/jwt/verify"
+import { verifyToken } from "@/lib/simple-auth"
 
 async function getCurrentUser(request: Request) {
   const authHeader = request.headers.get("authorization")
@@ -10,26 +9,21 @@ async function getCurrentUser(request: Request) {
   }
 
   const token = authHeader.substring(7)
-  try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      role: payload.role as string,
-      franchiseeId: payload.franchiseeId as string | null,
-    }
-  } catch {
-    return null
+  const payload = verifyToken(token)
+  if (!payload) return null
+
+  return {
+    id: payload.userId as string,
+    role: payload.role as string,
+    franchiseeId: payload.franchiseeId as string | null,
   }
 }
 
 export async function GET(request: Request) {
-  const rateLimitError = await withRateLimit(request, 100, 60000)
-  if (rateLimitError) return rateLimitError
-
-  const authResult = await requireApiAuth(request)
-  if (authResult instanceof NextResponse) return authResult
-  const { user } = authResult
+  const user = await getCurrentUser(request)
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   try {
     if (!process.env.DATABASE_URL) {
@@ -41,33 +35,27 @@ export async function GET(request: Request) {
     const franchiseeId = searchParams.get("franchiseeId")
 
     if (franchiseeId) {
-      const validationError = validateUUIDs({ franchiseeId })
-      if (validationError) return validationError
-    }
-
-    let transactions
-
-    if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
       // Franchisee/own_point/admin sees only their transactions
-      if (user.franchiseeId) {
-        transactions = await sql`
-          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
-            t."dealId", t."franchiseeId", t."gameLeadId",
-            d."clientName" as "dealTitle",
-            f.name as "franchiseeName", f.city as "franchiseeCity"
-          FROM "Transaction" t
-          LEFT JOIN "Deal" d ON t."dealId" = d.id
-          LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
-          WHERE t."franchiseeId" = ${user.franchiseeId}
-          ORDER BY t.date DESC
-          LIMIT 100
-        `
-      } else {
-        transactions = []
-      }
-    } else if (user.role === "uk_employee") {
-      if (franchiseeId) {
-        transactions = await sql`
+      if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
+        if (user.franchiseeId) {
+          const transactions = await sql`
+            SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
+              t."dealId", t."franchiseeId", t."gameLeadId",
+              d."clientName" as "dealTitle",
+              f.name as "franchiseeName", f.city as "franchiseeCity"
+            FROM "Transaction" t
+            LEFT JOIN "Deal" d ON t."dealId" = d.id
+            LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
+            WHERE t."franchiseeId" = ${user.franchiseeId}
+            ORDER BY t.date DESC
+            LIMIT 100
+          `
+          return NextResponse.json({ transactions, data: transactions })
+        } else {
+          return NextResponse.json({ transactions: [], data: [] })
+        }
+      } else if (user.role === "uk_employee") {
+        const transactions = await sql`
           SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
             t."dealId", t."franchiseeId", t."gameLeadId",
             d."clientName" as "dealTitle",
@@ -80,8 +68,44 @@ export async function GET(request: Request) {
           ORDER BY t.date DESC
           LIMIT 100
         `
+        return NextResponse.json({ transactions, data: transactions })
       } else {
-        transactions = await sql`
+        // UK/super_admin sees all or filtered by franchiseeId
+        const transactions = await sql`
+          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
+            t."dealId", t."franchiseeId", t."gameLeadId",
+            d."clientName" as "dealTitle",
+            f.name as "franchiseeName", f.city as "franchiseeCity"
+          FROM "Transaction" t
+          LEFT JOIN "Deal" d ON t."dealId" = d.id
+          LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
+          WHERE t."franchiseeId" = ${franchiseeId}
+          ORDER BY t.date DESC
+          LIMIT 100
+        `
+        return NextResponse.json({ transactions, data: transactions })
+      }
+    } else {
+      if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
+        if (user.franchiseeId) {
+          const transactions = await sql`
+            SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
+              t."dealId", t."franchiseeId", t."gameLeadId",
+              d."clientName" as "dealTitle",
+              f.name as "franchiseeName", f.city as "franchiseeCity"
+            FROM "Transaction" t
+            LEFT JOIN "Deal" d ON t."dealId" = d.id
+            LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
+            WHERE t."franchiseeId" = ${user.franchiseeId}
+            ORDER BY t.date DESC
+            LIMIT 100
+          `
+          return NextResponse.json({ transactions, data: transactions })
+        } else {
+          return NextResponse.json({ transactions: [], data: [] })
+        }
+      } else if (user.role === "uk_employee") {
+        const transactions = await sql`
           SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
             t."dealId", t."franchiseeId", t."gameLeadId",
             d."clientName" as "dealTitle",
@@ -94,24 +118,10 @@ export async function GET(request: Request) {
           ORDER BY t.date DESC
           LIMIT 100
         `
-      }
-    } else {
-      // UK/super_admin sees all or filtered by franchiseeId
-      if (franchiseeId) {
-        transactions = await sql`
-          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
-            t."dealId", t."franchiseeId", t."gameLeadId",
-            d."clientName" as "dealTitle",
-            f.name as "franchiseeName", f.city as "franchiseeCity"
-          FROM "Transaction" t
-          LEFT JOIN "Deal" d ON t."dealId" = d.id
-          LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
-          WHERE t."franchiseeId" = ${franchiseeId}
-          ORDER BY t.date DESC
-          LIMIT 100
-        `
+        return NextResponse.json({ transactions, data: transactions })
       } else {
-        transactions = await sql`
+        // UK/super_admin sees all transactions
+        const transactions = await sql`
           SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
             t."dealId", t."franchiseeId", t."gameLeadId",
             d."clientName" as "dealTitle",
@@ -122,10 +132,9 @@ export async function GET(request: Request) {
           ORDER BY t.date DESC
           LIMIT 100
         `
+        return NextResponse.json({ transactions, data: transactions })
       }
     }
-
-    return NextResponse.json({ transactions, data: transactions })
   } catch (error) {
     console.error("[v0] TRANSACTIONS_GET error:", error)
     return NextResponse.json({ transactions: [], data: [] })
@@ -133,12 +142,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const rateLimitError = await withRateLimit(request, 20, 60000)
-  if (rateLimitError) return rateLimitError
-
-  const authResult = await requireApiAuth(request)
-  if (authResult instanceof NextResponse) return authResult
-  const { user } = authResult
+  const user = await getCurrentUser(request)
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   try {
     if (!process.env.DATABASE_URL) {
@@ -146,18 +153,9 @@ export async function POST(request: Request) {
     }
 
     const sql = neon(process.env.DATABASE_URL)
-    const rawBody = await request.json()
-    const body = sanitizeBody(rawBody)
+    const body = await request.json()
 
     const { dealId, franchiseeId, type, amount, description, date, category, gameLeadId } = body
-
-    const idsToValidate: Record<string, string> = {}
-    if (dealId) idsToValidate.dealId = dealId
-    if (franchiseeId) idsToValidate.franchiseeId = franchiseeId
-    if (gameLeadId) idsToValidate.gameLeadId = gameLeadId
-
-    const validationError = validateUUIDs(idsToValidate)
-    if (validationError) return validationError
 
     if (amount && (typeof amount !== "number" || amount < 0)) {
       return NextResponse.json({ error: "Неверная сумма транзакции" }, { status: 400 })

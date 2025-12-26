@@ -1,28 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
-
-async function getCurrentUser(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null
-  }
-  const token = authHeader.substring(7)
-  try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      name: payload.name as string,
-      role: payload.role as string,
-      franchiseeId: payload.franchiseeId as string | null,
-    }
-  } catch {
-    return null
-  }
-}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -49,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const user = await getCurrentUser(req)
+    const user = await verifyRequest(req)
     const body = await req.json()
 
     const [existing] = await sql`SELECT * FROM "Transaction" WHERE id = ${id}`
@@ -87,7 +67,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const user = await getCurrentUser(req)
+    const user = await verifyRequest(req)
 
     const [existing] = await sql`SELECT * FROM "Transaction" WHERE id = ${id}`
     if (!existing) {

@@ -1,23 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { jwtVerify } from "jose"
-
-async function getCurrentUser(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) return null
-
-  try {
-    const token = authHeader.substring(7)
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      role: payload.role as string,
-    }
-  } catch {
-    return null
-  }
-}
+import { verifyRequest } from "@/lib/simple-auth"
 
 async function queryWithRetry(sql: ReturnType<typeof neon>, query: () => Promise<any>, retries = 2) {
   for (let i = 0; i <= retries; i++) {
@@ -32,7 +15,7 @@ async function queryWithRetry(sql: ReturnType<typeof neon>, query: () => Promise
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -44,7 +27,7 @@ export async function GET(request: NextRequest) {
       () => sql`
       SELECT COUNT(*) as count
       FROM "Notification"
-      WHERE "recipientId" = ${user.id}
+      WHERE "recipientId" = ${user.userId}
         AND "isRead" = false
         AND "isArchived" = false
     `,

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
+import { verifyRequest } from "@/lib/simple-auth"
 import { jwtVerify } from "jose"
 
 const sql = neon(process.env.DATABASE_URL!)
@@ -51,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
     const { id } = params
     const body = await req.json()
-    const user = await getCurrentUser(req)
+    const user = await verifyRequest(req)
 
     console.log(`[v0] GameLead PATCH: leadId=${id}, fields=`, Object.keys(body))
 

@@ -1,81 +1,25 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { getToken } from "next-auth/jwt"
 
-const protectedRoutes = [
-  "/",
-  "/crm",
-  "/erp",
-  "/finances",
-  "/personnel",
-  "/shifts",
-  "/users",
-  "/access",
-  "/knowledge",
-  "/messages",
-  "/notifications",
-  "/marketing",
-  "/incidents",
-]
+const publicRoutes = ["/login", "/api/auth/login", "/api/auth/logout"]
 
-const roleBasedRoutes: Record<string, string[]> = {
-  "/users": ["super_admin", "admin", "uk_company"],
-  "/access": ["super_admin", "franchisee", "uk_company"],
-  "/erp": ["super_admin", "uk_company"],
-  "/finances": ["super_admin", "franchisee", "uk_company"],
-}
-
-export async function proxy(request: NextRequest) {
+export default async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (pathname === "/login" || pathname.startsWith("/api/auth")) {
+  if (publicRoutes.some((route) => pathname.startsWith(route))) {
     return NextResponse.next()
   }
 
-  const isProtectedRoute = protectedRoutes.some((route) => pathname === route || pathname.startsWith(route + "/"))
-
-  if (isProtectedRoute) {
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-    })
-
-    if (!token) {
-      const loginUrl = new URL("/login", request.url)
-      loginUrl.searchParams.set("callbackUrl", pathname)
-      return NextResponse.redirect(loginUrl)
-    }
-
-    for (const [route, allowedRoles] of Object.entries(roleBasedRoutes)) {
-      if (pathname === route || pathname.startsWith(route + "/")) {
-        if (!allowedRoles.includes(token.role as string)) {
-          return NextResponse.redirect(new URL("/", request.url))
-        }
-      }
-    }
-  }
-
+  // Authentication is handled by AuthContext on client and API route protection on server
   const response = NextResponse.next()
 
-  // Prevent DNS prefetching on untrusted links
+  // Security Headers
   response.headers.set("X-DNS-Prefetch-Control", "on")
-
-  // Force HTTPS for 1 year including subdomains
   response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
-
-  // Prevent clickjacking attacks
   response.headers.set("X-Frame-Options", "SAMEORIGIN")
-
-  // Prevent MIME type sniffing
   response.headers.set("X-Content-Type-Options", "nosniff")
-
-  // Enable XSS protection in older browsers
   response.headers.set("X-XSS-Protection", "1; mode=block")
-
-  // Control referrer information
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
-
-  // Disable potentially dangerous browser features
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=()")
 
   const cspDirectives = [

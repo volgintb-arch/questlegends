@@ -1,37 +1,15 @@
 import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { requireApiAuth, requireRoles, sanitizeBody, withRateLimit } from "@/lib/api-auth"
-import { jwtVerify } from "jose/jwt/verify"
-
-async function getCurrentUser(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null
-  }
-
-  const token = authHeader.substring(7)
-  try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      role: payload.role as string,
-      franchiseeId: payload.franchiseeId as string | null,
-    }
-  } catch {
-    return null
-  }
-}
+import { verifyRequest } from "@/lib/simple-auth"
 
 export async function GET(request: Request) {
-  const rateLimitError = await withRateLimit(request, 100, 60000)
-  if (rateLimitError) return rateLimitError
-
-  const authResult = await requireApiAuth(request)
-  if (authResult instanceof NextResponse) return authResult
-  const { user } = authResult
-
   try {
+    const user = await verifyRequest(request as any)
+
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    }
+
     if (!process.env.DATABASE_URL) {
       return NextResponse.json([])
     }
@@ -58,7 +36,7 @@ export async function GET(request: Request) {
           (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role IN ('franchisee', 'own_point') LIMIT 1) as "ownerRole"
         FROM "Franchisee" f
         INNER JOIN "UserFranchiseeAssignment" ufa ON f.id = ufa."franchiseeId"
-        WHERE ufa."userId" = ${user.id}
+        WHERE ufa."userId" = ${user.userId}
         ORDER BY f.name ASC
       `
     } else if (user.franchiseeId) {
@@ -85,29 +63,28 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("[v0] FRANCHISEES_GET error:", error)
-    return NextResponse.json([])
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
-  const rateLimitError = await withRateLimit(request, 10, 60000)
-  if (rateLimitError) return rateLimitError
-
-  const authResult = await requireApiAuth(request)
-  if (authResult instanceof NextResponse) return authResult
-  const { user } = authResult
-
-  const rolesError = requireRoles(user, ["super_admin", "uk", "uk_employee"])
-  if (rolesError) return rolesError
-
   try {
+    const user = await verifyRequest(request as any)
+
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    }
+
+    if (!["super_admin", "uk", "uk_employee"].includes(user.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
     if (!process.env.DATABASE_URL) {
       return NextResponse.json({ error: "Database not configured" }, { status: 500 })
     }
 
     const sql = neon(process.env.DATABASE_URL)
-    const rawBody = await request.json()
-    const body = sanitizeBody(rawBody)
+    const body = await request.json()
 
     const result = await sql`
       INSERT INTO "Franchisee" (

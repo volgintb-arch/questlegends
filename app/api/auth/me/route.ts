@@ -1,22 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { jwtVerify } from "jose"
+import { verifyRequest } from "@/lib/simple-auth"
 import { neon } from "@neondatabase/serverless"
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("Authorization")
-    const token = authHeader?.replace("Bearer ", "")
+    const payload = await verifyRequest(request)
 
-    if (!token) {
+    if (!payload) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
-
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-
-    const userId = payload.userId as string
-
-    console.log("[v0] Auth me - userId from JWT:", userId)
 
     const sql = neon(process.env.DATABASE_URL!)
 
@@ -26,7 +18,7 @@ export async function GET(request: NextRequest) {
         f.name as "franchiseeName", f.city as "franchiseeCity"
       FROM "User" u
       LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
-      WHERE u.id = ${userId}
+      WHERE u.id = ${payload.userId}
       LIMIT 1
     `
 
@@ -35,13 +27,6 @@ export async function GET(request: NextRequest) {
     }
 
     const user = users[0]
-
-    console.log("[v0] Auth me - user from DB:", {
-      id: user.id,
-      name: user.name,
-      role: user.role,
-      franchiseeId: user.franchiseeId,
-    })
 
     return NextResponse.json({
       user: {
