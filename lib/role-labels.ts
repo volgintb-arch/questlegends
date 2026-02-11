@@ -1,5 +1,5 @@
 export const ROLE_LABELS: Record<string, string> = {
-  super_admin: "Супер Администратор",
+  super_admin: "Управляющая Компания", // обратная совместимость, = uk
   uk: "Управляющая Компания",
   uk_employee: "Сотрудник УК",
   franchisee: "Франчайзи",

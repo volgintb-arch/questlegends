@@ -3,7 +3,7 @@ export interface User {
   id: string
   email: string
   name: string
-  role: "uk" | "franchisee" | "admin" | "employee" | "animator" | "host" | "dj"
+  role: "uk" | "super_admin" | "uk_employee" | "franchisee" | "own_point" | "admin" | "employee" | "animator" | "host" | "dj"
   phone?: string
   telegram_id?: string
   whatsapp?: string

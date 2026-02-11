@@ -56,24 +56,23 @@ export default function UsersPage() {
 
       // Filter based on current user role
       let filteredUsers = allUsers
-      if (user?.role === "uk") {
+      if (user?.role === "uk" || user?.role === "super_admin") {
+        // UK Owner видит всех подчинённых (кроме себя)
         filteredUsers = allUsers.filter(
-          (u: User) => u.role === "uk_employee" || u.role === "franchisee" || u.role === "own_point",
+          (u: User) => u.id !== user.id && ["uk_employee", "franchisee", "own_point", "admin", "employee", "animator", "host", "dj"].includes(u.role),
         )
       } else if (user?.role === "franchisee" || user?.role === "own_point") {
-        // Franchisee sees only their own franchise users
+        // Франчайзи видит только своих сотрудников
         filteredUsers = allUsers.filter(
           (u: User) =>
             u.franchisee?.id === user.franchiseeId && ["admin", "employee", "animator", "host", "dj"].includes(u.role),
         )
       } else if (user?.role === "admin") {
+        // Администратор видит только персонал своей точки
         filteredUsers = allUsers.filter(
           (u: User) =>
             u.franchisee?.id === user.franchiseeId && ["employee", "animator", "host", "dj"].includes(u.role),
         )
-      } else if (user?.role === "super_admin") {
-        // Super admin sees everyone except themselves
-        filteredUsers = allUsers.filter((u: User) => u.id !== user.id)
       }
 
       setUsers(filteredUsers)

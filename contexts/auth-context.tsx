@@ -3,9 +3,10 @@
 import { createContext, useContext, type ReactNode, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 
-export type UserRole = "super_admin" | "uk" | "uk_employee" | "franchisee" | "own_point" | "admin" | "employee"
+export type UserRole = "super_admin" | "uk" | "uk_employee" | "franchisee" | "own_point" | "admin" | "employee" | "animator" | "host" | "dj"
 
 export const ROLE_PERMISSIONS = {
+  // super_admin и uk объединены - одинаковый полный доступ
   super_admin: {
     dashboard: true,
     crm: true,
@@ -18,10 +19,12 @@ export const ROLE_PERMISSIONS = {
     kb: true,
     analytics: true,
     createFranchisee: true,
-    createUsers: ["franchisee", "own_point", "uk_employee", "uk", "admin", "employee"],
+    createUsers: ["franchisee", "own_point", "uk_employee", "admin", "employee", "animator", "host", "dj"],
     viewAllLocations: true,
     canManageKPI: true,
     canManageAll: true,
+    canManageSettings: true,
+    auditLog: true,
   },
   uk: {
     dashboard: true,
@@ -35,9 +38,12 @@ export const ROLE_PERMISSIONS = {
     kb: true,
     analytics: true,
     createFranchisee: true,
-    createUsers: ["franchisee", "own_point", "uk_employee"],
+    createUsers: ["franchisee", "own_point", "uk_employee", "admin", "employee", "animator", "host", "dj"],
     viewAllLocations: true,
     canManageKPI: true,
+    canManageAll: true,
+    canManageSettings: true,
+    auditLog: true,
   },
   uk_employee: {
     dashboard: true,
@@ -59,7 +65,7 @@ export const ROLE_PERMISSIONS = {
     access: true,
     kb: true,
     analytics: true,
-    createUsers: ["admin", "employee"],
+    createUsers: ["admin", "employee", "animator", "host", "dj"],
     viewOwnLocations: true,
     addExpenses: true,
     manageAdminPermissions: true,
@@ -75,12 +81,12 @@ export const ROLE_PERMISSIONS = {
     access: true,
     kb: true,
     analytics: true,
-    createUsers: ["admin", "employee"],
+    createUsers: ["admin", "employee", "animator", "host", "dj"],
     viewOwnLocations: true,
     addExpenses: true,
     manageAdminPermissions: true,
     editTelegramTemplates: true,
-    noRoyalty: true, // Собственная точка не платит роялти
+    noRoyalty: true,
   },
   admin: {
     dashboard: true,
@@ -90,12 +96,34 @@ export const ROLE_PERMISSIONS = {
     schedules: true,
     kb: true,
     users: true,
-    createUsers: ["employee"],
+    createUsers: ["employee", "animator", "host", "dj"],
     viewOwnLocation: true,
     cannotManageAccess: true,
     cannotCreateCustomRoles: true,
   },
   employee: {
+    dashboard: true,
+    schedules: true,
+    kb: true,
+    viewOwnSchedule: true,
+    viewOwnTasks: true,
+  },
+  animator: {
+    dashboard: true,
+    schedules: true,
+    kb: true,
+    viewOwnSchedule: true,
+    viewOwnTasks: true,
+  },
+  host: {
+    dashboard: true,
+    schedules: true,
+    kb: true,
+    viewOwnSchedule: true,
+    viewOwnTasks: true,
+  },
+  dj: {
+    dashboard: true,
     schedules: true,
     kb: true,
     viewOwnSchedule: true,
@@ -230,7 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const data = await response.json()
 
           let permissions: UserPermissions | undefined
-          if (data.user.role === "uk" || data.user.role === "uk_employee") {
+          if (data.user.role === "uk" || data.user.role === "uk_employee" || data.user.role === "super_admin") {
             permissions = await loadUserPermissions(data.user.id, storedToken)
           }
 
@@ -288,7 +316,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(data.token)
 
       let permissions: UserPermissions | undefined
-      if (data.user.role === "uk" || data.user.role === "uk_employee") {
+      if (data.user.role === "uk" || data.user.role === "uk_employee" || data.user.role === "super_admin") {
         permissions = await loadUserPermissions(data.user.id, data.token)
       }
 
@@ -320,7 +348,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const canAccess = (requiredRoles: UserRole[]): boolean => {
     if (!user) return false
-    if (user.role === "super_admin") return true
+    // uk и super_admin имеют одинаковый полный доступ
+    if (user.role === "super_admin" || user.role === "uk") return true
     return requiredRoles.includes(user.role)
   }
 
@@ -366,11 +395,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canViewModule = (module: keyof UserPermissions): boolean => {
     if (!user) return false
 
-    if (user.role === "super_admin") return true
+    // uk и super_admin - полный доступ ко всему
+    if (user.role === "super_admin" || user.role === "uk") return true
 
-    if (user.role === "uk" || user.role === "uk_employee") {
+    // uk_employee - доступ через персональные permissions
+    if (user.role === "uk_employee") {
       if (!user.permissions) {
-        if (user.role === "uk") return true
         const ukEmployeeDefaults: Record<keyof UserPermissions, boolean> = {
           canViewDashboard: true,
           canViewCrm: true,

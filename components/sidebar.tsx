@@ -180,6 +180,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
 
     const personnelItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
+      { id: "schedule", label: "Мои Смены", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -219,7 +220,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
 
   const getRoleLabel = () => {
     const roleLabels: Record<string, string> = {
-      super_admin: "Супер Администратор",
+      super_admin: "Управляющая Компания",
       uk: "Управляющая Компания",
       uk_employee: "Сотрудник УК",
       franchisee: "Франчайзи",

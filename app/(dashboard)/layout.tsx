@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const getRoleDisplayName = (role: string) => {
     const roleLabels: Record<string, string> = {
-      super_admin: "Супер Администратор",
+      super_admin: "Управляющая Компания",
       uk: "Управляющая Компания",
       uk_employee: "Сотрудник УК",
       franchisee: "Франчайзи",
