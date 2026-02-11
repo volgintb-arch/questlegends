@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/utils/response"
 import { z } from "zod"
@@ -15,8 +14,8 @@ const taskSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
@@ -31,13 +30,13 @@ export async function GET(request: Request) {
     }
 
     if (assignedToMe) {
-      where.assignedToUserId = session.user.id
+      where.assignedToUserId = user.userId
     }
 
     // Filter by franchise for non-UK roles
-    if (session.user.role !== "uk") {
+    if (!["super_admin", "uk", "uk_employee"].includes(user.role)) {
       where.deal = {
-        franchiseeId: session.user.franchiseeId,
+        franchiseeId: user.franchiseeId,
       }
     }
 
@@ -79,8 +78,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
@@ -97,8 +96,8 @@ export async function POST(request: Request) {
     const deal = await prisma.deal.findFirst({
       where: {
         id: dealId,
-        ...(session.user.role !== "uk" && {
-          franchiseeId: session.user.franchiseeId,
+        ...(!["super_admin", "uk", "uk_employee"].includes(user.role) && {
+          franchiseeId: user.franchiseeId,
         }),
       },
       include: {
@@ -117,7 +116,7 @@ export async function POST(request: Request) {
         title,
         description,
         assignedToUserId,
-        createdByUserId: session.user.id,
+        createdByUserId: user.userId,
         startTime: startTime ? new Date(startTime) : null,
         dueTime: dueTime ? new Date(dueTime) : null,
       },

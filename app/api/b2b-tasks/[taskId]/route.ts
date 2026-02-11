@@ -1,17 +1,16 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/utils/response"
 
 export async function PATCH(request: Request, { params }: { params: { taskId: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
     // Only UK can update B2B tasks
-    if (session.user.role !== "uk") {
+    if (!["super_admin", "uk", "uk_employee"].includes(user.role)) {
       return errorResponse("Only UK can update B2B tasks", 403)
     }
 
@@ -81,8 +80,8 @@ export async function PATCH(request: Request, { params }: { params: { taskId: st
         b2bDealId: existingTask.b2bDealId,
         type: "task_updated",
         content: activityContent,
-        userId: session.user.id,
-        userName: session.user.name,
+        userId: user.userId,
+        userName: user.name || "",
       },
     })
 
@@ -100,13 +99,13 @@ export async function PATCH(request: Request, { params }: { params: { taskId: st
 
 export async function DELETE(request: Request, { params }: { params: { taskId: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
     // Only UK can delete B2B tasks
-    if (session.user.role !== "uk") {
+    if (!["super_admin", "uk", "uk_employee"].includes(user.role)) {
       return errorResponse("Only UK can delete B2B tasks", 403)
     }
 
@@ -128,8 +127,8 @@ export async function DELETE(request: Request, { params }: { params: { taskId: s
         b2bDealId: task.b2bDealId,
         type: "task_deleted",
         content: `Задача удалена: ${task.title}`,
-        userId: session.user.id,
-        userName: session.user.name,
+        userId: user.userId,
+        userName: user.name || "",
       },
     })
 

@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/utils/response"
 import { z } from "zod"
@@ -17,8 +16,8 @@ const updateSchema = z.object({
 
 export async function PATCH(request: Request, { params }: { params: { taskId: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
@@ -45,7 +44,7 @@ export async function PATCH(request: Request, { params }: { params: { taskId: st
     }
 
     // Check access
-    if (session.user.role !== "uk" && task.deal.franchiseeId !== session.user.franchiseeId) {
+    if (!["super_admin", "uk", "uk_employee"].includes(user.role) && task.deal.franchiseeId !== user.franchiseeId) {
       return errorResponse("Forbidden", 403)
     }
 
@@ -80,8 +79,8 @@ export async function PATCH(request: Request, { params }: { params: { taskId: st
 
 export async function DELETE(request: Request, { params }: { params: { taskId: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
@@ -97,7 +96,7 @@ export async function DELETE(request: Request, { params }: { params: { taskId: s
     }
 
     // Check access
-    if (session.user.role !== "uk" && task.deal.franchiseeId !== session.user.franchiseeId) {
+    if (!["super_admin", "uk", "uk_employee"].includes(user.role) && task.deal.franchiseeId !== user.franchiseeId) {
       return errorResponse("Forbidden", 403)
     }
 

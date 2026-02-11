@@ -4,22 +4,13 @@ import { verifyRequest } from "@/lib/simple-auth"
 import crypto from "crypto"
 
 async function getCurrentUser(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null
-  }
-
-  const token = authHeader.substring(7)
-  try {
-    const { payload } = await verifyRequest(token)
-    return {
-      id: payload.userId as string,
-      role: payload.role as string,
-      name: payload.name as string,
-      franchiseeId: payload.franchiseeId as string | null,
-    }
-  } catch {
-    return null
+  const payload = await verifyRequest(request)
+  if (!payload) return null
+  return {
+    id: payload.userId as string,
+    role: payload.role as string,
+    name: payload.name as string || "",
+    franchiseeId: payload.franchiseeId as string | null,
   }
 }
 

@@ -1,20 +1,11 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { verifyRequest } from "@/lib/simple-auth"
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
+    const user = await verifyRequest(request as any)
 
-    if (session?.user?.id) {
-      // Delete all refresh tokens for this user
-      await prisma.refreshToken.deleteMany({
-        where: {
-          userId: session.user.id,
-        },
-      })
-    }
+    // Token-based logout - just clear cookies, no DB cleanup needed
 
     const response = NextResponse.json({ success: true, message: "Logged out successfully" })
 

@@ -1,13 +1,10 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/utils/response"
 
 // This endpoint will be called by a cron job or webhook
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-
     // Verify this is an internal request or has proper API key
     const apiKey = request.headers.get("x-api-key")
     if (apiKey !== process.env.INTERNAL_API_KEY) {
