@@ -1,55 +1,66 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
-import { verifyToken } from "@/lib/simple-auth"
+import { verifyRequest } from "@/lib/simple-auth"
+import { sql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
-
-// GET /api/social-integrations/[configId]/triggers - получить триггеры
+// GET /api/social-integrations/[configId]/triggers - get triggers for integration
 export async function GET(req: NextRequest, { params }: { params: { configId: string } }) {
   try {
-    const authHeader = req.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
+    const user = await verifyRequest(req)
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const token = authHeader.substring(7)
-    const payload = verifyToken(token)
+    const { configId } = await params
 
-    if (!payload) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
-
-    const { configId } = params
-
+    // Try new triggerrule table first (unified integration system)
     const triggers = await sql`
-      SELECT * FROM "LeadTrigger" 
-      WHERE "configId" = ${configId}
-      ORDER BY "priority" DESC, "createdAt" DESC
+      SELECT 
+        id,
+        integration_id as "configId",
+        trigger_type as "triggerType",
+        keywords[1] as "keyword",
+        keywords,
+        keywords_match_type as "keywordsMatchType",
+        is_active as "isActive",
+        true as "autoCreateLead",
+        null as "autoReplyMessage",
+        priority,
+        created_at as "createdAt"
+      FROM triggerrule
+      WHERE integration_id = ${configId}::uuid
+      ORDER BY priority DESC, created_at DESC
     `
 
-    return NextResponse.json({ success: true, data: triggers })
+    // Also check old LeadTrigger table for backward compat
+    let oldTriggers: any[] = []
+    try {
+      oldTriggers = await sql`
+        SELECT * FROM "LeadTrigger" 
+        WHERE "configId" = ${configId}
+        ORDER BY "priority" DESC, "createdAt" DESC
+      ` as any[]
+    } catch {
+      // Old table may not exist or configId format doesn't match
+    }
+
+    const allTriggers = [...(triggers as any[]), ...oldTriggers]
+
+    return NextResponse.json({ success: true, data: allTriggers })
   } catch (error) {
     console.error("[v0] Error fetching triggers:", error)
     return NextResponse.json({ error: "Failed to fetch triggers" }, { status: 500 })
   }
 }
 
-// POST /api/social-integrations/[configId]/triggers - создать триггер
+// POST /api/social-integrations/[configId]/triggers - create trigger
 export async function POST(req: NextRequest, { params }: { params: { configId: string } }) {
   try {
-    const authHeader = req.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
+    const user = await verifyRequest(req)
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const token = authHeader.substring(7)
-    const payload = verifyToken(token)
-
-    if (!payload) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
-
-    const { configId } = params
+    const { configId } = await params
     const body = await req.json()
     const { keyword, isActive = true, autoCreateLead = true, autoReplyMessage, priority = 0 } = body
 
@@ -57,15 +68,34 @@ export async function POST(req: NextRequest, { params }: { params: { configId: s
       return NextResponse.json({ error: "Keyword is required" }, { status: 400 })
     }
 
+    // Insert into new triggerrule table
     const [trigger] = await sql`
-      INSERT INTO "LeadTrigger" (
-        "configId", "keyword", "isActive", "autoCreateLead", "autoReplyMessage", "priority"
+      INSERT INTO triggerrule (
+        integration_id,
+        trigger_type,
+        keywords,
+        keywords_match_type,
+        is_active,
+        priority
       )
       VALUES (
-        ${configId}, ${keyword}, ${isActive}, ${autoCreateLead}, ${autoReplyMessage || null}, ${priority}
+        ${configId}::uuid,
+        'keywords',
+        ${[keyword]}::text[],
+        'any',
+        ${isActive},
+        ${priority}
       )
-      RETURNING *
-    `
+      RETURNING 
+        id,
+        integration_id as "configId",
+        keywords[1] as "keyword",
+        is_active as "isActive",
+        true as "autoCreateLead",
+        null as "autoReplyMessage",
+        priority,
+        created_at as "createdAt"
+    ` as any[]
 
     return NextResponse.json({ success: true, data: trigger })
   } catch (error) {

@@ -153,6 +153,25 @@ export async function POST(request: NextRequest) {
 
     integration.webhook_url = webhookUrl
 
+    // Create default "first_message" trigger so leads are auto-created
+    await sql`
+      INSERT INTO triggerrule (
+        integration_id,
+        trigger_type,
+        keywords,
+        keywords_match_type,
+        is_active,
+        priority
+      ) VALUES (
+        ${integration.id}::uuid,
+        'first_message',
+        '{}'::text[],
+        'any',
+        true,
+        100
+      )
+    `
+
     // Audit log
     await logAuditEvent({
       action: "integration_message",
