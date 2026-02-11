@@ -1,27 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { verifyRequest } from "@/lib/simple-auth"
-import { jwtVerify } from "jose"
-
-async function getCurrentUser(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null
-  }
-
-  const token = authHeader.substring(7)
-  try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const { payload } = await jwtVerify(token, secret)
-    return {
-      id: payload.userId as string,
-      role: payload.role as string,
-      franchiseeId: payload.franchiseeId as string | null,
-    }
-  } catch {
-    return null
-  }
-}
 
 export async function GET(request: NextRequest) {
   try {
