@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { verifyRequest } from "@/lib/simple-auth"
+import { cache } from "@/lib/cache"
+
+// Префикс ключей кеша франчайзи (совпадает с route.ts)
+const CACHE_PREFIX = "franchisees:"
 
 export async function GET(request: NextRequest, { params }: { params: { franchiseeId: string } }) {
   try {
