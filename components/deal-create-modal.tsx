@@ -283,7 +283,7 @@ export function DealCreateModal({ isOpen, onClose, onCreated, pipeline, role }: 
                 <option value="">Не назначен</option>
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.role === "super_admin" ? "Супер Админ" : emp.role === "uk" ? "УК" : "Сотрудник УК"}
+                    {emp.name} ({emp.role === "super_admin" || emp.role === "uk" ? "УК" : "Сотрудник УК"}
                     )
                   </option>
                 ))}

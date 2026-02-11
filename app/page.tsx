@@ -60,60 +60,65 @@ export default function Dashboard() {
   }
 
   const renderView = () => {
+    const isUKOwner = user.role === "uk" || user.role === "super_admin"
+    const isPersonnel = ["employee", "animator", "host", "dj"].includes(user.role)
+
     switch (view) {
       case "dashboard":
-        if (user.role === "uk") return <DashboardUK />
+        if (isUKOwner || user.role === "uk_employee") return <DashboardUK />
         if (user.role === "franchisee" || user.role === "own_point") return <DashboardFranchisee />
         if (user.role === "admin") return <DashboardAdmin />
-        if (user.role === "employee") return <DashboardEmployee />
+        if (isPersonnel) return <DashboardEmployee />
         return <DashboardUK />
       case "deals":
-        return <DealsKanban role={user.role} />
+        return <DealsKanban role={isUKOwner ? "uk" : user.role as any} />
       case "transactions":
-        return <TransactionsERP role={user.role} />
+        return <TransactionsERP role={isUKOwner ? "uk" : user.role} />
       case "finances":
+        if (isUKOwner) return <TransactionsERP role="uk" />
         if (user.role === "admin") return <FinancesAdmin />
         if (user.role === "franchisee" || user.role === "own_point") return <FinancesFranchisee />
         return <TransactionsERP role={user.role} />
       case "schedule":
+        if (isPersonnel) return <DashboardEmployee />
         if (user.role === "admin") return <PersonnelScheduleAdmin />
-        return <PersonnelSection role={user.role} />
+        return <PersonnelSection role={isUKOwner ? "uk" : user.role} />
       case "personnel":
+        if (isPersonnel) return <DashboardEmployee />
         if (user.role === "admin") return <PersonnelScheduleAdmin />
         if (user.role === "franchisee" || user.role === "own_point") return <PersonnelFranchisee />
-        return <PersonnelSection role={user.role} />
+        return <PersonnelSection role={isUKOwner ? "uk" : user.role} />
       case "knowledge":
-        if (user.role === "employee") return <KnowledgeBaseSection role="employee" />
         return <KnowledgeBaseSection role={user.role} />
       case "notifications":
         return <NotificationsSection role={user.role} />
       case "access":
-        if (user.role === "uk") return <AccessManagementUK />
+        if (isUKOwner || user.role === "uk_employee") return <AccessManagementUK />
         if (user.role === "franchisee" || user.role === "own_point") return <AccessManagementFranchisee />
         if (user.role === "admin") return <AccessManagementAdmin />
         return <DashboardUK />
       default:
-        return user.role === "uk" ? (
-          <DashboardUK />
-        ) : user.role === "admin" ? (
-          <DashboardAdmin />
-        ) : (
-          <DashboardFranchisee />
-        )
+        if (isUKOwner || user.role === "uk_employee") return <DashboardUK />
+        if (user.role === "admin") return <DashboardAdmin />
+        if (isPersonnel) return <DashboardEmployee />
+        return <DashboardFranchisee />
     }
   }
 
   const getRoleLabel = () => {
     const labels: Record<string, string> = {
       uk: "Управляющая Компания",
+      super_admin: "Управляющая Компания",
+      uk_employee: "Сотрудник УК",
       admin: "Администратор",
       employee: "Сотрудник",
+      animator: "Аниматор",
+      host: "Ведущий",
+      dj: "DJ",
       franchisee: "Франчайзи",
       own_point: "Собственная Точка",
-      super_admin: "Супер Администратор",
-      uk_employee: "Сотрудник УК",
     }
-    return labels[user.role] || "Франчайзи"
+    return labels[user.role] || "Сотрудник"
   }
 
   return (

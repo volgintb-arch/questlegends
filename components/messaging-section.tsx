@@ -118,10 +118,8 @@ export function MessagingSection() {
       const filtered = users.filter((u: any) => {
         if (u.id === user?.id) return false
 
-        if (user?.role === "super_admin") {
+        if (user?.role === "super_admin" || user?.role === "uk") {
           return true
-        } else if (user?.role === "uk") {
-          return u.role === "uk" || u.role === "uk_employee" || u.role === "franchisee" || u.role === "super_admin"
         } else if (user?.role === "uk_employee") {
           if (u.role === "super_admin" || u.role === "uk") {
             return true
@@ -331,7 +329,7 @@ export function MessagingSection() {
     const roleMap: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
       uk: { label: "УК", variant: "default" },
       uk_employee: { label: "Сотрудник УК", variant: "secondary" },
-      super_admin: { label: "Супер-админ", variant: "default" },
+      super_admin: { label: "УК", variant: "default" },
       franchisee: { label: "Франчайзи", variant: "outline" },
       admin: { label: "Админ", variant: "secondary" },
       employee: { label: "Сотрудник", variant: "outline" },
@@ -346,7 +344,7 @@ export function MessagingSection() {
     const roleMap: Record<string, string> = {
       uk: "УК",
       uk_employee: "Сотрудник УК",
-      super_admin: "Супер-админ",
+      super_admin: "УК",
       franchisee: "Франчайзи",
       admin: "Админ",
       employee: "Сотрудник",

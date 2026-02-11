@@ -1,6 +1,6 @@
 /**
  * API endpoint для Audit Log
- * Доступ только для super_admin (read-only)
+ * Доступ только для uk/super_admin (read-only)
  */
 
 import { type NextRequest, NextResponse } from "next/server"
@@ -15,9 +15,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Только super_admin может просматривать audit log
-    if (tokenPayload.role !== "super_admin") {
-      return NextResponse.json({ error: "Access denied. Only super_admin can view audit logs." }, { status: 403 })
+    // Только uk/super_admin может просматривать audit log
+    if (tokenPayload.role !== "super_admin" && tokenPayload.role !== "uk") {
+      return NextResponse.json({ error: "Access denied. Only UK owner can view audit logs." }, { status: 403 })
     }
 
     // Получение параметров запроса
