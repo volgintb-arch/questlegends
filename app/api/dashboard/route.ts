@@ -39,32 +39,90 @@ export async function GET(request: Request) {
 
     const sql = neon(process.env.DATABASE_URL)
 
-    let stats
+    // Optimized: all dashboard data in a single query per role using CTEs
     if (user.role === "uk_employee") {
-      // uk_employee sees only stats for assigned franchisees
-      stats = await sql`
-        WITH assigned_franchisees AS (
+      const result = await sql`
+        WITH af AS (
           SELECT "franchiseeId" FROM "UserFranchiseeAssignment" WHERE "userId" = ${user.id}
+        ),
+        stats AS (
+          SELECT 
+            COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as "totalRevenue",
+            COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) as "totalExpenses",
+            (SELECT COUNT(*) FROM "Franchisee" f WHERE f.id IN (SELECT "franchiseeId" FROM af)) as "franchiseesCount",
+            (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" IN (SELECT "franchiseeId" FROM af)) as "dealsCount"
+          FROM "Transaction" t
+          WHERE t."franchiseeId" IN (SELECT "franchiseeId" FROM af)
+        ),
+        top5 AS (
+          SELECT f.id, f.name, f.city,
+            COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as revenue
+          FROM "Franchisee" f
+          LEFT JOIN "Transaction" t ON t."franchiseeId" = f.id
+          WHERE f.id IN (SELECT "franchiseeId" FROM af)
+          GROUP BY f.id, f.name, f.city
+          ORDER BY revenue DESC
+          LIMIT 5
         )
         SELECT 
-          COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as "totalRevenue",
-          COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) as "totalExpenses",
-          (SELECT COUNT(*) FROM "Franchisee" f WHERE f.id IN (SELECT "franchiseeId" FROM assigned_franchisees)) as "franchiseesCount",
-          (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" IN (SELECT "franchiseeId" FROM assigned_franchisees)) as "dealsCount"
-        FROM "Transaction" t
-        WHERE t."franchiseeId" IN (SELECT "franchiseeId" FROM assigned_franchisees)
+          json_build_object(
+            'totalRevenue', (SELECT "totalRevenue" FROM stats),
+            'totalExpenses', (SELECT "totalExpenses" FROM stats),
+            'franchiseesCount', (SELECT "franchiseesCount" FROM stats),
+            'dealsCount', (SELECT "dealsCount" FROM stats),
+            'topFranchisees', COALESCE((SELECT json_agg(row_to_json(t.*)) FROM top5 t), '[]'::json)
+          ) as data
       `
-    } else if (user.role === "super_admin" || user.role === "uk") {
-      stats = await sql`
+      const data = result[0]?.data || {}
+      return NextResponse.json({
+        totalRevenue: Number(data.totalRevenue) || 0,
+        totalExpenses: Number(data.totalExpenses) || 0,
+        franchiseesCount: Number(data.franchiseesCount) || 0,
+        dealsCount: Number(data.dealsCount) || 0,
+        topFranchisees: data.topFranchisees || [],
+      })
+    }
+
+    if (user.role === "super_admin" || user.role === "uk") {
+      const result = await sql`
+        WITH stats AS (
+          SELECT 
+            COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as "totalRevenue",
+            COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as "totalExpenses",
+            (SELECT COUNT(*) FROM "Franchisee") as "franchiseesCount",
+            (SELECT COUNT(*) FROM "Deal") as "dealsCount"
+          FROM "Transaction"
+        ),
+        top5 AS (
+          SELECT f.id, f.name, f.city,
+            COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as revenue
+          FROM "Franchisee" f
+          LEFT JOIN "Transaction" t ON t."franchiseeId" = f.id
+          GROUP BY f.id, f.name, f.city
+          ORDER BY revenue DESC
+          LIMIT 5
+        )
         SELECT 
-          COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as "totalRevenue",
-          COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as "totalExpenses",
-          (SELECT COUNT(*) FROM "Franchisee") as "franchiseesCount",
-          (SELECT COUNT(*) FROM "Deal") as "dealsCount"
-        FROM "Transaction"
+          json_build_object(
+            'totalRevenue', (SELECT "totalRevenue" FROM stats),
+            'totalExpenses', (SELECT "totalExpenses" FROM stats),
+            'franchiseesCount', (SELECT "franchiseesCount" FROM stats),
+            'dealsCount', (SELECT "dealsCount" FROM stats),
+            'topFranchisees', COALESCE((SELECT json_agg(row_to_json(t.*)) FROM top5 t), '[]'::json)
+          ) as data
       `
-    } else if (user.franchiseeId) {
-      stats = await sql`
+      const data = result[0]?.data || {}
+      return NextResponse.json({
+        totalRevenue: Number(data.totalRevenue) || 0,
+        totalExpenses: Number(data.totalExpenses) || 0,
+        franchiseesCount: Number(data.franchiseesCount) || 0,
+        dealsCount: Number(data.dealsCount) || 0,
+        topFranchisees: data.topFranchisees || [],
+      })
+    }
+
+    if (user.franchiseeId) {
+      const result = await sql`
         SELECT 
           COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as "totalRevenue",
           COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as "totalExpenses",
@@ -73,44 +131,21 @@ export async function GET(request: Request) {
         FROM "Transaction"
         WHERE "franchiseeId" = ${user.franchiseeId}
       `
-    } else {
-      stats = [{ totalRevenue: 0, totalExpenses: 0, franchiseesCount: 0, dealsCount: 0 }]
-    }
-
-    // Get top franchisees (filtered for uk_employee)
-    let topFranchisees
-    if (user.role === "uk_employee") {
-      topFranchisees = await sql`
-        SELECT f.id, f.name, f.city,
-          COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as revenue
-        FROM "Franchisee" f
-        LEFT JOIN "Transaction" t ON t."franchiseeId" = f.id
-        INNER JOIN "UserFranchiseeAssignment" ufa ON f.id = ufa."franchiseeId"
-        WHERE ufa."userId" = ${user.id}
-        GROUP BY f.id, f.name, f.city
-        ORDER BY revenue DESC
-        LIMIT 5
-      `
-    } else if (user.role === "super_admin" || user.role === "uk") {
-      topFranchisees = await sql`
-        SELECT f.id, f.name, f.city,
-          COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) as revenue
-        FROM "Franchisee" f
-        LEFT JOIN "Transaction" t ON t."franchiseeId" = f.id
-        GROUP BY f.id, f.name, f.city
-        ORDER BY revenue DESC
-        LIMIT 5
-      `
-    } else {
-      topFranchisees = []
+      return NextResponse.json({
+        totalRevenue: Number(result[0]?.totalRevenue) || 0,
+        totalExpenses: Number(result[0]?.totalExpenses) || 0,
+        franchiseesCount: 1,
+        dealsCount: Number(result[0]?.dealsCount) || 0,
+        topFranchisees: [],
+      })
     }
 
     return NextResponse.json({
-      totalRevenue: Number(stats[0]?.totalRevenue) || 0,
-      totalExpenses: Number(stats[0]?.totalExpenses) || 0,
-      franchiseesCount: Number(stats[0]?.franchiseesCount) || 0,
-      dealsCount: Number(stats[0]?.dealsCount) || 0,
-      topFranchisees: topFranchisees || [],
+      totalRevenue: 0,
+      totalExpenses: 0,
+      franchiseesCount: 0,
+      dealsCount: 0,
+      topFranchisees: [],
     })
   } catch (error) {
     console.error("[v0] DASHBOARD_GET error:", error)
