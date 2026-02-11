@@ -31,7 +31,7 @@
 - Audit logging for sensitive operations
 
 ### 5. Security Headers
-```
+\`\`\`
 Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 X-Frame-Options: SAMEORIGIN
 X-Content-Type-Options: nosniff
@@ -39,7 +39,7 @@ X-XSS-Protection: 1; mode=block
 Referrer-Policy: strict-origin-when-cross-origin
 Permissions-Policy: camera=(), microphone=(), geolocation=()
 Content-Security-Policy: [comprehensive policy]
-```
+\`\`\`
 
 ### 6. Monitoring & Logging
 - Real-time security event logging
@@ -51,7 +51,7 @@ Content-Security-Policy: [comprehensive policy]
 ## Security Best Practices for Developers
 
 ### When Adding New API Endpoints:
-```typescript
+\`\`\`typescript
 import { requireApiAuth, requireRoles, withRateLimit, validateUUIDs, sanitizeBody } from "@/lib/api-auth"
 
 export async function POST(request: Request) {
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
 
   // Your logic here
 }
-```
+\`\`\`
 
 ### Environment Variables:
 - `NEXTAUTH_SECRET`: Strong random string (min 32 chars)

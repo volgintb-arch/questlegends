@@ -1,6 +1,6 @@
 // Message Normalizer - приводит все сообщения к единому формату
 export interface NormalizedMessage {
-  channel: "telegram" | "instagram" | "vk" | "whatsapp" | "avito" | "max"
+  channel: "telegram" | "instagram" | "vk" | "whatsapp" | "avito"
   external_user_id: string
   username?: string
   phone?: string

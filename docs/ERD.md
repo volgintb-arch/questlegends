@@ -6,7 +6,7 @@ This document describes the complete database schema for QuestLegends OS 2.0, in
 
 ## Mermaid ERD
 
-```mermaid
+\`\`\`mermaid
 erDiagram
     users ||--o{ user_franchisee_access : "has access to"
     users ||--o{ deals : "responsible for"
@@ -278,7 +278,7 @@ erDiagram
         text user_agent
         timestamp created_at
     }
-```
+\`\`\`
 
 ## Entity Descriptions
 
@@ -367,7 +367,7 @@ Complete audit trail of all data changes.
 - All FK columns for join optimization
 
 ### Composite Indexes
-```sql
+\`\`\`sql
 CREATE INDEX idx_deals_location_stage ON deals(location_id, stage);
 CREATE INDEX idx_transactions_location_date ON transactions(location_id, date);
 CREATE INDEX idx_transactions_date_status ON transactions(date, status);
@@ -378,12 +378,12 @@ CREATE INDEX idx_notifications_user_read ON notifications(user_id, is_read);
 CREATE INDEX idx_notifications_created ON notifications(created_at DESC);
 CREATE INDEX idx_audit_logs_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX idx_audit_logs_user_created ON audit_logs(user_id, created_at DESC);
-```
+\`\`\`
 
 ## Constraints
 
 ### Check Constraints
-```sql
+\`\`\`sql
 ALTER TABLE users ADD CONSTRAINT chk_user_role 
   CHECK (role IN ('uk', 'franchisee', 'admin', 'employee'));
 
@@ -398,10 +398,10 @@ ALTER TABLE personnel ADD CONSTRAINT chk_personnel_status
 
 ALTER TABLE expenses ADD CONSTRAINT chk_expense_status 
   CHECK (status IN ('pending', 'approved', 'rejected'));
-```
+\`\`\`
 
 ### Unique Constraints
-```sql
+\`\`\`sql
 ALTER TABLE user_franchisee_access 
   ADD CONSTRAINT uk_user_franchisee UNIQUE (user_id, franchisee_id);
 
@@ -410,7 +410,7 @@ ALTER TABLE game_assignments
 
 ALTER TABLE payroll 
   ADD CONSTRAINT uk_personnel_period UNIQUE (personnel_id, period);
-```
+\`\`\`
 
 ## Data Types
 
@@ -420,4 +420,4 @@ ALTER TABLE payroll
 - **enum/varchar**: Status and type fields
 - **timestamp**: All datetime fields with timezone support
 - **date**: Date-only fields (payroll period, transaction date)
-```
+\`\`\`
