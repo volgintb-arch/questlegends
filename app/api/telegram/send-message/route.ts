@@ -1,18 +1,17 @@
-import { type NextRequest, NextResponse } from "next"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { type NextRequest, NextResponse } from "next/server"
+import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const user = await verifyRequest(req)
 
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Only UK role can send messages to franchisees
-    if (session.user.role !== "uk") {
+    if (!["super_admin", "uk", "uk_employee"].includes(user.role)) {
       return NextResponse.json({ error: "Forbidden: Only UK can send messages" }, { status: 403 })
     }
 
@@ -67,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Format message with sender info
-    const formattedMessage = `📨 *Сообщение от Управляющей Компании*\n\n${message}\n\n_Отправитель: ${session.user.name}_\n_Франшиза: ${franchiseeUser.franchisee?.name} (${franchiseeUser.franchisee?.city})_`
+    const formattedMessage = `📨 *Сообщение от Управляющей Компании*\n\n${message}\n\n_Отправитель: ${user.name || "УК"}_\n_Франшиза: ${franchiseeUser.franchisee?.name} (${franchiseeUser.franchisee?.city})_`
 
     // Send message via Telegram Bot API
     const telegramResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

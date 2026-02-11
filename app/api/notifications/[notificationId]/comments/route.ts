@@ -1,12 +1,11 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/utils/response"
 
 export async function POST(request: Request, { params }: { params: { notificationId: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
@@ -20,7 +19,7 @@ export async function POST(request: Request, { params }: { params: { notificatio
     const comment = await prisma.notificationComment.create({
       data: {
         notificationId: params.notificationId,
-        authorId: session.user.id,
+        authorId: user.userId,
         text: text.trim(),
       },
       include: {

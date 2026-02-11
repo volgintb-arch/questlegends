@@ -1,16 +1,15 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/utils/response"
 
 export async function PATCH(request: Request, { params }: { params: { templateId: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
-    if (session.user.role !== "franchisee" && session.user.role !== "admin") {
+    if (!["franchisee", "admin"].includes(user.role)) {
       return errorResponse("Forbidden", 403)
     }
 
@@ -20,7 +19,7 @@ export async function PATCH(request: Request, { params }: { params: { templateId
     const template = await prisma.telegramTemplate.update({
       where: {
         id: params.templateId,
-        franchiseeId: session.user.franchiseeId!,
+        franchiseeId: user.franchiseeId!,
       },
       data: {
         isActive,

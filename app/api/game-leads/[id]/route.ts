@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { verifyRequest } from "@/lib/simple-auth"
-import { getCurrentUser } from "@/lib/user-utils" // Declare the getCurrentUser function
 
 const sql = neon(process.env.DATABASE_URL!)
 

@@ -1,12 +1,11 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from "@/lib/utils/response"
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
@@ -35,13 +34,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
     // Only UK can create articles
-    if (session.user.role !== "UK") {
+    if (!["super_admin", "uk", "uk_employee"].includes(user.role)) {
       return forbiddenResponse()
     }
 
@@ -50,7 +49,7 @@ export async function POST(request: Request) {
     const article = await prisma.knowledgeBaseArticle.create({
       data: {
         ...body,
-        authorId: session.user.id,
+        authorId: user.userId,
       },
       include: {
         author: { select: { id: true, name: true } },

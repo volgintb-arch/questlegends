@@ -1,22 +1,21 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/utils/response"
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
-    if (session.user.role !== "franchisee") {
+    if (!["franchisee", "admin"].includes(user.role)) {
       return errorResponse("Only franchisee can manage Telegram templates", 403)
     }
 
     const templates = await prisma.telegramTemplate.findMany({
       where: {
-        franchiseeId: session.user.franchiseeId!,
+        franchiseeId: user.franchiseeId!,
       },
     })
 
@@ -29,12 +28,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
-    if (session.user.role !== "franchisee") {
+    if (!["franchisee", "admin"].includes(user.role)) {
       return errorResponse("Only franchisee can manage Telegram templates", 403)
     }
 
@@ -48,7 +47,7 @@ export async function POST(request: Request) {
     const template = await prisma.telegramTemplate.upsert({
       where: {
         franchiseeId_type: {
-          franchiseeId: session.user.franchiseeId!,
+          franchiseeId: user.franchiseeId!,
           type,
         },
       },
@@ -57,7 +56,7 @@ export async function POST(request: Request) {
         isActive: true,
       },
       create: {
-        franchiseeId: session.user.franchiseeId!,
+        franchiseeId: user.franchiseeId!,
         type,
         message,
         isActive: true,

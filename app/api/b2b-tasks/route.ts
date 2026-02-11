@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/utils/response"
 import { z } from "zod"
@@ -15,13 +14,13 @@ const b2bTaskSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
     // Only UK and UK employees can access B2B tasks
-    if (session.user.role !== "uk" && !session.user.isUKEmployee) {
+    if (!["super_admin", "uk", "uk_employee"].includes(user.role)) {
       return errorResponse("Access denied", 403)
     }
 
@@ -36,7 +35,7 @@ export async function GET(request: Request) {
     }
 
     if (assignedToMe) {
-      where.assignedToUserId = session.user.id
+      where.assignedToUserId = user.userId
     }
 
     const tasks = await prisma.b2BTask.findMany({
@@ -78,13 +77,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const user = await verifyRequest(request as any)
+    if (!user) {
       return unauthorizedResponse()
     }
 
     // Only UK can create B2B tasks
-    if (session.user.role !== "uk") {
+    if (!["super_admin", "uk", "uk_employee"].includes(user.role)) {
       return errorResponse("Only UK can create B2B tasks", 403)
     }
 
@@ -127,7 +126,7 @@ export async function POST(request: Request) {
         title,
         description,
         assignedToUserId,
-        createdByUserId: session.user.id,
+        createdByUserId: user.userId,
         startTime: startTime ? new Date(startTime) : null,
         dueTime: dueTime ? new Date(dueTime) : null,
       },
@@ -144,8 +143,8 @@ export async function POST(request: Request) {
         b2bDealId,
         type: "task_created",
         content: `Создана задача: ${title}`,
-        userId: session.user.id,
-        userName: session.user.name,
+        userId: user.userId,
+        userName: user.name || "",
       },
     })
 
