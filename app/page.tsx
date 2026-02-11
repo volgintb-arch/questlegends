@@ -22,6 +22,7 @@ import { DashboardEmployee } from "@/components/dashboard-employee"
 import { AccessManagementUK } from "@/components/access-management-uk"
 import { AccessManagementFranchisee } from "@/components/access-management-franchisee"
 import { AccessManagementAdmin } from "@/components/access-management-admin"
+import { ErrorBoundary } from "@/components/error-boundary"
 
 type View =
   | "dashboard"
@@ -122,30 +123,32 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar
-        role={user.role}
-        currentView={view}
-        onViewChange={(newView) => {
-          setView(newView)
-          setIsMobileSidebarOpen(false)
-        }}
-        isMobileOpen={isMobileSidebarOpen}
-        onMobileToggle={setIsMobileSidebarOpen}
-      />
-
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header
-          userName={user.name}
-          role={getRoleLabel()}
-          onViewChange={setView}
-          onMobileMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+    <ErrorBoundary>
+      <div className="flex h-screen bg-background overflow-hidden">
+        <Sidebar
+          role={user.role}
+          currentView={view}
+          onViewChange={(newView) => {
+            setView(newView)
+            setIsMobileSidebarOpen(false)
+          }}
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileToggle={setIsMobileSidebarOpen}
         />
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 pb-20 md:pb-8">{renderView()}</div>
-        </main>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header
+            userName={user.name}
+            role={getRoleLabel()}
+            onViewChange={setView}
+            onMobileMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          />
+
+          <main className="flex-1 overflow-y-auto">
+            <div className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 pb-20 md:pb-8">{renderView()}</div>
+          </main>
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   )
 }
