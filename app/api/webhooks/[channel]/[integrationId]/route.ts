@@ -13,7 +13,7 @@ export async function POST(request: NextRequest, { params }: { params: { channel
     const payload = await request.json()
 
     // Валидация канала
-    const supportedChannels = ["telegram", "instagram", "vk", "whatsapp", "avito", "max"]
+    const supportedChannels = ["telegram", "instagram", "vk", "whatsapp", "avito"]
     if (!supportedChannels.includes(channel)) {
       return NextResponse.json({ error: "Unsupported channel" }, { status: 400 })
     }

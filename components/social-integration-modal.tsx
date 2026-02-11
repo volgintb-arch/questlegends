@@ -45,13 +45,11 @@ interface SocialIntegrationModalProps {
 }
 
 const platforms = [
-  { value: "instagram", label: "Instagram" },
-  { value: "facebook", label: "Facebook" },
-  { value: "vk", label: "ВКонтакте" },
   { value: "telegram", label: "Telegram" },
   { value: "whatsapp", label: "WhatsApp" },
-  { value: "tiktok", label: "TikTok" },
-  { value: "youtube", label: "YouTube" },
+  { value: "instagram", label: "Instagram" },
+  { value: "vk", label: "ВКонтакте" },
+  { value: "avito", label: "Авито" },
 ]
 
 export function SocialIntegrationModal({

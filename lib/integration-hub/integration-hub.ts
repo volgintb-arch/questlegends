@@ -49,8 +49,6 @@ export class IntegrationHub {
         return MessageNormalizer.normalizeWhatsApp(payload, integration)
       case "avito":
         return MessageNormalizer.normalizeAvito(payload, integration)
-      case "max":
-        return MessageNormalizer.normalizeMAX(payload, integration)
       default:
         throw new Error(`Unsupported channel: ${channel}`)
     }
