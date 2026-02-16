@@ -3,14 +3,13 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { DashboardUK } from "@/components/dashboard-uk"
 import { DashboardFranchisee } from "@/components/dashboard-franchisee"
 import { DashboardAdmin } from "@/components/dashboard-admin"
-import { DealsKanban } from "@/components/deals-kanban"
-import { TransactionsERP } from "@/components/transactions-erp"
-import { PersonnelSection } from "@/components/personnel-section"
 import { KnowledgeBaseSection } from "@/components/knowledge-base-section"
 import { NotificationsSection } from "@/components/notifications-section"
 import { useAuth } from "@/contexts/auth-context"
@@ -23,6 +22,97 @@ import { AccessManagementUK } from "@/components/access-management-uk"
 import { AccessManagementFranchisee } from "@/components/access-management-franchisee"
 import { AccessManagementAdmin } from "@/components/access-management-admin"
 import { ErrorBoundary } from "@/components/error-boundary"
+
+// --- Skeleton loaders для динамических компонентов ---
+
+function KanbanSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-9 w-32 rounded-md" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {Array.from({ length: 5 }).map((_, col) => (
+          <div key={col} className="space-y-3">
+            <Skeleton className="h-6 w-28" />
+            {Array.from({ length: 3 }).map((_, row) => (
+              <Skeleton key={row} className="h-28 w-full rounded-lg" />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TableSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-8 w-56" />
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-24 rounded-md" />
+          <Skeleton className="h-9 w-32 rounded-md" />
+        </div>
+      </div>
+      <div className="rounded-lg border border-border overflow-hidden">
+        <div className="flex gap-4 p-3 bg-muted/50">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-4 flex-1" />
+          ))}
+        </div>
+        {Array.from({ length: 8 }).map((_, row) => (
+          <div key={row} className="flex gap-4 p-3 border-t border-border">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-4 flex-1" />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CalendarSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-8 w-40" />
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-9 rounded-md" />
+          <Skeleton className="h-9 w-32 rounded-md" />
+          <Skeleton className="h-9 w-9 rounded-md" />
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <Skeleton key={i} className="h-5 w-full" />
+        ))}
+        {Array.from({ length: 35 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 w-full rounded-md" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// --- Динамические импорты тяжёлых компонентов ---
+
+const DealsKanban = dynamic(
+  () => import("@/components/deals-kanban").then((mod) => ({ default: mod.DealsKanban })),
+  { ssr: false, loading: () => <KanbanSkeleton /> },
+)
+
+const TransactionsERP = dynamic(
+  () => import("@/components/transactions-erp").then((mod) => ({ default: mod.TransactionsERP })),
+  { loading: () => <TableSkeleton /> },
+)
+
+const PersonnelSection = dynamic(
+  () => import("@/components/personnel-section").then((mod) => ({ default: mod.PersonnelSection })),
+  { loading: () => <CalendarSkeleton /> },
+)
 
 type View =
   | "dashboard"
