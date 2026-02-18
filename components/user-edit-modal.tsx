@@ -84,7 +84,7 @@ export function UserEditModal({ isOpen, onClose, user, onUpdated }: UserEditModa
   }
 
   const getRoleOptions = () => {
-    if (currentUser?.role === "super_admin") {
+    if (currentUser?.role === "super_admin" || currentUser?.role === "uk") {
       return [
         { value: "uk", label: "Директор УК" },
         { value: "uk_employee", label: "Сотрудник УК" },
@@ -94,11 +94,6 @@ export function UserEditModal({ isOpen, onClose, user, onUpdated }: UserEditModa
         { value: "animator", label: "Аниматор" },
         { value: "host", label: "Ведущий" },
         { value: "dj", label: "DJ" },
-      ]
-    } else if (currentUser?.role === "uk") {
-      return [
-        { value: "uk_employee", label: "Сотрудник УК" },
-        { value: "franchisee", label: "Франчайзи" },
       ]
     } else if (currentUser?.role === "franchisee") {
       return [

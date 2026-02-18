@@ -35,12 +35,13 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
 
   const availableRoles: Array<{ value: string; label: string }> = []
 
-  if (currentUser.role === "uk" || currentUser.role === "super_admin" || currentUser.role === "uk_employee") {
-    availableRoles.push({ value: "franchisee", label: "Франчайзи" }, { value: "own_point", label: "Собственная Точка" })
-    // Only uk and super_admin can create uk_employee
-    if (currentUser.role === "uk" || currentUser.role === "super_admin") {
-      availableRoles.push({ value: "uk_employee", label: "Сотрудник УК" })
-    }
+  if (currentUser.role === "uk" || currentUser.role === "super_admin") {
+    // UK Owner может создавать все подчинённые роли
+    availableRoles.push(
+      { value: "franchisee", label: "Франчайзи" },
+      { value: "own_point", label: "Собственная Точка" },
+      { value: "uk_employee", label: "Сотрудник УК" },
+    )
   } else if (currentUser.role === "franchisee" || currentUser.role === "own_point") {
     availableRoles.push(
       { value: "admin", label: "Администратор" },
@@ -245,7 +246,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
             </Select>
           </div>
 
-          {(currentUser.role === "uk" || currentUser.role === "super_admin" || currentUser.role === "uk_employee") &&
+          {(currentUser.role === "uk" || currentUser.role === "super_admin") &&
             (formData.role === "franchisee" || formData.role === "own_point") && (
               <div className="space-y-1">
                 <Label htmlFor="city" className="text-xs">

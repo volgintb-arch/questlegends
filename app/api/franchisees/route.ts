@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { verifyRequest } from "@/lib/simple-auth"
+import { cache } from "@/lib/cache"
+
+// Префикс ключей кеша для франчайзи
+const CACHE_PREFIX = "franchisees:"
+// TTL кеша — 5 минут
+const CACHE_TTL = 300
 
 export async function GET(request: Request) {
   try {
@@ -12,6 +18,26 @@ export async function GET(request: Request) {
 
     if (!process.env.DATABASE_URL) {
       return NextResponse.json([])
+    }
+
+    // --- Кеш: формируем ключ на основе роли и franchiseeId ---
+    const cacheKey =
+      user.role === "uk_employee"
+        ? `${CACHE_PREFIX}uk_employee:${user.userId}`
+        : user.franchiseeId
+          ? `${CACHE_PREFIX}franchisee:${user.franchiseeId}`
+          : `${CACHE_PREFIX}all`
+
+    // --- Кеш: проверяем наличие данных в кеше ---
+    const cached = await cache.get<unknown[]>(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          Pragma: "no-cache",
+          "X-Cache": "HIT",
+        },
+      })
     }
 
     const sql = neon(process.env.DATABASE_URL)
@@ -53,12 +79,14 @@ export async function GET(request: Request) {
       franchisees = []
     }
 
-    console.log("[v0] Franchisees API: Found", franchisees.length, "franchisees for role", user.role)
+    // --- Кеш: сохраняем результат с TTL 5 минут ---
+    await cache.set(cacheKey, franchisees, CACHE_TTL)
 
     return NextResponse.json(franchisees, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate",
         Pragma: "no-cache",
+        "X-Cache": "MISS",
       },
     })
   } catch (error) {
@@ -102,6 +130,9 @@ export async function POST(request: Request) {
       )
       RETURNING *
     `
+
+    // --- Кеш: инвалидируем все ключи франчайзи после создания ---
+    await cache.invalidatePattern(CACHE_PREFIX)
 
     return NextResponse.json(result[0], { status: 201 })
   } catch (error) {

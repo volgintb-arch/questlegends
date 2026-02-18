@@ -58,18 +58,19 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         path: "/knowledge",
         module: "canViewKnowledgeBase" as const,
       },
-      { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
-      { id: "access", label: "Доступ", icon: Users, path: "/access", module: "canViewAccess" as const },
-      {
-        id: "notifications",
-        label: "Уведомления",
-        icon: Bell,
-        path: "/notifications",
-        module: "canViewNotifications" as const,
-      },
-    ]
+    { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+    { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
+    { id: "access", label: "Доступ", icon: Users, path: "/access", module: "canViewAccess" as const },
+    {
+      id: "notifications",
+      label: "Уведомления",
+      icon: Bell,
+      path: "/notifications",
+      module: "canViewNotifications" as const,
+    },
+  ]
 
-    const ukEmployeeItems = [
+  const ukEmployeeItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
@@ -92,20 +93,21 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         label: "База Знаний",
         icon: BookOpen,
         path: "/knowledge",
-        module: "canViewKnowledgeBase" as const,
-      },
-      { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
-      { id: "access", label: "Доступ", icon: Users, path: "/access", module: "canViewAccess" as const },
-      {
-        id: "notifications",
-        label: "Уведомления",
-        icon: Bell,
-        path: "/notifications",
-        module: "canViewNotifications" as const,
-      },
-    ]
+    module: "canViewKnowledgeBase" as const,
+    },
+    { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+    { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
+    { id: "access", label: "Доступ", icon: Users, path: "/access", module: "canViewAccess" as const },
+    {
+      id: "notifications",
+      label: "Уведомления",
+      icon: Bell,
+      path: "/notifications",
+      module: "canViewNotifications" as const,
+    },
+  ]
 
-    const franchiseeItems = [
+  const franchiseeItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
@@ -180,6 +182,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
 
     const personnelItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
+      { id: "schedule", label: "Мои Смены", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -219,7 +222,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
 
   const getRoleLabel = () => {
     const roleLabels: Record<string, string> = {
-      super_admin: "Супер Администратор",
+      super_admin: "Управляющая Компания",
       uk: "Управляющая Компания",
       uk_employee: "Сотрудник УК",
       franchisee: "Франчайзи",

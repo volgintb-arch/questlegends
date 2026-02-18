@@ -4,9 +4,15 @@ import { useAuth } from "@/contexts/auth-context"
 import { PersonnelSection } from "@/components/personnel-section"
 import { PersonnelScheduleAdmin } from "@/components/personnel-schedule-admin"
 import { PersonnelFranchisee } from "@/components/personnel-franchisee"
+import { DashboardEmployee } from "@/components/dashboard-employee"
 
 export default function PersonnelPage() {
   const { user } = useAuth()
+
+  // Сотрудники видят свои смены
+  if (["employee", "animator", "host", "dj"].includes(user.role)) {
+    return <DashboardEmployee />
+  }
 
   if (user.role === "admin") {
     return <PersonnelScheduleAdmin />
@@ -16,5 +22,6 @@ export default function PersonnelPage() {
     return <PersonnelFranchisee />
   }
 
+  // UK и super_admin видят общий обзор персонала
   return <PersonnelSection role={user.role} />
 }

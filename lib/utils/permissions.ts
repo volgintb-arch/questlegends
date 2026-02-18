@@ -1,5 +1,5 @@
 export const PERMISSIONS = {
-  // UK permissions
+  // UK Owner (объединённая роль super_admin + uk) - полный доступ
   UK: {
     canViewAllFranchisees: true,
     canManageFranchisees: true,
@@ -10,6 +10,26 @@ export const PERMISSIONS = {
     canViewAnalytics: true,
     canCreateUsers: true,
     canManageSettings: true,
+    canManageAccess: true,
+    canViewCRM: true,
+    canManageCRM: true,
+    canViewTransactions: true,
+    canCreateTransactions: true,
+    canViewExpenses: true,
+    canManageExpenses: true,
+    canViewPersonnel: true,
+    canManagePersonnel: true,
+    canViewSchedule: true,
+    canManageSchedule: true,
+    canViewAuditLog: true,
+    canDeleteFranchisees: true,
+  },
+
+  // UK Employee - ограниченный доступ, настраивается через UserPermission
+  UK_EMPLOYEE: {
+    canViewKnowledgeBase: true,
+    canViewCRM: true,
+    canViewOwnTasks: true,
   },
 
   // Franchisee permissions
@@ -28,6 +48,7 @@ export const PERMISSIONS = {
     canViewKnowledgeBase: true,
     canCreateUsers: true,
     canManageAccess: true,
+    canViewAnalytics: true,
   },
 
   // Admin permissions
@@ -46,7 +67,13 @@ export const PERMISSIONS = {
     canCreateUsers: true, // Can only create personnel
   },
 
-  // Personnel permissions (Animator, Host, DJ)
+  // Employee - базовый доступ
+  EMPLOYEE: {
+    canViewOwnSchedule: true,
+    canViewKnowledgeBase: true,
+  },
+
+  // Personnel permissions (Animator, Host, DJ) - идентичны Employee
   ANIMATOR: {
     canViewOwnSchedule: true,
     canViewKnowledgeBase: true,
@@ -63,8 +90,21 @@ export const PERMISSIONS = {
   },
 }
 
+/**
+ * Маппинг ролей из БД к ключам PERMISSIONS
+ */
+function getPermissionKey(role: string): string {
+  if (role === "uk" || role === "super_admin") return "UK"
+  if (role === "uk_employee") return "UK_EMPLOYEE"
+  if (role === "franchisee" || role === "own_point") return "FRANCHISEE"
+  if (role === "admin") return "ADMIN"
+  if (role === "employee") return "EMPLOYEE"
+  return role.toUpperCase()
+}
+
 export function hasPermission(role: string, permission: string): boolean {
-  const rolePermissions = PERMISSIONS[role as keyof typeof PERMISSIONS]
+  const key = getPermissionKey(role)
+  const rolePermissions = PERMISSIONS[key as keyof typeof PERMISSIONS]
   if (!rolePermissions) return false
   return rolePermissions[permission as keyof typeof rolePermissions] === true
 }
@@ -74,7 +114,7 @@ export function canAccessResource(
   userFranchiseeId: string | null,
   resourceFranchiseeId: string | null,
 ): boolean {
-  if (userRole === "UK") return true
+  if (userRole === "uk" || userRole === "super_admin" || userRole === "UK") return true
   if (resourceFranchiseeId === null) return false
   return userFranchiseeId === resourceFranchiseeId
 }

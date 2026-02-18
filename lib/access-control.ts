@@ -1,25 +1,24 @@
 /**
  * Централизованная система проверки прав доступа
- * НЕ удаляет существующие роли, а структурирует их
+ * Роль "uk" является верхнеуровневой с полным доступом ко всему функционалу.
+ * Роль "super_admin" объединена в "uk" - все проверки на super_admin также включают uk для обратной совместимости.
  */
 
 // Маппинг существующих ролей к стандартизированной модели
 export const ROLE_HIERARCHY = {
-  // Уровень 1: Полный доступ
-  super_admin: 100,
-
-  // Уровень 2: Управляющая компания
-  uk: 80,
+  // Уровень 1: Управляющая компания (полный доступ, включая бывший super_admin)
+  super_admin: 100, // обратная совместимость, фактически = uk
+  uk: 100,
   uk_employee: 60,
 
-  // Уровень 3: Владельцы франшиз
+  // Уровень 2: Владельцы франшиз
   franchisee: 50,
   own_point: 50,
 
-  // Уровень 4: Операционное управление
+  // Уровень 3: Операционное управление
   admin: 40,
 
-  // Уровень 5: Сотрудники
+  // Уровень 4: Сотрудники
   employee: 20,
   animator: 20,
   host: 20,
@@ -30,8 +29,8 @@ export type SystemRole = keyof typeof ROLE_HIERARCHY
 
 // Стандартизированные названия ролей согласно спецификации
 export const ROLE_MAPPING = {
-  super_admin: "SUPER_ADMIN",
-  uk: "UK_STAFF",
+  super_admin: "UK_OWNER", // обратная совместимость
+  uk: "UK_OWNER",
   uk_employee: "UK_STAFF",
   franchisee: "FRANCHISE_OWNER",
   own_point: "FRANCHISE_OWNER",
@@ -44,19 +43,19 @@ export const ROLE_MAPPING = {
 
 // Определение разрешений для модулей
 export const MODULE_PERMISSIONS = {
-  dashboard: ["super_admin", "uk", "uk_employee", "franchisee", "own_point", "admin", "employee"],
-  crm: ["super_admin", "uk", "uk_employee", "franchisee", "own_point", "admin", "employee"],
-  b2b_crm: ["super_admin", "uk", "uk_employee"],
-  erp: ["super_admin", "uk", "franchisee", "own_point"],
-  finances: ["super_admin", "uk", "franchisee", "own_point", "admin"],
-  personnel: ["super_admin", "uk", "franchisee", "own_point"],
-  schedules: ["super_admin", "uk", "franchisee", "own_point", "admin", "employee"],
-  access: ["super_admin", "uk", "franchisee", "own_point"],
-  knowledge_base: ["super_admin", "uk", "uk_employee", "franchisee", "own_point", "admin", "employee"],
-  analytics: ["super_admin", "uk", "franchisee", "own_point"],
-  audit_log: ["super_admin"],
-  system_settings: ["super_admin"],
-  integrations: ["super_admin", "uk", "franchisee", "own_point"],
+  dashboard: ["uk", "super_admin", "uk_employee", "franchisee", "own_point", "admin", "employee", "animator", "host", "dj"],
+  crm: ["uk", "super_admin", "uk_employee", "franchisee", "own_point", "admin", "employee"],
+  b2b_crm: ["uk", "super_admin", "uk_employee"],
+  erp: ["uk", "super_admin", "franchisee", "own_point"],
+  finances: ["uk", "super_admin", "franchisee", "own_point", "admin"],
+  personnel: ["uk", "super_admin", "franchisee", "own_point"],
+  schedules: ["uk", "super_admin", "franchisee", "own_point", "admin", "employee", "animator", "host", "dj"],
+  access: ["uk", "super_admin", "franchisee", "own_point"],
+  knowledge_base: ["uk", "super_admin", "uk_employee", "franchisee", "own_point", "admin", "employee", "animator", "host", "dj"],
+  analytics: ["uk", "super_admin", "franchisee", "own_point"],
+  audit_log: ["uk", "super_admin"],
+  system_settings: ["uk", "super_admin"],
+  integrations: ["uk", "super_admin", "franchisee", "own_point"],
 } as const
 
 export type ModuleName = keyof typeof MODULE_PERMISSIONS
@@ -64,42 +63,42 @@ export type ModuleName = keyof typeof MODULE_PERMISSIONS
 // Определение действий для ресурсов
 export const RESOURCE_ACTIONS = {
   leads: {
-    view: ["super_admin", "uk", "uk_employee", "franchisee", "own_point", "admin", "employee"],
-    create: ["super_admin", "uk", "uk_employee", "franchisee", "own_point", "admin", "employee"],
-    edit: ["super_admin", "uk", "uk_employee", "franchisee", "own_point", "admin"],
-    delete: ["super_admin", "uk", "franchisee", "own_point"],
-    change_status: ["super_admin", "uk", "uk_employee", "franchisee", "own_point", "admin", "employee"],
+    view: ["uk", "super_admin", "uk_employee", "franchisee", "own_point", "admin", "employee"],
+    create: ["uk", "super_admin", "uk_employee", "franchisee", "own_point", "admin", "employee"],
+    edit: ["uk", "super_admin", "uk_employee", "franchisee", "own_point", "admin"],
+    delete: ["uk", "super_admin", "franchisee", "own_point"],
+    change_status: ["uk", "super_admin", "uk_employee", "franchisee", "own_point", "admin", "employee"],
   },
   users: {
-    view: ["super_admin", "uk", "franchisee", "own_point", "admin"],
-    create: ["super_admin", "uk", "franchisee", "own_point", "admin"],
-    edit: ["super_admin", "uk", "franchisee", "own_point"],
-    delete: ["super_admin", "uk"],
-    change_role: ["super_admin", "uk", "franchisee", "own_point"],
+    view: ["uk", "super_admin", "franchisee", "own_point", "admin"],
+    create: ["uk", "super_admin", "franchisee", "own_point", "admin"],
+    edit: ["uk", "super_admin", "franchisee", "own_point"],
+    delete: ["uk", "super_admin"],
+    change_role: ["uk", "super_admin", "franchisee", "own_point"],
   },
   franchisees: {
-    view: ["super_admin", "uk", "uk_employee"],
-    create: ["super_admin", "uk"],
-    edit: ["super_admin", "uk"],
-    delete: ["super_admin"],
+    view: ["uk", "super_admin", "uk_employee"],
+    create: ["uk", "super_admin"],
+    edit: ["uk", "super_admin"],
+    delete: ["uk", "super_admin"],
   },
   transactions: {
-    view: ["super_admin", "uk", "franchisee", "own_point", "admin"],
-    create: ["super_admin", "uk", "franchisee", "own_point", "admin"],
-    edit: ["super_admin", "uk", "franchisee", "own_point"],
-    delete: ["super_admin", "uk"],
+    view: ["uk", "super_admin", "franchisee", "own_point", "admin"],
+    create: ["uk", "super_admin", "franchisee", "own_point", "admin"],
+    edit: ["uk", "super_admin", "franchisee", "own_point"],
+    delete: ["uk", "super_admin"],
   },
   expenses: {
-    view: ["super_admin", "uk", "franchisee", "own_point", "admin"],
-    create: ["super_admin", "uk", "franchisee", "own_point", "admin"],
-    edit: ["super_admin", "uk", "franchisee", "own_point"],
-    delete: ["super_admin", "uk", "franchisee", "own_point"],
+    view: ["uk", "super_admin", "franchisee", "own_point", "admin"],
+    create: ["uk", "super_admin", "franchisee", "own_point", "admin"],
+    edit: ["uk", "super_admin", "franchisee", "own_point"],
+    delete: ["uk", "super_admin", "franchisee", "own_point"],
   },
   integrations: {
-    view: ["super_admin", "uk", "franchisee", "own_point"],
-    create: ["super_admin", "franchisee", "own_point"],
-    edit: ["super_admin", "franchisee", "own_point"],
-    delete: ["super_admin", "franchisee", "own_point"],
+    view: ["uk", "super_admin", "franchisee", "own_point"],
+    create: ["uk", "super_admin", "franchisee", "own_point"],
+    edit: ["uk", "super_admin", "franchisee", "own_point"],
+    delete: ["uk", "super_admin", "franchisee", "own_point"],
   },
 } as const
 
@@ -125,14 +124,22 @@ export class AccessControl {
   }
 
   /**
-   * Проверяет, является ли пользователь супер-администратором
+   * Проверяет, является ли пользователь владельцем УК (полный доступ).
+   * Роль super_admin объединена в uk - обе имеют одинаковый уровень доступа.
    */
-  isSuperAdmin(): boolean {
-    return this.user.role === "super_admin"
+  isUKOwner(): boolean {
+    return this.user.role === "uk" || this.user.role === "super_admin"
   }
 
   /**
-   * Проверяет, принадлежит ли пользователь к УК
+   * @deprecated Используйте isUKOwner() - super_admin объединён в uk
+   */
+  isSuperAdmin(): boolean {
+    return this.isUKOwner()
+  }
+
+  /**
+   * Проверяет, принадлежит ли пользователь к УК (включая сотрудников)
    */
   isUKStaff(): boolean {
     return ["super_admin", "uk", "uk_employee"].includes(this.user.role)
@@ -170,7 +177,7 @@ export class AccessControl {
    * Проверяет доступ к модулю
    */
   canAccessModule(module: ModuleName): boolean {
-    if (this.isSuperAdmin()) return true
+    if (this.isUKOwner()) return true
     const allowedRoles = MODULE_PERMISSIONS[module]
     return allowedRoles.includes(this.user.role)
   }
@@ -179,7 +186,7 @@ export class AccessControl {
    * Проверяет право на действие с ресурсом
    */
   canPerformAction(resource: ResourceName, action: ActionName): boolean {
-    if (this.isSuperAdmin()) return true
+    if (this.isUKOwner()) return true
 
     const resourceActions = RESOURCE_ACTIONS[resource]
     if (!resourceActions) return false
@@ -210,7 +217,10 @@ export class AccessControl {
    * Проверяет, может ли пользователь создавать пользователей с данной ролью
    */
   canCreateUserWithRole(targetRole: SystemRole): boolean {
-    if (this.isSuperAdmin()) return true
+    if (this.isUKOwner()) {
+      // UK Owner может создавать все роли кроме uk/super_admin (себе равных)
+      return ["franchisee", "own_point", "uk_employee", "admin", "employee", "animator", "host", "dj"].includes(targetRole)
+    }
 
     const userLevel = this.getAccessLevel()
     const targetLevel = ROLE_HIERARCHY[targetRole] || 0
@@ -218,9 +228,9 @@ export class AccessControl {
     // Можно создавать только пользователей с уровнем ниже своего
     if (targetLevel >= userLevel) return false
 
-    // Специальные ограничения
-    if (this.user.role === "uk") {
-      return ["franchisee", "own_point", "uk_employee"].includes(targetRole)
+    // Специальные ограничения для uk_employee
+    if (this.user.role === "uk_employee") {
+      return false // uk_employee не может создавать пользователей
     }
 
     if (this.isFranchiseOwner()) {

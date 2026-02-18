@@ -201,22 +201,19 @@ export async function POST(request: Request) {
       }
     }
 
-    if (user.role === "uk") {
-      if (!["franchisee", "own_point", "uk_employee"].includes(role)) {
+    if (user.role === "uk" || user.role === "super_admin") {
+      // UK Owner может создавать все подчинённые роли
+      if (!["franchisee", "own_point", "uk_employee", "admin", "employee", "animator", "host", "dj"].includes(role)) {
         return NextResponse.json(
-          { error: "UK can only create franchisee, own_point and uk_employee roles" },
+          { error: "UK can only create subordinate roles" },
           { status: 403 },
         )
       }
-    }
-
-    if (user.role === "uk_employee") {
-      if (!["franchisee", "own_point"].includes(role)) {
-        return NextResponse.json(
-          { error: "UK employee can only create franchisee and own_point roles" },
-          { status: 403 },
-        )
-      }
+    } else if (user.role === "uk_employee") {
+      return NextResponse.json(
+        { error: "UK employees cannot create users" },
+        { status: 403 },
+      )
     }
 
     const sql = neon(process.env.DATABASE_URL!)
