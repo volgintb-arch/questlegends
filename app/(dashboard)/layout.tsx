@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
+import { ErrorBoundary } from "@/components/error-boundary"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
@@ -52,25 +53,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar
-        role={user.role}
-        currentPath={pathname}
-        isMobileOpen={isMobileSidebarOpen}
-        onMobileToggle={setIsMobileSidebarOpen}
-      />
-
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header
-          userName={user.name}
-          role={getRoleDisplayName(user.role)}
-          onMobileMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+    <ErrorBoundary>
+      <div className="flex h-screen bg-background overflow-hidden">
+        <Sidebar
+          role={user.role}
+          currentPath={pathname}
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileToggle={setIsMobileSidebarOpen}
         />
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 pb-20 md:pb-8">{children}</div>
-        </main>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header
+            userName={user.name}
+            role={getRoleDisplayName(user.role)}
+            onMobileMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          />
+
+          <main className="flex-1 overflow-y-auto">
+            <div className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 pb-20 md:pb-8">{children}</div>
+          </main>
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   )
 }
