@@ -43,6 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       uk: "Управляющая Компания",
       uk_employee: "Сотрудник УК",
       franchisee: "Франчайзи",
+      own_point: "Собственная Точка",
       admin: "Администратор",
       employee: "Сотрудник",
       animator: "Аниматор",
