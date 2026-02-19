@@ -10,10 +10,13 @@ import {
   Bell,
   Users,
   Calendar,
+  CalendarClock,
   Shield,
   UserCog,
   MessageSquare,
   Share2,
+  AlertTriangle,
+  Megaphone,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -51,6 +54,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         path: "/social-integrations",
         module: "canViewDashboard" as const,
       },
+      { id: "marketing", label: "Маркетинг", icon: Megaphone, path: "/marketing", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -59,6 +63,8 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewKnowledgeBase" as const,
       },
     { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+    { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
+    { id: "incidents", label: "Инциденты", icon: AlertTriangle, path: "/incidents", module: "canViewDashboard" as const },
     { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
     { id: "access", label: "Доступ", icon: Users, path: "/access", module: "canViewAccess" as const },
     {
@@ -88,6 +94,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         path: "/social-integrations",
         module: "canViewDashboard" as const,
       },
+      { id: "marketing", label: "Маркетинг", icon: Megaphone, path: "/marketing", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -96,6 +103,8 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     module: "canViewKnowledgeBase" as const,
     },
     { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+    { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
+    { id: "incidents", label: "Инциденты", icon: AlertTriangle, path: "/incidents", module: "canViewDashboard" as const },
     { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
     { id: "access", label: "Доступ", icon: Users, path: "/access", module: "canViewAccess" as const },
     {
@@ -126,6 +135,8 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewDashboard" as const,
       },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+      { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
+      { id: "incidents", label: "Инциденты", icon: AlertTriangle, path: "/incidents", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -149,6 +160,8 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+      { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
+      { id: "incidents", label: "Инциденты", icon: AlertTriangle, path: "/incidents", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -170,6 +183,8 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
       { id: "schedule", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+      { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
+      { id: "incidents", label: "Инциденты", icon: AlertTriangle, path: "/incidents", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
