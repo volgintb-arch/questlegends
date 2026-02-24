@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   HandshakeIcon,
   TrendingUp,
+  DollarSign,
   BookOpen,
   Bell,
   Users,
@@ -119,7 +120,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
   const franchiseeItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
-      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
+      { id: "finances", label: "Финансы", icon: DollarSign, path: "/finances", module: "canViewErp" as const },
       {
         id: "messages",
         label: "Сообщения",
@@ -158,7 +159,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     const ownPointItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
-      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
+      { id: "finances", label: "Финансы", icon: DollarSign, path: "/finances", module: "canViewErp" as const },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
       { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
       { id: "incidents", label: "Инциденты", icon: AlertTriangle, path: "/incidents", module: "canViewDashboard" as const },
@@ -182,6 +183,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     const adminItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
+      { id: "finances", label: "Финансы", icon: DollarSign, path: "/finances", module: "canViewErp" as const },
       { id: "schedule", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
       { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
       { id: "incidents", label: "Инциденты", icon: AlertTriangle, path: "/incidents", module: "canViewDashboard" as const },
