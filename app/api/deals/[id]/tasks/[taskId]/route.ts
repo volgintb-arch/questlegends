@@ -13,17 +13,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const { id, taskId } = await params
     const body = await request.json()
-    const { completed } = body
+    const status = body.status || (body.completed ? "completed" : "pending")
+    const isCompleted = status === "completed"
 
     const [task] = await sql`
       UPDATE "DealTask"
-      SET completed = ${completed}, "updatedAt" = NOW()
-      WHERE id = ${taskId}::uuid AND "dealId" = ${id}
+      SET status = ${status}, "isCompleted" = ${isCompleted}
+      WHERE id = ${taskId} AND "dealId" = ${id}
       RETURNING *
     `
 
     // Create event for task completion
-    if (completed) {
+    if (isCompleted) {
       await sql`
         INSERT INTO "DealEvent" ("dealId", type, content, "userId", "userName", metadata)
         VALUES (${id}, 'task_completed', ${`Задача выполнена: ${task.title}`}, ${user.userId}, ${user.name}, ${JSON.stringify({ taskId })})
