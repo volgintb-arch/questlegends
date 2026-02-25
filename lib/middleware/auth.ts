@@ -27,8 +27,9 @@ export async function requireRole(req: NextRequest, allowedRoles: string[]) {
 }
 
 export function canAccessFranchisee(userRole: string, userFranchiseeId: string | null, targetFranchiseeId: string) {
-  if (userRole === "UK") return true
-  if (userRole === "FRANCHISEE" && userFranchiseeId === targetFranchiseeId) return true
-  if (userRole === "ADMIN" && userFranchiseeId === targetFranchiseeId) return true
+  // Roles are stored in lowercase in the database
+  if (userRole === "uk" || userRole === "super_admin") return true
+  if ((userRole === "franchisee" || userRole === "own_point") && userFranchiseeId === targetFranchiseeId) return true
+  if (userRole === "admin" && userFranchiseeId === targetFranchiseeId) return true
   return false
 }

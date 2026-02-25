@@ -2,21 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import bcrypt from "bcryptjs"
 import { rateLimit } from "@/lib/rate-limit"
-
-// Simple token generation (base64 encoded JSON)
-function generateSimpleToken(payload: any): string {
-  const tokenData = {
-    ...payload,
-    exp: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-    iat: Date.now(),
-  }
-  const jsonStr = JSON.stringify(tokenData)
-  // Use btoa for environments where Buffer may not be available
-  if (typeof Buffer !== "undefined") {
-    return Buffer.from(jsonStr).toString("base64")
-  }
-  return btoa(unescape(encodeURIComponent(jsonStr)))
-}
+import { createSignedToken } from "@/lib/simple-auth"
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     // Rate limiting: 5 attempts per minute per IP+phone
     const clientIp = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
-    const { success: rateLimitOk, remaining } = rateLimit(`login:${phone}:${clientIp}`)
+    const { success: rateLimitOk } = rateLimit(`login:${phone}:${clientIp}`)
     if (!rateLimitOk) {
       return NextResponse.json(
         { error: "Слишком много попыток входа. Попробуйте через минуту." },
@@ -40,30 +26,10 @@ export async function POST(request: NextRequest) {
 
     const sql = neon(process.env.DATABASE_URL!)
 
-    // Special handling for super admin / UK owner
-    if (phone === "+79000000000") {
-      const existingUsers = await sql`SELECT id FROM "User" WHERE phone = ${phone}`
-
-      if (existingUsers.length === 0) {
-        const hashedPassword = await bcrypt.hash("admin123", 10)
-        await sql`
-          INSERT INTO "User" (id, phone, name, role, "passwordHash", password, "isActive", "createdAt", "updatedAt")
-          VALUES ('super-admin-001', '+79000000000', 'Супер Администратор', 'super_admin', ${hashedPassword}, ${hashedPassword}, true, NOW(), NOW())
-        `
-      } else if (password === "admin123") {
-        const hashedPassword = await bcrypt.hash("admin123", 10)
-        await sql`
-          UPDATE "User" 
-          SET "passwordHash" = ${hashedPassword}, password = ${hashedPassword}
-          WHERE phone = '+79000000000'
-        `
-      }
-    }
-
-    // Query user
+    // Query user — select only necessary fields, never return password columns
     const users = await sql`
-      SELECT 
-        u.id, u.phone, u.name, u.role, u."passwordHash", u.password, u."isActive", u."franchiseeId",
+      SELECT
+        u.id, u.phone, u.name, u.role, u."passwordHash", u."isActive", u."franchiseeId",
         f.name as "franchiseeName", f.city as "franchiseeCity"
       FROM "User" u
       LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
@@ -71,8 +37,11 @@ export async function POST(request: NextRequest) {
       LIMIT 1
     `
 
+    // Use identical error for missing user and wrong password to prevent user enumeration
+    const genericError = NextResponse.json({ error: "Invalid phone or password" }, { status: 401 })
+
     if (users.length === 0) {
-      return NextResponse.json({ error: "Invalid phone or password" }, { status: 401 })
+      return genericError
     }
 
     const user = users[0]
@@ -81,18 +50,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Account is inactive" }, { status: 401 })
     }
 
-    const storedPassword = user.passwordHash || user.password
-    if (!storedPassword) {
-      return NextResponse.json({ error: "Invalid phone or password" }, { status: 401 })
+    if (!user.passwordHash) {
+      return genericError
     }
 
-    const isPasswordValid = await bcrypt.compare(password, storedPassword)
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash)
 
     if (!isPasswordValid) {
-      return NextResponse.json({ error: "Invalid phone or password" }, { status: 401 })
+      return genericError
     }
 
-    const token = generateSimpleToken({
+    const token = await createSignedToken({
       userId: user.id,
       phone: user.phone,
       name: user.name,
@@ -114,13 +82,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error: any) {
-    console.error("[v0] Login API error:", error)
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+    console.error("[login] Login error occurred")
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

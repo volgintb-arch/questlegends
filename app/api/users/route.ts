@@ -4,28 +4,7 @@ import bcrypt from "bcryptjs"
 import { v4 as uuidv4 } from "uuid"
 import { verifyRequest } from "@/lib/simple-auth"
 
-async function getCurrentUser(request: Request) {
-  const authHeader = request.headers.get("Authorization")
-  const token = authHeader?.replace("Bearer ", "")
-
-  if (!token) {
-    return null
-  }
-
-  try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "default-secret-key")
-    const payload = JSON.parse(atob(token.split(".")[1]))
-    return {
-      id: payload.userId,
-      phone: payload.phone,
-      name: payload.name,
-      role: payload.role,
-      franchiseeId: payload.franchiseeId,
-    }
-  } catch (error: any) {
-    return null
-  }
-}
+// getCurrentUser is unused — authentication is handled via verifyRequest from simple-auth
 
 export async function GET(request: Request) {
   try {
@@ -136,8 +115,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data: formattedUsers })
   } catch (error: any) {
-    console.error("[v0] USERS_GET error:", error.message)
-    return NextResponse.json({ error: "Internal error", details: error.message }, { status: 500 })
+    console.error("[users] GET error")
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
 
@@ -240,6 +219,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Пользователь с таким email уже существует" }, { status: 400 })
     }
 
+    if (!password) {
+      return NextResponse.json({ error: "Password is required" }, { status: 400 })
+    }
+    // Store only the bcrypt hash — never store plaintext passwords
     const passwordHash = await bcrypt.hash(password, 10)
 
     let userFranchiseeId = franchiseeId || user.franchiseeId
@@ -270,8 +253,8 @@ export async function POST(request: Request) {
 
     const userUUID = uuidv4()
     const newUser = await sql`
-      INSERT INTO "User" (id, phone, email, "passwordHash", password, name, role, telegram, whatsapp, "telegramId", description, "franchiseeId", "isActive", "createdAt", "updatedAt")
-      VALUES (${userUUID}, ${phone || null}, ${userEmail}, ${passwordHash}, ${password}, ${name}, ${finalRole}, ${telegram || null}, ${whatsapp || null}, ${telegramId || null}, ${description || null}, ${userFranchiseeId}, true, NOW(), NOW())
+      INSERT INTO "User" (id, phone, email, "passwordHash", name, role, telegram, whatsapp, "telegramId", description, "franchiseeId", "isActive", "createdAt", "updatedAt")
+      VALUES (${userUUID}, ${phone || null}, ${userEmail}, ${passwordHash}, ${name}, ${finalRole}, ${telegram || null}, ${whatsapp || null}, ${telegramId || null}, ${description || null}, ${userFranchiseeId}, true, NOW(), NOW())
       RETURNING id, phone, email, name, role, telegram, whatsapp, "telegramId"
     `
 
@@ -290,9 +273,10 @@ export async function POST(request: Request) {
       `
     }
 
-    return NextResponse.json({ user: newUser[0], tempPassword: password })
+    // Return only safe fields — never include password in the response
+    return NextResponse.json({ user: newUser[0] })
   } catch (error: any) {
-    console.error("[v0] USERS_POST error:", error.message)
-    return NextResponse.json({ error: "Internal error", details: error.message }, { status: 500 })
+    console.error("[users] POST error")
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
