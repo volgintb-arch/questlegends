@@ -3,14 +3,19 @@ import { neon } from "@neondatabase/serverless"
 import bcrypt from "bcryptjs"
 import { rateLimit } from "@/lib/rate-limit"
 
-// Simple token generation (just base64 encoded JSON for simplicity)
+// Simple token generation (base64 encoded JSON)
 function generateSimpleToken(payload: any): string {
   const tokenData = {
     ...payload,
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
     iat: Date.now(),
   }
-  return Buffer.from(JSON.stringify(tokenData)).toString("base64")
+  const jsonStr = JSON.stringify(tokenData)
+  // Use btoa for environments where Buffer may not be available
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(jsonStr).toString("base64")
+  }
+  return btoa(unescape(encodeURIComponent(jsonStr)))
 }
 
 export async function POST(request: NextRequest) {

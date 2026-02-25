@@ -6,10 +6,12 @@ import {
   LayoutGrid,
   HandshakeIcon,
   TrendingUp,
+  DollarSign,
   BookOpen,
   Bell,
   Users,
   Calendar,
+  CalendarClock,
   Shield,
   UserCog,
   MessageSquare,
@@ -58,7 +60,6 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         path: "/knowledge",
         module: "canViewKnowledgeBase" as const,
       },
-    { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
     { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
     { id: "access", label: "Доступ", icon: Users, path: "/access", module: "canViewAccess" as const },
     {
@@ -95,7 +96,6 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         path: "/knowledge",
     module: "canViewKnowledgeBase" as const,
     },
-    { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
     { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
     { id: "access", label: "Доступ", icon: Users, path: "/access", module: "canViewAccess" as const },
     {
@@ -110,7 +110,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
   const franchiseeItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
-      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
+      { id: "finances", label: "Финансы", icon: DollarSign, path: "/finances", module: "canViewErp" as const },
       {
         id: "messages",
         label: "Сообщения",
@@ -126,6 +126,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewDashboard" as const,
       },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+      { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -147,8 +148,9 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     const ownPointItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
-      { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
+      { id: "finances", label: "Финансы", icon: DollarSign, path: "/finances", module: "canViewErp" as const },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+      { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -169,7 +171,9 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     const adminItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
+      { id: "finances", label: "Финансы", icon: DollarSign, path: "/finances", module: "canViewErp" as const },
       { id: "schedule", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
+      { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",

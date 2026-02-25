@@ -26,32 +26,38 @@ export function DashboardUK() {
     averageCheck: 0,
     totalGames: 0,
   })
-  const [kpiData] = useState([
+  const formatMoney = (value: number) => {
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M ₽`
+    if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K ₽`
+    return `${Math.round(value)} ₽`
+  }
+
+  const kpiData = [
     {
       id: "1",
       name: "Общая Выручка Сети",
-      value: "0K ₽",
+      value: formatMoney(metrics.totalRevenue),
       icon: <DollarSign className="w-5 h-5" />,
     },
     {
       id: "2",
       name: "Сводное Роялти (7%)",
-      value: "0K ₽",
+      value: formatMoney(metrics.totalRoyalties),
       icon: <TrendingUp className="w-5 h-5" />,
     },
     {
       id: "3",
       name: "Средний Чек",
-      value: "0K ₽",
+      value: formatMoney(metrics.averageCheck),
       icon: <BarChart3 className="w-5 h-5" />,
     },
     {
       id: "4",
       name: "Количество Игр",
-      value: "0",
+      value: `${metrics.totalGames}`,
       icon: <Users className="w-5 h-5" />,
     },
-  ])
+  ]
 
   const isUkEmployee = user?.role === "uk_employee"
 
@@ -140,17 +146,7 @@ export function DashboardUK() {
             <MetricCard
               key={metric.id}
               title={metric.name}
-              value={
-                metric.id === "1"
-                  ? `${(metrics.totalRevenue / 1000).toFixed(0)}K ₽`
-                  : metric.id === "2"
-                    ? `${(metrics.totalRoyalties / 1000).toFixed(0)}K ₽`
-                    : metric.id === "3"
-                      ? `${(metrics.averageCheck / 1000).toFixed(0)}K ₽`
-                      : metric.id === "4"
-                        ? `${metrics.totalGames}`
-                        : metric.value
-              }
+              value={metric.value}
               trend={{ value: 0, isPositive: true }}
               icon={metric.icon}
             />

@@ -35,7 +35,7 @@ export default function IncidentsPage() {
   }
 
   return (
-    <div className="p-6">
+    <>
       <IncidentsList
         locationId={currentLocationId}
         onCreateIncident={handleCreateIncident}
@@ -50,6 +50,6 @@ export default function IncidentsPage() {
           onClose={() => setIsModalOpen(false)}
         />
       )}
-    </div>
+    </>
   )
 }

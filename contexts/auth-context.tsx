@@ -290,27 +290,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (phone: string, password: string) => {
-    console.log("[v0] AuthContext.login called with phone:", phone)
-
     try {
-      console.log("[v0] Sending POST request to /api/auth/login")
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, password }),
       })
 
-      console.log("[v0] Response status:", response.status)
-      console.log("[v0] Response ok:", response.ok)
-
       if (!response.ok) {
-        const data = await response.json()
-        console.log("[v0] Error response data:", data)
-        throw new Error(data.error || "Login failed")
+        let errorMessage = "Login failed"
+        try {
+          const contentType = response.headers.get("content-type") || ""
+          if (contentType.includes("application/json")) {
+            const data = await response.json()
+            errorMessage = data.error || errorMessage
+          } else {
+            errorMessage = await response.text() || errorMessage
+          }
+        } catch {
+          // ignore parse errors
+        }
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
-      console.log("[v0] Login success, token received:", !!data.token)
 
       setStoredToken(data.token)
       setToken(data.token)
@@ -335,6 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.push("/")
     } catch (error) {
       console.error("[v0] Login failed:", error)
+      throw error
     }
   }
 

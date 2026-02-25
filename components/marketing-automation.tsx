@@ -20,9 +20,10 @@ export function MarketingAutomation() {
   const fetchCampaigns = async () => {
     try {
       const response = await fetch("/api/marketing-campaigns")
-      if (response.ok) {
+      const contentType = response.headers.get("content-type") || ""
+      if (response.ok && contentType.includes("application/json")) {
         const data = await response.json()
-        setCampaigns(data)
+        setCampaigns(Array.isArray(data) ? data : [])
       }
     } catch (error) {
       console.error("[v0] Error fetching campaigns:", error)
@@ -54,7 +55,8 @@ export function MarketingAutomation() {
         body: JSON.stringify({ is_active: !campaign.is_active }),
       })
 
-      if (response.ok) {
+      const contentType = response.headers.get("content-type") || ""
+      if (response.ok && contentType.includes("application/json")) {
         setCampaigns(campaigns.map((c) => (c.id === id ? { ...c, is_active: !c.is_active } : c)))
       }
     } catch (error) {
