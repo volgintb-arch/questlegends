@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 interface TaskModalProps {
   isOpen: boolean
@@ -21,6 +22,7 @@ interface TaskModalProps {
 }
 
 export function TaskModal({ isOpen, onClose, dealId, task, personnel, onSave }: TaskModalProps) {
+  const { getAuthHeaders } = useAuth()
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -81,7 +83,7 @@ export function TaskModal({ isOpen, onClose, dealId, task, personnel, onSave }: 
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(body),
       })
 

@@ -98,6 +98,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   const [boardData, setBoardData] = useState<BoardData>({})
   const [crmStats, setCrmStats] = useState<CrmStats | null>(null)
 
+  const [refreshKey, setRefreshKey] = useState(0)
   const [showFilters, setShowFilters] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterStage, setFilterStage] = useState<string>("all")
@@ -231,7 +232,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
     if (selectedPipeline) {
       fetchDeals()
     }
-  }, [selectedPipeline, user, role, getAuthHeaders])
+  }, [selectedPipeline, user, role, getAuthHeaders, refreshKey])
 
   useEffect(() => {
     const dealIdFromUrl = searchParams.get("dealId")
@@ -282,7 +283,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
       })
       if (response.ok) {
         const data = await response.json()
-        setViewingDeal(data.success ? data : data)
+        setViewingDeal(data.data || data)
         setIsViewModalOpen(true)
       } else {
         console.error("Failed to fetch deal:", response.status)
@@ -330,7 +331,9 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   }
 
   const handleDealUpdated = () => {
-    window.location.reload()
+    setIsViewModalOpen(false)
+    setViewingDeal(null)
+    setRefreshKey((k) => k + 1)
   }
 
   const handlePipelineCreated = async (pipelineId: string) => {

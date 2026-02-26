@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
+import { toast } from "sonner"
 
 interface Permission {
   id: string
@@ -31,7 +32,7 @@ interface StaffMember {
 }
 
 export function AccessManagementAdmin() {
-  const { user: currentUser } = useAuth()
+  const { user: currentUser, getAuthHeaders } = useAuth()
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -51,7 +52,9 @@ export function AccessManagementAdmin() {
   const fetchStaff = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/permissions?franchiseeId=${currentUser?.franchiseeId}`)
+      const response = await fetch(`/api/permissions?franchiseeId=${currentUser?.franchiseeId}`, {
+        headers: getAuthHeaders(),
+      })
       if (!response.ok) throw new Error("Failed to fetch staff")
       const data = await response.json()
 
@@ -110,7 +113,7 @@ export function AccessManagementAdmin() {
 
       const response = await fetch("/api/permissions", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           userId: staffId,
           permissions: {
@@ -122,9 +125,10 @@ export function AccessManagementAdmin() {
       if (!response.ok) throw new Error("Failed to update permissions")
 
       setStaff(staff.map((s) => (s.id === staffId ? { ...s, permissions: newPermissions } : s)))
+      toast.success("Права доступа обновлены")
     } catch (error) {
       console.error("[v0] Error updating permissions:", error)
-      alert("Ошибка при обновлении прав доступа")
+      toast.error("Ошибка при обновлении прав доступа")
     }
   }
 
@@ -132,13 +136,17 @@ export function AccessManagementAdmin() {
     if (!confirm("Вы уверены, что хотите удалить этого сотрудника?")) return
 
     try {
-      const response = await fetch(`/api/users/${staffId}`, { method: "DELETE" })
+      const response = await fetch(`/api/users/${staffId}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      })
       if (!response.ok) throw new Error("Failed to delete staff")
 
       setStaff(staff.filter((s) => s.id !== staffId))
+      toast.success("Сотрудник удалён")
     } catch (error) {
       console.error("[v0] Error deleting staff:", error)
-      alert("Ошибка при удалении сотрудника")
+      toast.error("Ошибка при удалении сотрудника")
     }
   }
 

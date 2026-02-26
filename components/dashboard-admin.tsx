@@ -3,11 +3,13 @@
 import { DollarSign, TrendingDown, Users, AlertTriangle, Plus } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { TransactionFormModal } from "./transaction-form-modal"
 import { GameCreateModal } from "./game-create-modal"
 
 export function DashboardAdmin() {
   const { user, getAuthHeaders } = useAuth()
+  const router = useRouter()
   const [showTransactionForm, setShowTransactionForm] = useState(false)
   const [showGameModal, setShowGameModal] = useState(false)
   const [pipeline, setPipeline] = useState<any>(null)
@@ -128,7 +130,7 @@ export function DashboardAdmin() {
     await loadGamesRequiringAssignment()
 
     if (game.id) {
-      window.location.href = `/crm?cardId=${game.id}`
+      router.push(`/crm?dealId=${game.id}`)
     }
   }
 

@@ -6,6 +6,7 @@ import { Shield, Building2, Loader2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/contexts/auth-context"
+import { toast } from "sonner"
 
 interface Franchisee {
   id: string
@@ -134,7 +135,7 @@ export function AccessManagementUK() {
 
   const handleTogglePermission = async (userId: string, permission: keyof UserPermissions) => {
     if (currentUser?.role !== "super_admin" && currentUser?.role !== "uk") {
-      alert("Только супер-админ может изменять права доступа")
+      toast.error("Только супер-админ может изменять права доступа")
       return
     }
 
@@ -172,15 +173,16 @@ export function AccessManagementUK() {
       if (!response.ok) throw new Error("Failed to update permissions")
 
       setUsers(users.map((u) => (u.id === userId ? { ...u, permissions: newPermissions } : u)))
+      toast.success("Права доступа обновлены")
     } catch (error) {
       console.error("Error updating permissions:", error)
-      alert("Ошибка при обновлении прав доступа")
+      toast.error("Ошибка при обновлении прав доступа")
     }
   }
 
   const handleToggleFranchisee = async (userId: string, franchiseeId: string) => {
     if (currentUser?.role !== "super_admin" && currentUser?.role !== "uk") {
-      alert("Только супер-админ может изменять доступ к франшизам")
+      toast.error("Только супер-админ может изменять доступ к франшизам")
       return
     }
 
@@ -207,9 +209,10 @@ export function AccessManagementUK() {
       if (!response.ok) throw new Error("Failed to update franchisee assignment")
 
       setUsers(users.map((u) => (u.id === userId ? { ...u, assignedFranchisees: newAssignedFranchisees } : u)))
+      toast.success("Доступ к франшизе обновлён")
     } catch (error) {
       console.error("[v0] Error updating franchisee assignment:", error)
-      alert("Ошибка при обновлении доступа к франшизам")
+      toast.error("Ошибка при обновлении доступа к франшизам")
     }
   }
 

@@ -39,9 +39,23 @@ export function IncidentModal({ incident, locationId, personnel, onClose }: Inci
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Convert new uploaded files to base64 data URLs so they are included in the API payload
+    const newPhotoUrls: string[] = await Promise.all(
+      uploadedFiles.map(
+        (file) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          }),
+      ),
+    )
+
     const data = {
       ...formData,
       location_id: locationId,
+      photos: [...formData.photos, ...newPhotoUrls],
     }
 
     if (incident) {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { User, Mail, Shield, Check, X } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { toast } from "sonner"
 
 interface AccessRight {
   id: string
@@ -130,9 +131,10 @@ export function AccessManagementFranchisee() {
       if (!response.ok) throw new Error("Failed to update permissions")
 
       await fetchUsers()
+      toast.success("Права доступа обновлены")
     } catch (error) {
       console.error("[v0] Error updating permissions:", error)
-      alert("Ошибка при обновлении прав доступа")
+      toast.error("Ошибка при обновлении прав доступа")
     }
   }
 
@@ -152,9 +154,10 @@ export function AccessManagementFranchisee() {
       if (!response.ok) throw new Error("Failed to revoke access")
 
       await fetchUsers()
+      toast.success("Доступ отозван")
     } catch (error) {
       console.error("[v0] Error revoking access:", error)
-      alert("Ошибка при отзыве доступа")
+      toast.error("Ошибка при отзыве доступа")
     }
   }
 
