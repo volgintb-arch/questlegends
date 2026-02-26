@@ -3,6 +3,13 @@ import { neon } from "@neondatabase/serverless"
 import { verifyRequest } from "@/lib/simple-auth"
 import bcrypt from "bcryptjs"
 
+// Safe user fields — never include passwordHash or password columns
+const USER_SAFE_FIELDS = `
+  u.id, u.phone, u.email, u.name, u.role, u.telegram, u.whatsapp,
+  u."telegramId", u.description, u."isActive", u."franchiseeId", u."createdAt", u."updatedAt",
+  f.name as "franchiseeName"
+`
+
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await verifyRequest(request)
@@ -14,7 +21,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const sql = neon(process.env.DATABASE_URL!)
 
     const users = await sql`
-      SELECT u.*, f.name as "franchiseeName"
+      SELECT ${sql.unsafe(USER_SAFE_FIELDS)}
       FROM "User" u
       LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
       WHERE u.id = ${id}
@@ -26,7 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     return NextResponse.json({ success: true, data: users[0] })
   } catch (error) {
-    console.error("[v0] Error fetching user:", error)
+    console.error("[users/id] GET error")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -42,13 +49,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const body = await request.json()
     const sql = neon(process.env.DATABASE_URL!)
 
-    // Check if user exists
-    const existing = await sql`SELECT * FROM "User" WHERE id = ${id}`
+    // Fetch only needed fields to check permissions
+    const existing = await sql`
+      SELECT id, role, "franchiseeId" FROM "User" WHERE id = ${id}
+    `
     if (existing.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // Check permissions
     const targetUser = existing[0]
     const canEdit =
       currentUser.role === "super_admin" ||
@@ -61,7 +69,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Update user fields
     if (body.name !== undefined) {
       await sql`UPDATE "User" SET name = ${body.name}, "updatedAt" = NOW() WHERE id = ${id}`
     }
@@ -77,13 +84,19 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     if (body.password && body.password.trim()) {
       const hashedPassword = await bcrypt.hash(body.password, 10)
-      await sql`UPDATE "User" SET "passwordHash" = ${hashedPassword}, password = ${hashedPassword}, "updatedAt" = NOW() WHERE id = ${id}`
+      // Only store the bcrypt hash — never store plaintext password
+      await sql`UPDATE "User" SET "passwordHash" = ${hashedPassword}, "updatedAt" = NOW() WHERE id = ${id}`
     }
 
-    const updated = await sql`SELECT * FROM "User" WHERE id = ${id}`
+    const updated = await sql`
+      SELECT ${sql.unsafe(USER_SAFE_FIELDS)}
+      FROM "User" u
+      LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+      WHERE u.id = ${id}
+    `
     return NextResponse.json({ success: true, data: updated[0] })
   } catch (error) {
-    console.error("[v0] Error updating user:", error)
+    console.error("[users/id] PATCH error")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -98,13 +111,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const { id } = params
     const sql = neon(process.env.DATABASE_URL!)
 
-    // Check if user exists
-    const existing = await sql`SELECT * FROM "User" WHERE id = ${id}`
+    const existing = await sql`
+      SELECT id, role, name, "franchiseeId" FROM "User" WHERE id = ${id}
+    `
     if (existing.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // Check permissions
     const targetUser = existing[0]
     const canDelete =
       currentUser.role === "super_admin" ||
@@ -124,7 +137,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     await sql`DELETE FROM "User" WHERE id = ${id}`
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error deleting user:", error)
+    console.error("[users/id] DELETE error")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
