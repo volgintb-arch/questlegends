@@ -33,45 +33,50 @@ export interface Deal {
   stage: string
   amount: number
   source?: string
-  priority: "low" | "medium" | "high"
+  priority?: "low" | "medium" | "high"
   participants: number
   package?: string
-  game_date?: Date
-  check_per_person: number
-  animators_count: number
-  animator_rate: number
-  host_rate: number
-  dj_rate: number
-  location_id: string
-  responsible_user_id?: string
-  contact_name?: string
-  contact_phone?: string
-  contact_email?: string
-  contact_company?: string
-  contact_social_vk?: string
-  contact_social_telegram?: string
-  contact_social_instagram?: string
-  created_at: Date
-  updated_at: Date
+  gameDate?: Date
+  checkPerPerson: number
+  animatorsCount: number
+  animatorRate: number
+  hostRate: number
+  djRate: number
+  locationId: string
+  franchiseeId?: string
+  responsibleId?: string
+  amoDealId?: string
+  clientName?: string
+  clientPhone?: string
+  clientEmail?: string
+  contactCompany?: string
+  contactSocialVk?: string
+  contactSocialTelegram?: string
+  contactSocialInstagram?: string
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface Transaction {
   id: string
   date: Date
-  deal_id?: string
-  location_id: string
-  participants_count: number
-  check_per_person: number
-  animators_count: number
-  animator_rate: number
-  host_rate: number
-  dj_rate: number
-  total_revenue: number
-  royalty_amount: number
-  fot_calculation: number
+  dealId?: string
+  locationId: string
+  amoDealId?: string
+  participantsCount: number
+  checkPerPerson: number
+  animatorsCount: number
+  animatorRate: number
+  hostRate: number
+  djRate: number
+  totalRevenue: number
+  royaltyAmount: number
+  fotCalculation: number
+  historicalRates?: Record<string, any>
+  idempotencyKey: string
   status: "completed" | "pending" | "cancelled"
-  created_at: Date
-  updated_at: Date
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface Expense {

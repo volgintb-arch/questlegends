@@ -3,6 +3,7 @@
  * Доступ только для SUPER_ADMIN (read-only)
  */
 
+import { neon } from "@neondatabase/serverless"
 import { sql } from "@/lib/db"
 
 export type AuditAction =
@@ -88,6 +89,7 @@ export async function logAuditEvent(params: CreateAuditLogParams): Promise<void>
 
 /**
  * Получает записи audit log (только для super_admin)
+ * Использует neon template literals с NULL-safe условиями для динамической фильтрации.
  */
 export async function getAuditLogs(params: {
   page?: number
@@ -99,72 +101,48 @@ export async function getAuditLogs(params: {
   dateFrom?: Date
   dateTo?: Date
 }): Promise<{ logs: AuditLogEntry[]; total: number }> {
+  if (!process.env.DATABASE_URL) {
+    return { logs: [], total: 0 }
+  }
+
   const { page = 1, limit = 50, action, entityType, userId, franchiseeId, dateFrom, dateTo } = params
-
   const offset = (page - 1) * limit
-  const conditions: string[] = []
-  const values: any[] = []
-  let paramIndex = 1
 
-  if (action) {
-    conditions.push(`action = $${paramIndex}`)
-    values.push(action)
-    paramIndex++
-  }
+  // Null-safe values so template params work for optional filters
+  const a = action ?? null
+  const et = entityType ?? null
+  const uid = userId ?? null
+  const fid = franchiseeId ?? null
+  const df = dateFrom ?? null
+  const dt = dateTo ?? null
 
-  if (entityType) {
-    conditions.push(`"entityType" = $${paramIndex}`)
-    values.push(entityType)
-    paramIndex++
-  }
+  const neonSql = neon(process.env.DATABASE_URL)
 
-  if (userId) {
-    conditions.push(`"userId" = $${paramIndex}`)
-    values.push(userId)
-    paramIndex++
-  }
-
-  if (franchiseeId) {
-    conditions.push(`"franchiseeId" = $${paramIndex}`)
-    values.push(franchiseeId)
-    paramIndex++
-  }
-
-  if (dateFrom) {
-    conditions.push(`"createdAt" >= $${paramIndex}`)
-    values.push(dateFrom)
-    paramIndex++
-  }
-
-  if (dateTo) {
-    conditions.push(`"createdAt" <= $${paramIndex}`)
-    values.push(dateTo)
-    paramIndex++
-  }
-
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
-
-  // Используем sql template для запроса с динамическими условиями
-  const logsResult = await sql.query(
-    `
+  const logsResult = await neonSql`
     SELECT * FROM "AuditLog"
-    ${whereClause}
+    WHERE (${a}::text IS NULL OR action = ${a})
+      AND (${et}::text IS NULL OR "entityType" = ${et})
+      AND (${uid}::text IS NULL OR "userId" = ${uid})
+      AND (${fid}::text IS NULL OR "franchiseeId" = ${fid})
+      AND (${df}::timestamptz IS NULL OR "createdAt" >= ${df})
+      AND (${dt}::timestamptz IS NULL OR "createdAt" <= ${dt})
     ORDER BY "createdAt" DESC
     LIMIT ${limit} OFFSET ${offset}
-  `,
-    values,
-  )
+  `
 
-  const countResult = await sql.query(
-    `
-    SELECT COUNT(*) as count FROM "AuditLog" ${whereClause}
-  `,
-    values,
-  )
+  const countResult = await neonSql`
+    SELECT COUNT(*) as count FROM "AuditLog"
+    WHERE (${a}::text IS NULL OR action = ${a})
+      AND (${et}::text IS NULL OR "entityType" = ${et})
+      AND (${uid}::text IS NULL OR "userId" = ${uid})
+      AND (${fid}::text IS NULL OR "franchiseeId" = ${fid})
+      AND (${df}::timestamptz IS NULL OR "createdAt" >= ${df})
+      AND (${dt}::timestamptz IS NULL OR "createdAt" <= ${dt})
+  `
 
   return {
-    logs: logsResult.rows as AuditLogEntry[],
-    total: Number.parseInt(countResult.rows[0]?.count || "0", 10),
+    logs: logsResult as AuditLogEntry[],
+    total: Number.parseInt(countResult[0]?.count || "0", 10),
   }
 }
 

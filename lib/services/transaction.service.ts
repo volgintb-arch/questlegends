@@ -29,7 +29,7 @@ export interface TransactionResult {
  * This ensures the same deal can only create one transaction
  */
 export function generateIdempotencyKey(dealId: string, stage: string): string {
-  return `deal-${dealId}-stage-${stage}-${Date.now()}`
+  return `deal-${dealId}-stage-${stage}`
 }
 
 /**
@@ -92,71 +92,56 @@ export async function createTransactionFromDeal(deal: Deal, idempotencyKey?: str
     status: "completed",
   }
 
-  try {
-    // In real backend, this would be a database INSERT with UNIQUE constraint on idempotency_key
-    // For now, simulate the check
-    const existingTransaction = await checkExistingTransaction(finalIdempotencyKey)
+  // Synchronous check+save to ensure atomicity (prevents race conditions)
+  const existingTransaction = checkExistingTransaction(finalIdempotencyKey)
 
-    if (existingTransaction) {
-      console.log("[Transaction Service] Idempotency: Transaction already exists", finalIdempotencyKey)
-      return {
-        transaction: existingTransaction,
-        isNew: false,
-      }
-    }
-
-    // Create new transaction
-    const newTransaction = await saveTransaction(transactionData)
-
-    console.log("[Transaction Service] Created new transaction:", newTransaction.id)
-
+  if (existingTransaction) {
+    console.log("[Transaction Service] Idempotency: Transaction already exists", finalIdempotencyKey)
     return {
-      transaction: newTransaction,
-      isNew: true,
+      transaction: existingTransaction,
+      isNew: false,
     }
-  } catch (error: any) {
-    // Handle unique constraint violation (idempotency)
-    if (error.code === "23505" || error.message?.includes("duplicate")) {
-      console.log("[Transaction Service] Caught duplicate transaction, fetching existing")
-      const existingTransaction = await checkExistingTransaction(finalIdempotencyKey)
+  }
 
-      if (existingTransaction) {
-        return {
-          transaction: existingTransaction,
-          isNew: false,
-        }
-      }
-    }
+  // Create new transaction
+  const newTransaction = saveTransaction(transactionData)
 
-    throw error
+  console.log("[Transaction Service] Created new transaction:", newTransaction.id)
+
+  return {
+    transaction: newTransaction,
+    isNew: true,
   }
 }
 
 /**
- * Check if transaction with given idempotency key already exists
- * In real implementation, this would query the database
+ * In-memory transaction store — works in both browser and Node.js (test environment).
+ * In production this would be a database with a UNIQUE constraint on idempotency_key.
+ * Keyed by idempotency key for O(1) lookup.
  */
-async function checkExistingTransaction(idempotencyKey: string): Promise<Transaction | null> {
-  // Simulate database check
-  // In real backend: SELECT * FROM transactions WHERE idempotency_key = $1
+const mockTransactionStore = new Map<string, Transaction>()
 
-  // For frontend mock, check localStorage or return null
-  const mockTransactions = getMockTransactions()
-  return mockTransactions.find((t) => t.idempotencyKey === idempotencyKey) || null
+/**
+ * Check if transaction with given idempotency key already exists.
+ * Synchronous to ensure atomicity with saveTransaction (prevents race conditions).
+ * In real implementation: SELECT * FROM transactions WHERE idempotency_key = $1
+ */
+function checkExistingTransaction(idempotencyKey: string): Transaction | null {
+  return mockTransactionStore.get(idempotencyKey) ?? null
 }
 
 /**
- * Save transaction to database
- * In real implementation, this would INSERT into database
+ * Save transaction to store.
+ * Synchronous to ensure atomicity with checkExistingTransaction (prevents race conditions).
+ * In real implementation: INSERT INTO transactions (...) VALUES (...) RETURNING *
  */
-async function saveTransaction(data: Partial<Transaction>): Promise<Transaction> {
-  // Generate ID
+function saveTransaction(data: Partial<Transaction>): Transaction {
   const id = `txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
   const transaction: Transaction = {
     id,
     date: data.date || new Date(),
-    dealId: data.dealId!,
+    dealId: data.dealId,
     locationId: data.locationId!,
     amoDealId: data.amoDealId,
     participantsCount: data.participantsCount!,
@@ -175,30 +160,16 @@ async function saveTransaction(data: Partial<Transaction>): Promise<Transaction>
     updatedAt: new Date(),
   }
 
-  // Simulate database insert
-  // In real backend: INSERT INTO transactions (...) VALUES (...) RETURNING *
-
-  // For frontend mock, save to localStorage
-  const mockTransactions = getMockTransactions()
-  mockTransactions.push(transaction)
-  saveMockTransactions(mockTransactions)
+  mockTransactionStore.set(transaction.idempotencyKey, transaction)
 
   return transaction
 }
 
 /**
- * Mock transaction storage (for frontend testing)
- * In production, this would be handled by backend database
+ * Clear mock store — used in tests via beforeEach.
  */
-function getMockTransactions(): Transaction[] {
-  if (typeof window === "undefined") return []
-  const stored = localStorage.getItem("mock_transactions")
-  return stored ? JSON.parse(stored) : []
-}
-
-function saveMockTransactions(transactions: Transaction[]): void {
-  if (typeof window === "undefined") return
-  localStorage.setItem("mock_transactions", JSON.stringify(transactions))
+export function clearMockTransactionStore(): void {
+  mockTransactionStore.clear()
 }
 
 /**

@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "@jest/globals"
-import { createTransactionFromDeal, generateIdempotencyKey } from "./transaction.service"
+import { createTransactionFromDeal, generateIdempotencyKey, clearMockTransactionStore } from "./transaction.service"
 import type { Deal } from "../types"
 
 describe("Transaction Service - Idempotency", () => {
@@ -26,10 +26,8 @@ describe("Transaction Service - Idempotency", () => {
   }
 
   beforeEach(() => {
-    // Clear mock storage
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("mock_transactions")
-    }
+    // Clear in-memory mock store between tests
+    clearMockTransactionStore()
   })
 
   it("should create transaction on first call", async () => {

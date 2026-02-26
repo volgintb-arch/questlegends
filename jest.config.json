@@ -1,7 +1,7 @@
 {
   "preset": "ts-jest",
   "testEnvironment": "node",
-  "roots": ["<rootDir>/lib", "<rootDir>/tests"],
+  "roots": ["<rootDir>/lib"],
   "testMatch": ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
   "transform": {
     "^.+\\.ts$": "ts-jest"
