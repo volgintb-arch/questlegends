@@ -55,7 +55,7 @@ export async function createSignedToken(payload: Omit<TokenPayload, "exp" | "iat
   const full: TokenPayload = {
     ...payload,
     iat: Date.now(),
-    exp: Date.now() + 2 * 60 * 60 * 1000, // 2 hours
+    exp: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
   }
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url")
   const body = Buffer.from(JSON.stringify(full)).toString("base64url")
