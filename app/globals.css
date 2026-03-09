@@ -9,7 +9,7 @@
   --foreground: #1C1A17;
   --card: rgba(255, 255, 255, 0.75);
   --card-foreground: #1C1A17;
-  --popover: rgba(255, 255, 255, 0.88);
+  --popover: #FFFCF8;
   --popover-foreground: #1C1A17;
   --primary: #C45A2D;
   --primary-foreground: #ffffff;
@@ -46,7 +46,7 @@
   --foreground: #F0EBE4;
   --card: rgba(255, 255, 255, 0.04);
   --card-foreground: #F0EBE4;
-  --popover: rgba(22, 18, 14, 0.92);
+  --popover: #1A1614;
   --popover-foreground: #F0EBE4;
   --primary: #E8884A;
   --primary-foreground: #1C1A17;

@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
     const filterType = searchParams.get("type")
     const filterRead = searchParams.get("read")
     const unreadOnly = searchParams.get("unreadOnly")
+    const showArchived = searchParams.get("archived") === "true"
 
     const notifications = await withRetry(async () => {
       const sql = getSql()
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
       // Check if table exists first
       const tableCheck = await sql`
         SELECT EXISTS (
-          SELECT FROM information_schema.tables 
+          SELECT FROM information_schema.tables
           WHERE table_name = 'Notification'
         ) as exists
       `
@@ -78,6 +79,21 @@ export async function GET(request: NextRequest) {
             AND "isRead" = false
         `
         return { count: Number.parseInt(result[0]?.count || "0") }
+      }
+
+      // Archived notifications (last 7 days)
+      if (showArchived) {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        return await sql`
+          SELECT n.*, s.name as "senderName", s.role as "senderRole",
+                 n."relatedDealId", n."relatedTaskId"
+          FROM "Notification" n
+          LEFT JOIN "User" s ON n."senderId" = s.id
+          WHERE n."recipientId" = ${user.id}
+            AND n."isArchived" = true
+            AND n."createdAt" >= ${sevenDaysAgo}
+          ORDER BY n."createdAt" DESC
+        `
       }
 
       // Build query based on filters

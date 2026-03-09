@@ -42,72 +42,79 @@ export class LeadCreator {
 
   // Создать B2B Deal (для УК - продажа франшиз)
   private static async createB2BDeal(message: NormalizedMessage, integrationId: string): Promise<string> {
-    // Получить ответственного
     const assignee = await this.getAssignee(integrationId, "uk")
+    const dealId = globalThis.crypto.randomUUID()
+    const clientName = message.username || message.external_user_id
+    const comment = `Автосоздано из ${message.channel}: ${message.message_text}`
 
-    const result = await sql`
-      INSERT INTO B2BDeal (
-        name,
-        phone,
-        source,
-        status,
-        stage,
-        responsible_id,
-        comment,
-        created_at
+    await sql`
+      INSERT INTO "Deal" (
+        id, "clientName", "clientPhone", source, stage,
+        "additionalComment", "responsibleId",
+        "createdAt", "updatedAt"
       ) VALUES (
-        ${message.username || message.external_user_id},
+        ${dealId},
+        ${clientName},
         ${message.phone || null},
-        ${`${message.channel}_integration`},
-        'new',
-        'new_lead',
+        ${`${message.channel}_bot`},
+        'NEW',
+        ${comment},
         ${assignee?.id || null},
-        ${`Автосоздано из ${message.channel}: ${message.message_text}`},
-        NOW()
+        NOW(), NOW()
       )
-      RETURNING id
     `
 
-    return result[0].id
+    return dealId
   }
 
   // Создать B2C Lead (для франчайзи - продажа игр)
   private static async createB2CLead(message: NormalizedMessage, integrationId: string): Promise<string> {
     // Получить ответственного и франчайзи
     const assignee = await this.getAssignee(integrationId, "franchisee")
+    const franchiseeId = message.owner_id
 
-    const result = await sql`
-      INSERT INTO GameLead (
-        name,
-        phone,
-        source,
-        status,
-        stage,
-        responsible_id,
-        franchisee_id,
-        comment,
-        telegram_id,
-        instagram_username,
-        vk_id,
-        created_at
-      ) VALUES (
-        ${message.username || message.external_user_id},
-        ${message.phone || null},
-        ${`${message.channel}_integration`},
-        'new',
-        'new_lead',
-        ${assignee?.id || null},
-        ${message.owner_id || null},
-        ${`Автосоздано из ${message.channel}: ${message.message_text}`},
-        ${message.channel === "telegram" ? message.external_user_id : null},
-        ${message.channel === "instagram" ? message.external_user_id : null},
-        ${message.channel === "vk" ? message.external_user_id : null},
-        NOW()
-      )
-      RETURNING id
+    if (!franchiseeId) {
+      throw new Error("Franchisee ID is required for B2C lead")
+    }
+
+    // Получить первую воронку и стадию для этого франчайзи
+    const pipeline = await sql`
+      SELECT gp.id as pipeline_id, gps.id as stage_id
+      FROM "GamePipeline" gp
+      JOIN "GamePipelineStage" gps ON gps."pipelineId" = gp.id
+      WHERE gp."franchiseeId" = ${franchiseeId}
+      ORDER BY gp."createdAt" ASC, gps."order" ASC
+      LIMIT 1
     `
 
-    return result[0].id
+    if (pipeline.length === 0) {
+      throw new Error("No pipeline found for franchisee")
+    }
+
+    const leadId = globalThis.crypto.randomUUID()
+    const clientName = message.username || message.external_user_id
+    const notes = `Автосоздано из ${message.channel}: ${message.message_text}`
+
+    await sql`
+      INSERT INTO "GameLead" (
+        id, "clientName", "clientPhone", source, notes,
+        "responsibleId", "pipelineId", "stageId", "franchiseeId",
+        "createdAt", "updatedAt"
+      ) VALUES (
+        ${leadId},
+        ${clientName},
+        ${message.phone || null},
+        ${`${message.channel}_bot`},
+        ${notes},
+        ${assignee?.id || null},
+        ${pipeline[0].pipeline_id},
+        ${pipeline[0].stage_id},
+        ${franchiseeId},
+        NOW(), NOW()
+      )
+    `
+
+    return leadId
   }
 
   // Получить ответственного по стратегии автоназначения
@@ -161,14 +168,25 @@ export class LeadCreator {
 
   // Обновить статистику
   private static async updateStats(integrationId: string, metric: string) {
-    await sql`
-      INSERT INTO IntegrationStats (integration_id, date, ${sql(metric)})
-      VALUES (${integrationId}, CURRENT_DATE, 1)
-      ON CONFLICT (integration_id, date)
-      DO UPDATE SET
-        ${sql(metric)} = IntegrationStats.${sql(metric)} + 1,
-        updated_at = NOW()
-    `
+    try {
+      if (metric === "leads_created") {
+        await sql`
+          INSERT INTO "IntegrationStats" (integration_id, date, leads_created)
+          VALUES (${integrationId}, CURRENT_DATE, 1)
+          ON CONFLICT (integration_id, date)
+          DO UPDATE SET leads_created = "IntegrationStats".leads_created + 1, updated_at = NOW()
+        `
+      } else if (metric === "duplicates_prevented") {
+        await sql`
+          INSERT INTO "IntegrationStats" (integration_id, date, duplicates_prevented)
+          VALUES (${integrationId}, CURRENT_DATE, 1)
+          ON CONFLICT (integration_id, date)
+          DO UPDATE SET duplicates_prevented = "IntegrationStats".duplicates_prevented + 1, updated_at = NOW()
+        `
+      }
+    } catch (error) {
+      console.error("[v0] LeadCreator: Stats update failed", error)
+    }
   }
 
   // Связать сообщение с созданным лидом

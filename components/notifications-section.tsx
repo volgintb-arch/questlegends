@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { AlertTriangle, AlertCircle, CheckCircle, Info, Bell, Trash2, MessageSquare, ExternalLink, Banknote } from "lucide-react"
+import { AlertTriangle, AlertCircle, CheckCircle, Info, Bell, Trash2, MessageSquare, ExternalLink, Banknote, Archive } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { NotificationDetailModal } from "./notification-detail-modal"
 import { useAuth } from "@/contexts/auth-context"
@@ -28,9 +28,11 @@ interface NotificationsSectionProps {
 
 export function NotificationsSection({ role }: NotificationsSectionProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [archivedNotifications, setArchivedNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState("all")
   const [filterRead, setFilterRead] = useState("unread")
+  const [activeTab, setActiveTab] = useState<"active" | "archive">("active")
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({})
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
@@ -118,13 +120,13 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
     }
   }
 
-  const openDealCard = async (notification: Notification) => {
+  const handleNotificationClick = async (notification: Notification) => {
+    // Mark as read on any click
+    if (!notification.read) {
+      await markAsRead(notification.id)
+    }
+    // Navigate to CRM if dealId exists
     if (notification.dealId) {
-      // Mark as read first
-      if (!notification.read) {
-        await markAsRead(notification.id)
-      }
-      // Navigate to CRM with deal ID and task ID in query params
       const taskParam = notification.taskId ? `&taskId=${notification.taskId}` : ""
       router.push(`/crm?dealId=${notification.dealId}${taskParam}`)
     }
@@ -233,52 +235,69 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
     setShowDetailModal(true)
   }
 
+  const transformNotifications = (data: any[]) =>
+    data.map((n: any) => ({
+      id: n.id,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      timestamp: new Date(n.createdAt).toLocaleString("ru-RU"),
+      read: n.isRead,
+      location: n.location,
+      dealId: n.dealId,
+      taskId: n.taskId,
+      comments: n.comments?.map((c: any) => c.text) || [],
+      archived: n.isArchived,
+      sender: n.sender?.name,
+    }))
+
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
         setLoading(true)
-        const response = await fetch(`/api/notifications?type=${filterType}&read=${filterRead}`, {
-          headers: getAuthHeaders(),
-        })
 
-        if (!response.ok) {
-          console.error("[v0] Error fetching notifications:", response.status)
-          setNotifications([])
-          return
-        }
-
-        const data = await response.json()
-
-        if (data.success && data.data?.notifications) {
-          // Transform API data to component format
-          const transformed = data.data.notifications.map((n: any) => ({
-            id: n.id,
-            type: n.type,
-            title: n.title,
-            message: n.message,
-            timestamp: new Date(n.createdAt).toLocaleString("ru-RU"),
-            read: n.isRead,
-            location: n.location,
-            dealId: n.dealId,
-            taskId: n.taskId,
-            comments: n.comments?.map((c: any) => c.text) || [],
-            archived: n.isArchived,
-            sender: n.sender?.name,
-          }))
-          setNotifications(transformed)
+        if (activeTab === "archive") {
+          const response = await fetch(`/api/notifications?archived=true`, {
+            headers: getAuthHeaders(),
+          })
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.data?.notifications) {
+              setArchivedNotifications(transformNotifications(data.data.notifications))
+            } else {
+              setArchivedNotifications([])
+            }
+          }
         } else {
-          setNotifications([])
+          const response = await fetch(`/api/notifications?type=${filterType}&read=${filterRead}`, {
+            headers: getAuthHeaders(),
+          })
+
+          if (!response.ok) {
+            console.error("[v0] Error fetching notifications:", response.status)
+            setNotifications([])
+            return
+          }
+
+          const data = await response.json()
+
+          if (data.success && data.data?.notifications) {
+            setNotifications(transformNotifications(data.data.notifications))
+          } else {
+            setNotifications([])
+          }
         }
       } catch (error) {
         console.error("[v0] Error fetching notifications:", error)
-        setNotifications([])
+        if (activeTab === "archive") setArchivedNotifications([])
+        else setNotifications([])
       } finally {
         setLoading(false)
       }
     }
 
     fetchNotifications()
-  }, [filterType, filterRead]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filterType, filterRead, activeTab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -303,66 +322,135 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setFilterRead("all")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filterRead === "all"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            Все
-          </button>
-          <button
-            onClick={() => setFilterRead("unread")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filterRead === "unread"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            Непрочитанные ({unreadCount})
-          </button>
-          <button
-            onClick={() => setFilterRead("read")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filterRead === "read"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            Прочитанные
-          </button>
-        </div>
-
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="bg-card border border-border rounded-lg px-4 py-2 text-sm outline-none focus:border-primary"
+      {/* Tabs: Active / Archive */}
+      <div className="flex gap-2 border-b border-border pb-2">
+        <button
+          onClick={() => setActiveTab("active")}
+          className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+            activeTab === "active"
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:bg-muted/80"
+          }`}
         >
-          <option value="all">Все типы</option>
-          <option value="royalty_payment">Роялти</option>
-          <option value="task">Задачи</option>
-          <option value="message">Сообщения от УК</option>
-          <option value="warning">Предупреждения</option>
-          <option value="info">Информация</option>
-          <option value="success">Успех</option>
-        </select>
+          <Bell size={14} className="inline mr-1.5 -mt-0.5" />
+          Активные
+        </button>
+        <button
+          onClick={() => setActiveTab("archive")}
+          className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+            activeTab === "archive"
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:bg-muted/80"
+          }`}
+        >
+          <Archive size={14} className="inline mr-1.5 -mt-0.5" />
+          Архив (7 дней)
+        </button>
       </div>
+
+      {/* Filters — only for active tab */}
+      {activeTab === "active" && (
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setFilterRead("all")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                filterRead === "all"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              Все
+            </button>
+            <button
+              onClick={() => setFilterRead("unread")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                filterRead === "unread"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              Непрочитанные ({unreadCount})
+            </button>
+            <button
+              onClick={() => setFilterRead("read")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                filterRead === "read"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              Прочитанные
+            </button>
+          </div>
+
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="bg-popover border border-border rounded-lg px-4 py-2 text-sm outline-none focus:border-primary"
+          >
+            <option value="all">Все типы</option>
+            <option value="royalty_payment">Роялти</option>
+            <option value="task">Задачи</option>
+            <option value="message">Сообщения от УК</option>
+            <option value="warning">Предупреждения</option>
+            <option value="info">Информация</option>
+            <option value="success">Успех</option>
+          </select>
+        </div>
+      )}
 
       {/* Notifications List */}
       <div className="space-y-3">
-        {filteredNotifications.length > 0 ? (
+        {activeTab === "archive" ? (
+          archivedNotifications.length > 0 ? (
+            archivedNotifications.map((notification) => (
+              <div
+                key={notification.id}
+                className="border rounded-lg p-4 transition-all bg-card border-border/50 opacity-75"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 mt-1">{getIcon(notification.type)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-4 mb-2">
+                      <div>
+                        <h3 className="font-semibold text-foreground">{notification.title}</h3>
+                        {notification.sender && <p className="text-xs text-purple-500 mt-1">От: {notification.sender}</p>}
+                        <p className="text-sm text-muted-foreground mt-1">{notification.message}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge className={getTypeColor(notification.type)}>
+                          {getTypeLabel(notification.type)}
+                        </Badge>
+                        <Badge className="bg-muted text-muted-foreground border-border">Архив</Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap mt-3">
+                      <span className="text-xs text-muted-foreground">{notification.timestamp}</span>
+                      {notification.location && (
+                        <span className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground">
+                          📍 {notification.location}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-12 bg-card border border-border rounded-lg">
+              <Archive size={32} className="mx-auto text-muted-foreground mb-2" />
+              <p className="text-muted-foreground">Нет архивных уведомлений за последние 7 дней</p>
+            </div>
+          )
+        ) : filteredNotifications.length > 0 ? (
           filteredNotifications.map((notification) => (
             <div
               key={notification.id}
-              className={`border rounded-lg p-4 transition-all ${
+              className={`border rounded-lg p-4 transition-all cursor-pointer ${
                 notification.read ? "bg-card border-border/50" : "bg-card border-border bg-primary/5"
-              } ${notification.dealId ? "cursor-pointer hover:border-primary/50" : ""}`}
-              onClick={() => notification.dealId && openDealCard(notification)}
+              } hover:border-primary/50`}
+              onClick={() => handleNotificationClick(notification)}
             >
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0 mt-1">{getIcon(notification.type)}</div>

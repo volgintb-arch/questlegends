@@ -104,12 +104,10 @@ export class IntegrationHub {
   private static async updateStats(integrationId: string, metric: string) {
     try {
       await sql`
-        INSERT INTO IntegrationStats (integration_id, date, ${metric})
+        INSERT INTO "IntegrationStats" (integration_id, date, messages_received)
         VALUES (${integrationId}, CURRENT_DATE, 1)
         ON CONFLICT (integration_id, date)
-        DO UPDATE SET
-          ${metric} = IntegrationStats.${metric} + 1,
-          updated_at = NOW()
+        DO UPDATE SET messages_received = "IntegrationStats".messages_received + 1, updated_at = NOW()
       `
     } catch (error) {
       // Статистика не критична - не ломаем основной поток
@@ -119,7 +117,7 @@ export class IntegrationHub {
 
   // Генерация уникального webhook URL
   static generateWebhookUrl(integrationId: string, channel: string): string {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://questlegends-os-dashboard.vercel.app"
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
     const secret = this.generateWebhookSecret()
     return `${baseUrl}/api/webhooks/${channel}/${integrationId}?secret=${secret}`
   }

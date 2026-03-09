@@ -37,26 +37,25 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
   const availableRoles: Array<{ value: string; label: string }> = []
 
   if (currentUser.role === "uk" || currentUser.role === "super_admin") {
-    // UK Owner может создавать все подчинённые роли
     availableRoles.push(
-      { value: "franchisee", label: "Франчайзи" },
-      { value: "own_point", label: "Собственная Точка" },
       { value: "uk_employee", label: "Сотрудник УК" },
+      { value: "franchisee", label: "Франчайзи" },
     )
   } else if (currentUser.role === "uk_employee") {
     availableRoles.push(
       { value: "franchisee", label: "Франчайзи" },
-      { value: "own_point", label: "Собственная Точка" },
     )
   } else if (currentUser.role === "franchisee" || currentUser.role === "own_point") {
     availableRoles.push(
       { value: "admin", label: "Администратор" },
+      { value: "employee", label: "Сотрудник" },
       { value: "animator", label: "Аниматор" },
       { value: "host", label: "Ведущий" },
       { value: "dj", label: "DJ" },
     )
   } else if (currentUser.role === "admin") {
     availableRoles.push(
+      { value: "employee", label: "Сотрудник" },
       { value: "animator", label: "Аниматор" },
       { value: "host", label: "Ведущий" },
       { value: "dj", label: "DJ" },

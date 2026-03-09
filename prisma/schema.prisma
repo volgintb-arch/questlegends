@@ -947,3 +947,94 @@ model SocialMediaTrigger {
 
   @@index([configId])
 }
+
+// New integration system (used by integration-wizard & integration-hub)
+model integration {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  owner_type           String    // "uk" | "franchisee"
+  owner_id             String?
+  channel              String    // "telegram" | "whatsapp" | "instagram" | "vk" | "avito"
+  credentials          Json      @default("{}")
+  webhook_url          String?
+  assignment_strategy  String    @default("first_admin")
+  default_assignee_id  String?
+  is_active            Boolean   @default(true)
+  auto_lead_creation   Boolean   @default(true)
+  last_message_at      DateTime?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @default(now()) @updatedAt
+
+  triggers             triggerrule[]
+
+  @@index([owner_type, owner_id])
+  @@index([channel])
+}
+
+model triggerrule {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  integration_id      String    @db.Uuid
+  integration         integration @relation(fields: [integration_id], references: [id], onDelete: Cascade)
+  trigger_type        String    // "first_message" | "keyword" | "all"
+  keywords            String[]  @default([])
+  keywords_match_type String    @default("any")
+  is_active           Boolean   @default(true)
+  priority            Int       @default(100)
+  created_at          DateTime  @default(now())
+
+  @@index([integration_id])
+}
+
+// Inbound messages from integrations
+model inboundmessage {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  integration_id    String    @db.Uuid
+  channel           String
+  external_user_id  String
+  username          String?
+  phone             String?
+  message_text      String    @default("")
+  attachments       Json?
+  owner_type        String
+  owner_id          String?
+  received_at       DateTime  @default(now())
+  raw_payload       Json?
+  status            String    @default("pending")
+  lead_id           String?
+  lead_type         String?
+  processed_at      DateTime?
+  created_at        DateTime  @default(now())
+
+  @@map("inboundmessage")
+  @@index([integration_id])
+  @@index([channel, external_user_id])
+}
+
+// Lead deduplication records
+model leaddeduplication {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  integration_id    String    @db.Uuid
+  channel           String
+  external_user_id  String
+  phone             String?
+  lead_id           String
+  lead_type         String
+  created_at        DateTime  @default(now())
+
+  @@map("leaddeduplication")
+  @@unique([channel, external_user_id])
+  @@index([phone])
+}
+
+// Integration statistics
+model integrationstats {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  integration_id        String    @db.Uuid
+  date                  DateTime  @db.Date
+  messages_received     Int       @default(0)
+  leads_created         Int       @default(0)
+  duplicates_prevented  Int       @default(0)
+  updated_at            DateTime  @default(now())
+
+  @@map("integrationstats")
+  @@unique([integration_id, date])
+}

@@ -39,7 +39,7 @@ export async function GET(request: Request) {
         "canViewDashboard", "canViewCrm", "canViewErp", "canViewKpi",
         "canViewMessages", "canViewKnowledgeBase", "canViewUsers",
         "canViewAccess", "canViewNotifications",
-        "canManageSchedule", "canManagePersonnel"
+        "canManageSchedule", "canManagePersonnel", "canManageUsers"
       FROM "UserPermission"
       WHERE "userId" = ${userId}
     `
@@ -62,6 +62,7 @@ export async function GET(request: Request) {
         canViewUsers: isUkLevel ? true : false,
         canViewAccess: isUkLevel,
         canViewNotifications: true,
+        canManageUsers: isUkLevel ? true : false,
       }
 
       return NextResponse.json({ permissions: defaultPermissions })

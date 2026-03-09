@@ -150,6 +150,7 @@ export interface UserPermissions {
   canViewUsers: boolean
   canViewAccess: boolean
   canViewNotifications: boolean
+  canManageUsers: boolean
 }
 
 export interface User {
@@ -374,27 +375,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasPermission = (permission: string): boolean => {
     if (!user) return false
-    if (user.role === "super_admin") return true
+    if (user.role === "super_admin" || user.role === "uk") return true
+    // uk_employee with canManageUsers can create users
+    if (user.role === "uk_employee" && permission === "createUsers" && user.permissions?.canManageUsers) {
+      return true
+    }
     const permissions = ROLE_PERMISSIONS[user.role] as Record<string, any>
     return !!permissions[permission]
   }
 
   const canCreateRole = (role: UserRole): boolean => {
     if (!user) return false
-    if (user.role === "super_admin") return true
 
-    const permissions = ROLE_PERMISSIONS[user.role] as any
-
-    if (
-      user.role === "admin" &&
-      (role === "admin" || role === "franchisee" || role === "uk" || role === "uk_employee" || role === "super_admin")
-    ) {
-      return false
+    // UK/super_admin can create only uk_employee and franchisee
+    if (user.role === "super_admin" || user.role === "uk") {
+      return ["uk_employee", "franchisee"].includes(role)
     }
 
-    const checkRole = ["animator", "host", "dj"].includes(role) ? "employee" : role
+    // uk_employee with canManageUsers can create only franchisee
+    if (user.role === "uk_employee" && user.permissions?.canManageUsers) {
+      return role === "franchisee"
+    }
 
-    return permissions.createUsers?.includes(checkRole) || false
+    // franchisee/own_point can create admin, employee, animator, host, dj
+    if (user.role === "franchisee" || user.role === "own_point") {
+      return ["admin", "employee", "animator", "host", "dj"].includes(role)
+    }
+
+    // admin can create employee, animator, host, dj
+    if (user.role === "admin") {
+      return ["employee", "animator", "host", "dj"].includes(role)
+    }
+
+    return false
   }
 
   const canViewModule = (module: keyof UserPermissions): boolean => {
@@ -416,6 +429,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           canViewUsers: false,
           canViewAccess: false,
           canViewNotifications: true,
+          canManageUsers: false,
         }
         return ukEmployeeDefaults[module]
       }
@@ -435,6 +449,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           canViewUsers: false,
           canViewAccess: false,
           canViewNotifications: true,
+          canManageUsers: false,
         }
         return adminDefaults[module]
       }

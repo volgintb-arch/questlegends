@@ -95,9 +95,34 @@ export function GamesCRMFranchisee() {
   })
   const [sortBy, setSortBy] = useState<"date" | "amount" | "name">("date")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [staffUsers, setStaffUsers] = useState<{ id: string; name: string }[]>([])
+  const [leadSources, setLeadSources] = useState<string[]>([])
 
   // The effective franchiseeId: either user's own or selected by UK user
   const activeFranchiseeId = isUKUser ? selectedFranchiseeId : user?.franchiseeId
+
+  // Load staff for responsible filter
+  useEffect(() => {
+    if (!activeFranchiseeId || authLoading) return
+    const loadStaff = async () => {
+      try {
+        const res = await fetch(`/api/users?franchiseeId=${activeFranchiseeId}`, { headers: getAuthHeaders() })
+        if (res.ok) {
+          const data = await res.json()
+          setStaffUsers((data.users || []).map((u: any) => ({ id: u.id, name: u.name })))
+        }
+      } catch (e) {
+        console.error("[v0] CRM: Error loading staff:", e)
+      }
+    }
+    loadStaff()
+  }, [activeFranchiseeId, authLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Derive unique sources from leads
+  useEffect(() => {
+    const sources = [...new Set(leads.map((l) => l.source).filter(Boolean))] as string[]
+    setLeadSources(sources)
+  }, [leads])
 
   // Load franchisee list for UK users
   useEffect(() => {
@@ -505,11 +530,40 @@ export function GamesCRMFranchisee() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Источник</label>
-              <Input
-                placeholder="Все источники"
-                value={filters.source}
-                onChange={(e) => setFilters({ ...filters, source: e.target.value })}
-              />
+              <Select value={filters.source || "all"} onValueChange={(value) => setFilters({ ...filters, source: value === "all" ? "" : value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Все источники" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все источники</SelectItem>
+                  <SelectItem value="website">Сайт</SelectItem>
+                  <SelectItem value="phone">Телефон</SelectItem>
+                  <SelectItem value="instagram">Instagram</SelectItem>
+                  <SelectItem value="telegram_bot">Telegram</SelectItem>
+                  <SelectItem value="vk_bot">ВКонтакте</SelectItem>
+                  <SelectItem value="whatsapp_bot">WhatsApp</SelectItem>
+                  <SelectItem value="avito_bot">Авито</SelectItem>
+                  <SelectItem value="referral">Рекомендация</SelectItem>
+                  <SelectItem value="walk_in">Самоприход</SelectItem>
+                  {leadSources.filter(s => !["website","phone","instagram","telegram_bot","vk_bot","whatsapp_bot","avito_bot","referral","walk_in"].includes(s)).map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Ответственный</label>
+              <Select value={filters.responsibleId || "all"} onValueChange={(value) => setFilters({ ...filters, responsibleId: value === "all" ? "" : value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Все сотрудники" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все сотрудники</SelectItem>
+                  {staffUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Бюджет от</label>

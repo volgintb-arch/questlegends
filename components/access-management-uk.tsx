@@ -44,6 +44,7 @@ const permissionLabels: Record<keyof UserPermissions, string> = {
   messages: "Сообщения",
   knowledgeBase: "База Знаний",
   notifications: "Уведомления",
+  manageUsers: "Управление пользователями",
 }
 
 export function AccessManagementUK() {
@@ -97,6 +98,7 @@ export function AccessManagementUK() {
           messages: u.userPermissions?.canViewMessages ?? true,
           knowledgeBase: u.userPermissions?.canViewKnowledgeBase ?? true,
           notifications: u.userPermissions?.canViewNotifications ?? true,
+          manageUsers: u.userPermissions?.canManageUsers ?? false,
         },
         assignedFranchisees: u.assignedFranchisees || [],
         status: u.isActive ? "active" : "inactive",
@@ -163,9 +165,10 @@ export function AccessManagementUK() {
             canViewKpi: false,
             canViewMessages: newPermissions.messages,
             canViewKnowledgeBase: newPermissions.knowledgeBase,
-            canViewUsers: false,
+            canViewUsers: newPermissions.manageUsers,
             canViewAccess: false,
             canViewNotifications: newPermissions.notifications,
+            canManageUsers: newPermissions.manageUsers,
           },
         }),
       })
