@@ -3,7 +3,7 @@ import { verifyRequest } from "@/lib/simple-auth"
 import { sql } from "@/lib/db"
 import { logAuditEvent } from "@/lib/audit-log"
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await verifyRequest(request)
     if (!user) {
@@ -20,7 +20,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     // Get integration first
     const integrations = await sql`
-      SELECT * FROM integration WHERE id = ${id}::uuid LIMIT 1
+      SELECT * FROM integration WHERE id = ${id} LIMIT 1
     `
 
     if ((integrations as any[]).length === 0) {
@@ -35,7 +35,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
 
     // Delete integration (cascades to trigger rules, inbound messages, etc)
-    await sql`DELETE FROM integration WHERE id = ${id}::uuid`
+    await sql`DELETE FROM integration WHERE id = ${id}`
 
     // Audit log
     await logAuditEvent({
@@ -51,12 +51,12 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error deleting integration:", error)
+    console.error("[v0] Error deleting integration:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await verifyRequest(request)
     if (!user) {
@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     // Get integration first
     const integrations = await sql`
-      SELECT * FROM integration WHERE id = ${id}::uuid LIMIT 1
+      SELECT * FROM integration WHERE id = ${id} LIMIT 1
     `
 
     if ((integrations as any[]).length === 0) {
@@ -99,13 +99,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         auto_lead_creation = COALESCE(${auto_lead_creation ?? null}::boolean, auto_lead_creation),
         default_assignee_id = COALESCE(${default_assignee_id ?? null}, default_assignee_id),
         updated_at = NOW()
-      WHERE id = ${id}::uuid
+      WHERE id = ${id}
       RETURNING *
     `
 
     return NextResponse.json({ integration: (result as any[])[0] })
   } catch (error) {
-    console.error("[v0] Error updating integration:", error)
+    console.error("[v0] Error updating integration:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

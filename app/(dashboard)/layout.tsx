@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
@@ -15,9 +15,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/login")
+    }
+  }, [isLoading, user, router])
+
+  // Check royalty payments on dashboard load (once per session)
+  useEffect(() => {
+    if (!user) return
+    const key = `royalty-check-${new Date().toISOString().slice(0, 10)}`
+    if (sessionStorage.getItem(key)) return
+    sessionStorage.setItem(key, "1")
+
+    const token = localStorage.getItem("token")
+    if (!token) return
+    fetch("/api/notifications/check-royalty", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => {})
+  }, [user])
+
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen items-center justify-center bg-mesh">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
           <p className="text-muted-foreground">Загрузка...</p>
@@ -27,9 +48,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   if (!user) {
-    router.push("/login")
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen items-center justify-center bg-mesh">
         <div className="text-center">
           <p className="text-muted-foreground">Перенаправление на страницу входа...</p>
         </div>
@@ -55,7 +75,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <ErrorBoundary>
-      <div className="flex h-screen bg-background overflow-hidden">
+      <div className="flex h-screen bg-mesh overflow-hidden">
         <Sidebar
           role={user.role}
           currentPath={pathname}

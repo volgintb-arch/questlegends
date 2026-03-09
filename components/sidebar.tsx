@@ -6,16 +6,16 @@ import {
   LayoutGrid,
   HandshakeIcon,
   TrendingUp,
-  DollarSign,
+  RussianRuble,
   BookOpen,
   Bell,
   Users,
   Calendar,
-  CalendarClock,
   Shield,
   UserCog,
   MessageSquare,
   Share2,
+  Building2,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -39,9 +39,10 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
+      { id: "franchise-management", label: "Франчизи", icon: Building2, path: "/franchise-management", module: "canViewDashboard" as const },
       {
         id: "messages",
-        label: "Сообщения",
+        label: "Чат",
         icon: MessageSquare,
         path: "/messages",
         module: "canViewMessages" as const,
@@ -75,9 +76,10 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
       { id: "transactions", label: "ERP", icon: TrendingUp, path: "/erp", module: "canViewErp" as const },
+      { id: "franchise-management", label: "Франчизи", icon: Building2, path: "/franchise-management", module: "canViewDashboard" as const },
       {
         id: "messages",
-        label: "Сообщения",
+        label: "Чат",
         icon: MessageSquare,
         path: "/messages",
         module: "canViewMessages" as const,
@@ -110,10 +112,10 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
   const franchiseeItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
-      { id: "finances", label: "Финансы", icon: DollarSign, path: "/finances", module: "canViewErp" as const },
+      { id: "finances", label: "Финансы", icon: RussianRuble, path: "/finances", module: "canViewErp" as const },
       {
         id: "messages",
-        label: "Сообщения",
+        label: "Чат",
         icon: MessageSquare,
         path: "/messages",
         module: "canViewMessages" as const,
@@ -126,7 +128,6 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewDashboard" as const,
       },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
-      { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -148,9 +149,8 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     const ownPointItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
-      { id: "finances", label: "Финансы", icon: DollarSign, path: "/finances", module: "canViewErp" as const },
+      { id: "finances", label: "Финансы", icon: RussianRuble, path: "/finances", module: "canViewErp" as const },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
-      { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -171,9 +171,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     const adminItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
-      { id: "finances", label: "Финансы", icon: DollarSign, path: "/finances", module: "canViewErp" as const },
-      { id: "schedule", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
-      { id: "shifts", label: "Графики смен", icon: CalendarClock, path: "/shifts", module: "canViewDashboard" as const },
+      { id: "schedule", label: "График", icon: Calendar, path: "/personnel", module: "canViewKpi" as const },
       {
         id: "knowledge",
         label: "База Знаний",
@@ -202,7 +200,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     }
     if (role === "own_point") return ownPointItems
     if (role === "franchisee") return franchiseeItems
-    if (role === "admin") return adminItems
+    if (role === "admin") return adminItems.filter((item) => canViewModule(item.module))
     if (role === "employee" || role === "animator" || role === "host" || role === "dj") return personnelItems
     return commonItems
   }
@@ -247,15 +245,14 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       )}
 
       <aside
-        className={`fixed md:static left-0 top-0 h-screen bg-sidebar border-r border-sidebar-border transition-transform duration-300 z-40 w-52 ${
+        className={`fixed md:static left-0 top-0 h-screen glass-sidebar transition-transform duration-300 z-40 w-52 ${
           isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
         <div className="h-full flex flex-col p-3 sm:p-4">
           <div className="mb-4 sm:mb-6">
-            <h1 className="text-base sm:text-lg font-bold text-sidebar-primary mb-0.5">QuestLegends</h1>
-            <p className="text-[10px] text-sidebar-primary-foreground/60 uppercase tracking-wider">OS 2.0</p>
-            <p className="text-[10px] text-sidebar-primary-foreground/50 mt-1">{getRoleLabel()}</p>
+            <img src="/logo.png" alt="Легенда об Искателях" className="w-12 h-12 sm:w-14 sm:h-14 object-contain mb-1" />
+            <p className="text-[10px] text-muted-foreground mt-1">{getRoleLabel()}</p>
           </div>
 
           <nav className="flex-1 space-y-0.5 sm:space-y-1 overflow-y-auto">
@@ -267,10 +264,10 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
                 <button
                   key={item.id}
                   onClick={() => handleNavigation(item.path)}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-md transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg transition-all text-left ${
                     isActive
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent/30"
+                      ? "gradient-primary text-white glow-purple-sm"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent"
                   }`}
                 >
                   <Icon size={14} className="flex-shrink-0" />
@@ -280,9 +277,8 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
             })}
           </nav>
 
-          <div className="border-t border-sidebar-border pt-2 sm:pt-3 text-[10px] text-sidebar-primary-foreground/60">
-            <p>QuestLegends OS 2.0</p>
-            <p>Version 2.0.1</p>
+          <div className="border-t border-sidebar-border pt-2 sm:pt-3">
+            <img src="/logo.png" alt="" className="w-6 h-6 object-contain opacity-40" />
           </div>
         </div>
       </aside>

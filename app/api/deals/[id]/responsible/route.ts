@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 import crypto from "crypto"
 
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       responsibles: responsibles,
     })
   } catch (error) {
-    console.error("[v0] Error fetching responsible users:", error)
+    console.error("[v0] Error fetching responsible users:")
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
@@ -74,7 +74,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error updating responsible users:", error)
+    console.error("[v0] Error updating responsible users:")
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

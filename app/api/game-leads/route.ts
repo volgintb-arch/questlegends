@@ -1,17 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
-import { verifyToken } from "@/lib/simple-auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { AccessControl } from "@/lib/access-control"
 import { AuditLog } from "@/lib/audit-log"
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await verifyToken(req)
+    const user = await verifyRequest(req)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const access = new AccessControl(user)
+    const access = new AccessControl({ id: user.userId, role: user.role, franchiseeId: user.franchiseeId })
     if (!access.canAccessModule("crm")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
       }
     } else {
       // Франчайзи видит только свои лиды
-      const userFranchiseeId = user.franchisee_id || franchiseeId
+      const userFranchiseeId = user.franchiseeId || franchiseeId
       if (!userFranchiseeId) {
         return NextResponse.json({ success: true, data: [] })
       }
@@ -98,13 +98,12 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: leads })
   } catch (error: any) {
-    console.error("[v0] Error fetching game leads:", error)
+    console.error("[v0] Error fetching game leads:")
     const errorMessage = error?.message || String(error)
     return NextResponse.json(
       {
         success: false,
         error: "Failed to fetch leads",
-        message: errorMessage,
       },
       { status: 500 },
     )
@@ -113,12 +112,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await verifyToken(req)
+    const user = await verifyRequest(req)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const access = new AccessControl(user)
+    const access = new AccessControl({ id: user.userId, role: user.role, franchiseeId: user.franchiseeId })
     if (!access.canPerformAction("leads", "create")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
@@ -146,6 +145,8 @@ export async function POST(req: NextRequest) {
       hostRate = 2000,
       djsCount = 0,
       djRate = 2500,
+      extras,
+      extrasAmount = 0,
     } = body
 
     if (!clientName || !pipelineId || !stageId || !franchiseeId) {
@@ -158,46 +159,56 @@ export async function POST(req: NextRequest) {
 
     const totalAmount = playersCount * pricePerPerson
 
+    const leadId = globalThis.crypto.randomUUID()
     const [lead] = await sql`
       INSERT INTO "GameLead" (
-        "clientName", "clientPhone", "clientEmail", "gameDate", "gameTime", "gameDuration",
+        id, "clientName", "clientPhone", "clientEmail", "gameDate", "gameTime", "gameDuration",
         "playersCount", "pricePerPerson", "totalAmount", "prepayment",
         "notes", "source", "responsibleId", "pipelineId", "stageId", "franchiseeId",
-        "animatorsCount", "animatorRate", "hostsCount", "hostRate", "djsCount", "djRate"
+        "animatorsCount", "animatorRate", "hostsCount", "hostRate", "djsCount", "djRate",
+        "extras", "extrasAmount",
+        "createdAt", "updatedAt"
       )
       VALUES (
-        ${clientName}, ${clientPhone || null}, ${clientEmail || null}, 
+        ${leadId}, ${clientName}, ${clientPhone || null}, ${clientEmail || null},
         ${gameDate || null}, ${gameTime || null}, ${gameDuration},
         ${playersCount}, ${pricePerPerson}, ${totalAmount}, ${prepayment},
-        ${notes || null}, ${source || null}, ${responsibleId || null}, 
+        ${notes || null}, ${source || null}, ${responsibleId || null},
         ${pipelineId}, ${stageId}, ${franchiseeId},
-        ${animatorsCount}, ${animatorRate}, ${hostsCount}, ${hostRate}, ${djsCount}, ${djRate}
+        ${animatorsCount}, ${animatorRate}, ${hostsCount}, ${hostRate}, ${djsCount}, ${djRate},
+        ${extras || null}, ${extrasAmount},
+        NOW(), NOW()
       )
       RETURNING *
     `
 
     const [stage] = await sql`SELECT name FROM "GamePipelineStage" WHERE id = ${stageId}`
 
+    const logId = globalThis.crypto.randomUUID()
     await sql`
-      INSERT INTO "GameLeadLog" ("leadId", action, "toStageId", "toStageName", "pipelineId", details, "userId", "userName")
-      VALUES (${lead.id}, 'create', ${stageId}, ${stage?.name || ""}, ${pipelineId}, ${"Создана заявка: " + clientName}, ${user?.id || null}, ${user?.name || null})
+      INSERT INTO "GameLeadLog" (id, "leadId", action, "toStageId", "toStageName", "pipelineId", details, "userId", "userName", "franchiseeId", "clientName")
+      VALUES (${logId}, ${lead.id}, 'create', ${stageId}, ${stage?.name || ""}, ${pipelineId}, ${"Создана заявка: " + clientName}, ${user.userId || null}, ${user.name || null}, ${franchiseeId || null}, ${clientName || null})
     `
 
+    const eventId = globalThis.crypto.randomUUID()
     await sql`
-      INSERT INTO "GameLeadEvent" ("leadId", type, content, "userId", "userName")
-      VALUES (${lead.id}, 'system', 'Заявка создана', ${user?.id || null}, ${user?.name || null})
+      INSERT INTO "GameLeadEvent" (id, "leadId", type, content, "userId", "userName")
+      VALUES (${eventId}, ${lead.id}, 'system', 'Заявка создана', ${user.userId || null}, ${user.name || null})
     `
 
     await AuditLog.log({
-      user_id: user.id,
+      userId: user.userId,
+      userName: user.name,
+      userRole: user.role,
       action: "lead_created",
-      resource_type: "game_lead",
-      resource_id: lead.id,
-      details: { clientName, franchiseeId, source },
-      ip_address: req.headers.get("x-forwarded-for") || "unknown",
+      entityType: "lead",
+      entityId: lead.id,
+      franchiseeId: franchiseeId || null,
+      details: { clientName, source },
+      ipAddress: req.headers.get("x-forwarded-for") || "unknown",
     })
 
-    if (responsibleId && responsibleId !== user?.id) {
+    if (responsibleId && responsibleId !== user.userId) {
       const notificationId = globalThis.crypto.randomUUID()
       const now = new Date().toISOString()
 
@@ -211,7 +222,7 @@ export async function POST(req: NextRequest) {
           'deal', 
           'Новая заявка', 
           ${"Вы назначены ответственным за новую заявку: " + clientName},
-          ${user?.id || null},
+          ${user.userId || null},
           ${responsibleId},
           ${lead.id},
           false,
@@ -225,6 +236,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, data: lead })
   } catch (error) {
     console.error("[v0] Error creating game lead:", error)
-    return NextResponse.json({ error: "Failed to create lead", details: String(error) }, { status: 500 })
+    return NextResponse.json({ error: "Failed to create lead", details: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }

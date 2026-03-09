@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 
 async function queryWithRetry(sql: ReturnType<typeof neon>, query: () => Promise<any>, retries = 2) {

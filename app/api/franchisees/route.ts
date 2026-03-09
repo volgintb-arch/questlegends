@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 import { cache } from "@/lib/cache"
 
@@ -45,21 +45,29 @@ export async function GET(request: Request) {
     let franchisees
     if (user.role === "super_admin" || user.role === "uk") {
       franchisees = await sql`
-        SELECT f.*, 
+        SELECT f.*,
           COALESCE(f."royaltyPercent", 7) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
-          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id AND u.role != 'own_point') as "usersCount",
-          (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role IN ('franchisee', 'own_point') LIMIT 1) as "ownerRole"
+          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount",
+          (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role = 'franchisee' LIMIT 1) as "ownerRole",
+          (SELECT COUNT(*) FROM "GameLead" gl JOIN "GamePipelineStage" s ON gl."stageId" = s.id WHERE gl."franchiseeId" = f.id AND s."stageType" = 'completed')::int as "completedGames",
+          (SELECT COALESCE(SUM(gl."totalAmount"), 0) FROM "GameLead" gl JOIN "GamePipelineStage" s ON gl."stageId" = s.id WHERE gl."franchiseeId" = f.id AND s."stageType" = 'completed')::int as "gamesRevenue",
+          (SELECT COUNT(*) FROM "GameLead" gl JOIN "GamePipelineStage" s ON gl."stageId" = s.id WHERE gl."franchiseeId" = f.id AND s."stageType" = 'cancelled')::int as "cancelledGames",
+          (SELECT COALESCE(SUM(e.amount), 0) FROM "Expense" e WHERE e."franchiseeId" = f.id)::int as "totalExpenses"
         FROM "Franchisee" f
         ORDER BY f.name ASC
       `
     } else if (user.role === "uk_employee") {
       franchisees = await sql`
-        SELECT f.*, 
+        SELECT f.*,
           COALESCE(f."royaltyPercent", 7) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
-          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id AND u.role != 'own_point') as "usersCount",
-          (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role IN ('franchisee', 'own_point') LIMIT 1) as "ownerRole"
+          (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount",
+          (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role = 'franchisee' LIMIT 1) as "ownerRole",
+          (SELECT COUNT(*) FROM "GameLead" gl JOIN "GamePipelineStage" s ON gl."stageId" = s.id WHERE gl."franchiseeId" = f.id AND s."stageType" = 'completed')::int as "completedGames",
+          (SELECT COALESCE(SUM(gl."totalAmount"), 0) FROM "GameLead" gl JOIN "GamePipelineStage" s ON gl."stageId" = s.id WHERE gl."franchiseeId" = f.id AND s."stageType" = 'completed')::int as "gamesRevenue",
+          (SELECT COUNT(*) FROM "GameLead" gl JOIN "GamePipelineStage" s ON gl."stageId" = s.id WHERE gl."franchiseeId" = f.id AND s."stageType" = 'cancelled')::int as "cancelledGames",
+          (SELECT COALESCE(SUM(e.amount), 0) FROM "Expense" e WHERE e."franchiseeId" = f.id)::int as "totalExpenses"
         FROM "Franchisee" f
         INNER JOIN "UserFranchiseeAssignment" ufa ON f.id = ufa."franchiseeId"
         WHERE ufa."userId" = ${user.userId}
@@ -71,7 +79,11 @@ export async function GET(request: Request) {
           COALESCE(f."royaltyPercent", 7) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
           (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount",
-          (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role IN ('franchisee', 'own_point') LIMIT 1) as "ownerRole"
+          (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role = 'franchisee' LIMIT 1) as "ownerRole",
+          (SELECT COUNT(*) FROM "GameLead" gl JOIN "GamePipelineStage" s ON gl."stageId" = s.id WHERE gl."franchiseeId" = f.id AND s."stageType" = 'completed')::int as "completedGames",
+          (SELECT COALESCE(SUM(gl."totalAmount"), 0) FROM "GameLead" gl JOIN "GamePipelineStage" s ON gl."stageId" = s.id WHERE gl."franchiseeId" = f.id AND s."stageType" = 'completed')::int as "gamesRevenue",
+          (SELECT COUNT(*) FROM "GameLead" gl JOIN "GamePipelineStage" s ON gl."stageId" = s.id WHERE gl."franchiseeId" = f.id AND s."stageType" = 'cancelled')::int as "cancelledGames",
+          (SELECT COALESCE(SUM(e.amount), 0) FROM "Expense" e WHERE e."franchiseeId" = f.id)::int as "totalExpenses"
         FROM "Franchisee" f
         WHERE f.id = ${user.franchiseeId}
       `
@@ -89,8 +101,8 @@ export async function GET(request: Request) {
         "X-Cache": "MISS",
       },
     })
-  } catch (error) {
-    console.error("[v0] FRANCHISEES_GET error:", error)
+  } catch (error: any) {
+    console.error("[v0] FRANCHISEES_GET error:", error?.message || error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
@@ -136,7 +148,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result[0], { status: 201 })
   } catch (error) {
-    console.error("[v0] FRANCHISEES_POST error:", error)
+    console.error("[v0] FRANCHISEES_POST error:")
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

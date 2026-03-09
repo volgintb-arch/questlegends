@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { TrendingUp, TrendingDown, DollarSign, Settings, X, Check } from "lucide-react"
+import { TrendingUp, TrendingDown, RussianRuble, Settings, X, Check } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -14,6 +14,10 @@ interface FranchiseFinance {
   royalty: number
   expenses: number
   profit: number
+  completedGames: number
+  cancelledGames: number
+  cancelRate: number
+  avgCheck: number
   status: "active" | "pending" | "inactive"
 }
 
@@ -62,10 +66,16 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
         const revenue = franchiseeTransactions
           .filter((t: any) => t.type === "income")
           .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
-        const royaltyPercent = f.royaltyPercent || 7
+        const royaltyPercent = Number(f.royaltyPercent) || 0
         const royalty = Math.round(revenue * (royaltyPercent / 100))
         const expensesTotal = franchiseeExpenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
         const profit = revenue - royalty - expensesTotal
+
+        const completedGames = Number(f.completedGames) || 0
+        const cancelledGames = Number(f.cancelledGames) || 0
+        const gamesRevenue = Number(f.gamesRevenue) || 0
+        const cancelRate = completedGames > 0 ? Math.round((cancelledGames / completedGames) * 100) : 0
+        const avgCheck = completedGames > 0 ? Math.round(gamesRevenue / completedGames) : 0
 
         return {
           id: f.id,
@@ -76,6 +86,10 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
           royalty,
           expenses: expensesTotal,
           profit,
+          completedGames,
+          cancelledGames,
+          cancelRate,
+          avgCheck,
           status: "active" as const,
         }
       })
@@ -180,11 +194,11 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-card border border-border rounded-lg p-6">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase">Общая Выручка</p>
-                <DollarSign className="w-4 h-4 text-green-500" />
+                <RussianRuble className="w-4 h-4 text-green-500" />
               </div>
               <p className="text-2xl font-bold text-green-500">{totalRevenue.toLocaleString()} ₽</p>
               <p className="text-xs text-muted-foreground mt-2">{filteredFranchises.length} франчайзи</p>
@@ -193,9 +207,9 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
             <div className="bg-card border border-border rounded-lg p-6">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase">Роялти Сеть</p>
-                <TrendingUp className="w-4 h-4 text-blue-500" />
+                <TrendingUp className="w-4 h-4 text-primary" />
               </div>
-              <p className="text-2xl font-bold text-blue-500">{totalRoyalty.toLocaleString()} ₽</p>
+              <p className="text-2xl font-bold text-primary">{totalRoyalty.toLocaleString()} ₽</p>
               <p className="text-xs text-muted-foreground mt-2">
                 {totalRevenue > 0 ? ((totalRoyalty / totalRevenue) * 100).toFixed(1) : 0}% от выручки
               </p>
@@ -225,9 +239,9 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
           </div>
 
           {/* Table */}
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="bg-card border border-border rounded-lg overflow-hidden overflow-x-auto">
             <div className="p-6 border-b border-border">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <h3 className="text-lg font-semibold text-foreground">Финансовые показатели по франчайзи</h3>
                 <div className="flex gap-2">
                   <button
@@ -270,6 +284,10 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
                   <TableHead className="text-right text-xs font-semibold text-muted-foreground">Роялти ₽</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-muted-foreground">Расходы</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-muted-foreground">Прибыль</TableHead>
+                  <TableHead className="text-right text-xs font-semibold text-muted-foreground">Игры</TableHead>
+                  <TableHead className="text-right text-xs font-semibold text-muted-foreground">Отказы</TableHead>
+                  <TableHead className="text-right text-xs font-semibold text-muted-foreground">Отказы %</TableHead>
+                  <TableHead className="text-right text-xs font-semibold text-muted-foreground">Ср. чек</TableHead>
                   <TableHead className="text-xs font-semibold text-muted-foreground">Статус</TableHead>
                 </TableRow>
               </TableHeader>
@@ -311,7 +329,7 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-1">
-                          <span className="text-sm font-medium text-blue-500">{franchise.royaltyPercent}%</span>
+                          <span className="text-sm font-medium text-primary">{franchise.royaltyPercent}%</span>
                           {canEditRoyalty && (
                             <button
                               onClick={() => startEditingRoyalty(franchise)}
@@ -324,7 +342,7 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-right text-sm font-medium text-blue-500">
+                    <TableCell className="text-right text-sm font-medium text-primary">
                       {franchise.royalty.toLocaleString()} ₽
                     </TableCell>
                     <TableCell className="text-right text-sm font-medium text-red-500">
@@ -332,6 +350,26 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
                     </TableCell>
                     <TableCell className="text-right text-sm font-medium text-primary">
                       {franchise.profit.toLocaleString()} ₽
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-medium">
+                      {franchise.completedGames}
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-medium">
+                      {franchise.cancelledGames}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className={`text-sm font-medium ${
+                        franchise.cancelRate > 30
+                          ? "text-red-600"
+                          : franchise.cancelRate > 15
+                            ? "text-orange-500"
+                            : "text-green-600"
+                      }`}>
+                        {franchise.cancelRate}%
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-medium text-muted-foreground">
+                      {franchise.avgCheck.toLocaleString()} ₽
                     </TableCell>
                     <TableCell>
                       <span

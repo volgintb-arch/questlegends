@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
 
 async function getCurrentUser(request: Request) {
@@ -9,7 +9,7 @@ async function getCurrentUser(request: Request) {
   }
 
   const token = authHeader.substring(7)
-  const payload = verifyToken(token)
+  const payload = await verifyToken(token)
   if (!payload) return null
 
   return {
@@ -39,15 +39,16 @@ export async function GET(request: Request) {
       if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
         if (user.franchiseeId) {
           const transactions = await sql`
-            SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
-              t."dealId", t."franchiseeId", t."gameLeadId",
+            SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
+              t."dealId", t."gameLeadId", t."franchiseeId", t."royaltyAmount",
+              t.type, t.category, t.description, t.date,
               d."clientName" as "dealTitle",
               f.name as "franchiseeName", f.city as "franchiseeCity"
             FROM "Transaction" t
             LEFT JOIN "Deal" d ON t."dealId" = d.id
             LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
             WHERE t."franchiseeId" = ${user.franchiseeId}
-            ORDER BY t.date DESC
+            ORDER BY t."paymentDate" DESC
             LIMIT 100
           `
           return NextResponse.json({ transactions, data: transactions })
@@ -56,8 +57,8 @@ export async function GET(request: Request) {
         }
       } else if (user.role === "uk_employee") {
         const transactions = await sql`
-          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
-            t."dealId", t."franchiseeId", t."gameLeadId",
+          SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
+            t."dealId", t."franchiseeId", t."royaltyAmount",
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
@@ -65,22 +66,22 @@ export async function GET(request: Request) {
           LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
           INNER JOIN "UserFranchiseeAssignment" ufa ON t."franchiseeId" = ufa."franchiseeId"
           WHERE ufa."userId" = ${user.id} AND t."franchiseeId" = ${franchiseeId}
-          ORDER BY t.date DESC
+          ORDER BY t."paymentDate" DESC
           LIMIT 100
         `
         return NextResponse.json({ transactions, data: transactions })
       } else {
         // UK/super_admin sees all or filtered by franchiseeId
         const transactions = await sql`
-          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
-            t."dealId", t."franchiseeId", t."gameLeadId",
+          SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
+            t."dealId", t."franchiseeId", t."royaltyAmount",
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
           LEFT JOIN "Deal" d ON t."dealId" = d.id
           LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
           WHERE t."franchiseeId" = ${franchiseeId}
-          ORDER BY t.date DESC
+          ORDER BY t."paymentDate" DESC
           LIMIT 100
         `
         return NextResponse.json({ transactions, data: transactions })
@@ -89,15 +90,16 @@ export async function GET(request: Request) {
       if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
         if (user.franchiseeId) {
           const transactions = await sql`
-            SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
-              t."dealId", t."franchiseeId", t."gameLeadId",
+            SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
+              t."dealId", t."gameLeadId", t."franchiseeId", t."royaltyAmount",
+              t.type, t.category, t.description, t.date,
               d."clientName" as "dealTitle",
               f.name as "franchiseeName", f.city as "franchiseeCity"
             FROM "Transaction" t
             LEFT JOIN "Deal" d ON t."dealId" = d.id
             LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
             WHERE t."franchiseeId" = ${user.franchiseeId}
-            ORDER BY t.date DESC
+            ORDER BY t."paymentDate" DESC
             LIMIT 100
           `
           return NextResponse.json({ transactions, data: transactions })
@@ -106,8 +108,8 @@ export async function GET(request: Request) {
         }
       } else if (user.role === "uk_employee") {
         const transactions = await sql`
-          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
-            t."dealId", t."franchiseeId", t."gameLeadId",
+          SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
+            t."dealId", t."franchiseeId", t."royaltyAmount",
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
@@ -115,28 +117,28 @@ export async function GET(request: Request) {
           LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
           INNER JOIN "UserFranchiseeAssignment" ufa ON t."franchiseeId" = ufa."franchiseeId"
           WHERE ufa."userId" = ${user.id}
-          ORDER BY t.date DESC
+          ORDER BY t."paymentDate" DESC
           LIMIT 100
         `
         return NextResponse.json({ transactions, data: transactions })
       } else {
         // UK/super_admin sees all transactions
         const transactions = await sql`
-          SELECT t.id, t.type, t.amount, t.description, t.category, t.date, t."createdAt",
-            t."dealId", t."franchiseeId", t."gameLeadId",
+          SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
+            t."dealId", t."franchiseeId", t."royaltyAmount",
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
           LEFT JOIN "Deal" d ON t."dealId" = d.id
           LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
-          ORDER BY t.date DESC
+          ORDER BY t."paymentDate" DESC
           LIMIT 100
         `
         return NextResponse.json({ transactions, data: transactions })
       }
     }
   } catch (error) {
-    console.error("[v0] TRANSACTIONS_GET error:", error)
+    console.error("[v0] TRANSACTIONS_GET error:")
     return NextResponse.json({ transactions: [], data: [] })
   }
 }
@@ -155,27 +157,38 @@ export async function POST(request: Request) {
     const sql = neon(process.env.DATABASE_URL)
     const body = await request.json()
 
-    const { dealId, franchiseeId, type, amount, description, date, category, gameLeadId } = body
+    const { dealId, gameLeadId, franchiseeId, amount, notes, paymentMethod, paymentDate, royaltyAmount, type, category, description, date } = body
 
     if (amount && (typeof amount !== "number" || amount < 0)) {
       return NextResponse.json({ error: "Неверная сумма транзакции" }, { status: 400 })
     }
 
-    const actualFranchiseeId = franchiseeId || user.franchiseeId
+    // H8: Non-UK roles must use their own franchiseeId — prevent cross-tenant write
+    let actualFranchiseeId: string | null
+    if (["uk", "super_admin", "uk_employee"].includes(user.role)) {
+      actualFranchiseeId = franchiseeId || user.franchiseeId
+    } else {
+      actualFranchiseeId = user.franchiseeId
+    }
+    const txId = globalThis.crypto.randomUUID()
 
     const result = await sql`
       INSERT INTO "Transaction" (
-        id, "dealId", "franchiseeId", "gameLeadId", type, amount, description, category, date, "createdAt"
+        id, "dealId", "gameLeadId", "franchiseeId", amount, "paymentMethod", "paymentDate", "royaltyAmount", notes, type, category, description, date, "createdAt"
       ) VALUES (
-        gen_random_uuid()::text,
+        ${txId},
         ${dealId || null},
-        ${actualFranchiseeId},
         ${gameLeadId || null},
-        ${type || "income"},
+        ${actualFranchiseeId},
         ${amount || 0},
-        ${description || ""},
+        ${paymentMethod || "cash"},
+        ${paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString()},
+        ${royaltyAmount || 0},
+        ${notes || null},
+        ${type || null},
         ${category || null},
-        ${date ? new Date(date).toISOString() : new Date().toISOString()},
+        ${description || null},
+        ${date || new Date().toISOString().split("T")[0]},
         NOW()
       )
       RETURNING *
@@ -183,7 +196,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result[0])
   } catch (error) {
-    console.error("[v0] TRANSACTIONS_POST error:", error)
+    console.error("[v0] TRANSACTIONS_POST error:")
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { Users, Calendar, DollarSign, User } from "lucide-react"
+import { Users, Calendar, RussianRuble, User } from "lucide-react"
 
 interface GameLead {
   id: string
@@ -55,7 +55,7 @@ export function GameKanbanCard({ game }: GameKanbanCardProps) {
         {/* Amount */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <DollarSign className="h-3 w-3 text-green-600" />
+            <RussianRuble className="h-3 w-3 text-green-600" />
             <span className="text-xs font-semibold text-green-600">{game.totalAmount.toLocaleString()} ₽</span>
           </div>
           {game.prepayment > 0 && (

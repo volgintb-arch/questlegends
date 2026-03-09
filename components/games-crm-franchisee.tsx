@@ -65,6 +65,8 @@ export function GamesCRMFranchisee() {
   const dealIdFromUrl = searchParams.get("dealId") || searchParams.get("leadId")
   const taskIdFromUrl = searchParams.get("taskId")
 
+  const isUKUser = ["uk", "super_admin", "uk_employee"].includes(user?.role || "")
+
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("")
   const [leads, setLeads] = useState<Lead[]>([])
@@ -76,6 +78,9 @@ export function GamesCRMFranchisee() {
   const [isLogsOpen, setIsLogsOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
+
+  const [franchisees, setFranchisees] = useState<{ id: string; name: string }[]>([])
+  const [selectedFranchiseeId, setSelectedFranchiseeId] = useState<string>("")
 
   const [searchTerm, setSearchTerm] = useState("")
   const [showFilters, setShowFilters] = useState(false)
@@ -91,31 +96,55 @@ export function GamesCRMFranchisee() {
   const [sortBy, setSortBy] = useState<"date" | "amount" | "name">("date")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
 
+  // The effective franchiseeId: either user's own or selected by UK user
+  const activeFranchiseeId = isUKUser ? selectedFranchiseeId : user?.franchiseeId
+
+  // Load franchisee list for UK users
   useEffect(() => {
-    if (user?.franchiseeId) {
-      const storageKey = `crm_last_pipeline_${user.franchiseeId}`
+    if (!isUKUser || authLoading) return
+    const loadFranchisees = async () => {
+      try {
+        const res = await fetch("/api/franchisees", { headers: getAuthHeaders() })
+        if (res.ok) {
+          const data = await res.json()
+          const list = data.data || data.franchisees || []
+          setFranchisees(list)
+          if (list.length > 0 && !selectedFranchiseeId) {
+            setSelectedFranchiseeId(list[0].id)
+          }
+        }
+      } catch (error) {
+        console.error("[v0] CRM: Error loading franchisees:", error)
+      }
+    }
+    loadFranchisees()
+  }, [isUKUser, authLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (activeFranchiseeId) {
+      const storageKey = `crm_last_pipeline_${activeFranchiseeId}`
       const savedPipelineId = localStorage.getItem(storageKey)
       if (savedPipelineId) {
         setSelectedPipelineId(savedPipelineId)
       }
     }
-  }, [user?.franchiseeId])
+  }, [activeFranchiseeId])
 
   const handlePipelineChange = (pipelineId: string) => {
     setSelectedPipelineId(pipelineId)
-    if (user?.franchiseeId) {
-      const storageKey = `crm_last_pipeline_${user.franchiseeId}`
+    if (activeFranchiseeId) {
+      const storageKey = `crm_last_pipeline_${activeFranchiseeId}`
       localStorage.setItem(storageKey, pipelineId)
     }
   }
 
   const loadData = useCallback(async () => {
-    if (!user?.franchiseeId) return
+    if (!activeFranchiseeId) return
 
     const headers = getAuthHeaders()
 
     try {
-      const pipelinesRes = await fetch(`/api/game-pipelines?franchiseeId=${user.franchiseeId}`, { headers })
+      const pipelinesRes = await fetch(`/api/game-pipelines?franchiseeId=${activeFranchiseeId}`, { headers })
       if (!pipelinesRes.ok) {
         console.error("[v0] CRM: Failed to fetch pipelines")
         return
@@ -128,7 +157,7 @@ export function GamesCRMFranchisee() {
       )
       setPipelines(pipelinesList)
 
-      const storageKey = `crm_last_pipeline_${user.franchiseeId}`
+      const storageKey = `crm_last_pipeline_${activeFranchiseeId}`
       const savedPipelineId = localStorage.getItem(storageKey)
 
       let currentPipelineId = selectedPipelineId
@@ -145,7 +174,7 @@ export function GamesCRMFranchisee() {
 
       const leadsUrl = currentPipelineId
         ? `/api/game-leads?pipelineId=${currentPipelineId}`
-        : `/api/game-leads?franchiseeId=${user.franchiseeId}`
+        : `/api/game-leads?franchiseeId=${activeFranchiseeId}`
 
       const leadsRes = await fetch(leadsUrl, { headers })
       if (leadsRes.ok) {
@@ -161,19 +190,19 @@ export function GamesCRMFranchisee() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [user?.franchiseeId, selectedPipelineId, getAuthHeaders])
+  }, [activeFranchiseeId, selectedPipelineId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (authLoading) return
-    if (!user?.franchiseeId) {
-      setLoading(false)
+    if (!activeFranchiseeId) {
+      if (!isUKUser) setLoading(false)
       return
     }
     loadData()
-  }, [authLoading, user?.franchiseeId, loadData])
+  }, [authLoading, activeFranchiseeId, loadData]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!user?.franchiseeId || !selectedPipelineId || authLoading) return
+    if (!activeFranchiseeId || !selectedPipelineId || authLoading) return
 
     const fetchLeads = async () => {
       const headers = getAuthHeaders()
@@ -188,7 +217,7 @@ export function GamesCRMFranchisee() {
       }
     }
     fetchLeads()
-  }, [selectedPipelineId, user?.franchiseeId, authLoading, getAuthHeaders])
+  }, [selectedPipelineId, activeFranchiseeId, authLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (dealIdFromUrl && leads.length > 0) {
@@ -288,7 +317,7 @@ export function GamesCRMFranchisee() {
       })
     }
 
-    if (filters.stageId) {
+    if (filters.stageId && filters.stageId !== "all") {
       filtered = filtered.filter((lead) => lead.stageId === filters.stageId)
     }
 
@@ -353,7 +382,7 @@ export function GamesCRMFranchisee() {
     )
   }
 
-  if (!user?.franchiseeId) {
+  if (!activeFranchiseeId && !isUKUser) {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-muted-foreground">Франчайзи не найден</p>
@@ -366,6 +395,25 @@ export function GamesCRMFranchisee() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4 flex-wrap">
           <h1 className="text-2xl font-bold">CRM Игры</h1>
+          {isUKUser && franchisees.length > 0 && (
+            <Select value={selectedFranchiseeId} onValueChange={(val) => {
+              setSelectedFranchiseeId(val)
+              setSelectedPipelineId("")
+              setPipelines([])
+              setLeads([])
+            }}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Выберите франчайзи" />
+              </SelectTrigger>
+              <SelectContent>
+                {franchisees.map((f) => (
+                  <SelectItem key={f.id} value={f.id}>
+                    {f.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={selectedPipelineId} onValueChange={handlePipelineChange}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Выберите воронку" />
@@ -551,7 +599,7 @@ export function GamesCRMFranchisee() {
         onSuccess={handleCreateLead}
         pipelineId={selectedPipelineId}
         stages={stages}
-        franchiseeId={user.franchiseeId}
+        franchiseeId={activeFranchiseeId}
       />
 
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
@@ -559,7 +607,7 @@ export function GamesCRMFranchisee() {
           <DialogHeader>
             <DialogTitle>Настройки воронок</DialogTitle>
           </DialogHeader>
-          <GamePipelineSettings franchiseeId={user.franchiseeId} onUpdate={loadData} />
+          <GamePipelineSettings franchiseeId={activeFranchiseeId} onUpdate={loadData} />
         </DialogContent>
       </Dialog>
 

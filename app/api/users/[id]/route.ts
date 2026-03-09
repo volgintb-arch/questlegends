@@ -1,23 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
+import { cache } from "@/lib/cache"
 import bcrypt from "bcryptjs"
+import { v4 as uuidv4 } from "uuid"
 
 // Safe user fields — never include passwordHash or password columns
 const USER_SAFE_FIELDS = `
   u.id, u.phone, u.email, u.name, u.role, u.telegram, u.whatsapp,
-  u."telegramId", u.description, u."isActive", u."franchiseeId", u."createdAt", u."updatedAt",
+  u."telegramId", u.description, u."avatarUrl", u."isActive", u."franchiseeId", u."createdAt", u."updatedAt",
   f.name as "franchiseeName"
 `
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     const sql = neon(process.env.DATABASE_URL!)
 
     const users = await sql`
@@ -38,14 +40,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const currentUser = await verifyRequest(request)
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const sql = neon(process.env.DATABASE_URL!)
 
@@ -58,9 +60,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     const targetUser = existing[0]
+    const isSelfEdit = currentUser.userId === id
     const canEdit =
+      isSelfEdit ||
       currentUser.role === "super_admin" ||
-      (currentUser.role === "uk" && ["uk_employee", "franchisee"].includes(targetUser.role)) ||
+      currentUser.role === "uk" ||
+      (currentUser.role === "uk_employee" && ["franchisee", "admin", "employee", "animator", "host", "dj"].includes(targetUser.role)) ||
       (currentUser.role === "franchisee" &&
         targetUser.franchiseeId === currentUser.franchiseeId &&
         ["admin", "employee", "animator", "host", "dj"].includes(targetUser.role))
@@ -69,22 +74,81 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    // Self-edit: only allow name, phone, email, telegram fields
+    // Managers can also change role, isActive, password
     if (body.name !== undefined) {
       await sql`UPDATE "User" SET name = ${body.name}, "updatedAt" = NOW() WHERE id = ${id}`
     }
     if (body.phone !== undefined) {
       await sql`UPDATE "User" SET phone = ${body.phone}, "updatedAt" = NOW() WHERE id = ${id}`
     }
-    if (body.role !== undefined) {
-      await sql`UPDATE "User" SET role = ${body.role}, "updatedAt" = NOW() WHERE id = ${id}`
+    if (body.email !== undefined) {
+      await sql`UPDATE "User" SET email = ${body.email}, "updatedAt" = NOW() WHERE id = ${id}`
     }
-    if (body.isActive !== undefined) {
-      await sql`UPDATE "User" SET "isActive" = ${body.isActive}, "updatedAt" = NOW() WHERE id = ${id}`
+    if (body.telegramId !== undefined) {
+      await sql`UPDATE "User" SET "telegramId" = ${body.telegramId}, "updatedAt" = NOW() WHERE id = ${id}`
+    }
+    if (body.telegram !== undefined) {
+      await sql`UPDATE "User" SET telegram = ${body.telegram}, "updatedAt" = NOW() WHERE id = ${id}`
+    }
+    if (body.description !== undefined) {
+      await sql`UPDATE "User" SET description = ${body.description}, "updatedAt" = NOW() WHERE id = ${id}`
+    }
+    if (body.avatarUrl !== undefined) {
+      await sql`UPDATE "User" SET "avatarUrl" = ${body.avatarUrl}, "updatedAt" = NOW() WHERE id = ${id}`
     }
 
-    if (body.password && body.password.trim()) {
-      const hashedPassword = await bcrypt.hash(body.password, 10)
-      // Only store the bcrypt hash — never store plaintext password
+    // Role/active/franchisee changes are manager-only (not self-edit)
+    if (!isSelfEdit) {
+      if (body.role !== undefined) {
+        const personnelRoles = ["animator", "host", "dj"]
+        const requestedRole = body.role
+        // DB Role enum only has: uk, uk_employee, franchisee, admin, employee
+        const dbRole = personnelRoles.includes(requestedRole) ? "employee" : requestedRole
+        await sql`UPDATE "User" SET role = ${dbRole}, "updatedAt" = NOW() WHERE id = ${id}`
+
+        // Manage Personnel record for animator/host/dj
+        const userFranchiseeId = targetUser.franchiseeId || currentUser.franchiseeId
+        if (personnelRoles.includes(requestedRole) && userFranchiseeId) {
+          const existingPersonnel = await sql`SELECT id FROM "Personnel" WHERE "userId" = ${id}`
+          if (existingPersonnel.length > 0) {
+            await sql`UPDATE "Personnel" SET role = ${requestedRole}, name = ${body.name || targetUser.name || ''} WHERE "userId" = ${id}`
+          } else {
+            const personnelId = uuidv4()
+            const userName = body.name || (await sql`SELECT name, phone, telegram, whatsapp FROM "User" WHERE id = ${id}`)[0]
+            await sql`
+              INSERT INTO "Personnel" (id, "franchiseeId", name, role, phone, telegram, whatsapp, "userId")
+              VALUES (${personnelId}, ${userFranchiseeId}, ${userName?.name || ''}, ${requestedRole}, ${userName?.phone || null}, ${userName?.telegram || null}, ${userName?.whatsapp || null}, ${id})
+            `
+          }
+        } else if (!personnelRoles.includes(requestedRole)) {
+          // Changed away from personnel role — remove Personnel record
+          await sql`DELETE FROM "Personnel" WHERE "userId" = ${id}`
+        }
+      }
+      if (body.isActive !== undefined) {
+        await sql`UPDATE "User" SET "isActive" = ${body.isActive}, "updatedAt" = NOW() WHERE id = ${id}`
+        // Sync Personnel isActive
+        await sql`UPDATE "Personnel" SET "isActive" = ${body.isActive} WHERE "userId" = ${id}`
+      }
+      if (body.franchiseeId !== undefined) {
+        await sql`UPDATE "User" SET "franchiseeId" = ${body.franchiseeId}, "updatedAt" = NOW() WHERE id = ${id}`
+      }
+    }
+
+    if (body.password && body.password.trim() && body.password.length >= 8) {
+      // For self-edit, verify current password first
+      if (isSelfEdit) {
+        if (!body.currentPassword) {
+          return NextResponse.json({ error: "Текущий пароль обязателен" }, { status: 400 })
+        }
+        const userWithHash = await sql`SELECT "passwordHash" FROM "User" WHERE id = ${id}`
+        const isValid = await bcrypt.compare(body.currentPassword, userWithHash[0]?.passwordHash || "")
+        if (!isValid) {
+          return NextResponse.json({ error: "Неверный текущий пароль" }, { status: 400 })
+        }
+      }
+      const hashedPassword = await bcrypt.hash(body.password, 12)
       await sql`UPDATE "User" SET "passwordHash" = ${hashedPassword}, "updatedAt" = NOW() WHERE id = ${id}`
     }
 
@@ -95,20 +159,20 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       WHERE u.id = ${id}
     `
     return NextResponse.json({ success: true, data: updated[0] })
-  } catch (error) {
-    console.error("[users/id] PATCH error")
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  } catch (error: any) {
+    console.error("[users/id] PATCH error:", error?.message || error)
+    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 })
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const currentUser = await verifyRequest(request)
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     const sql = neon(process.env.DATABASE_URL!)
 
     const existing = await sql`
@@ -121,7 +185,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const targetUser = existing[0]
     const canDelete =
       currentUser.role === "super_admin" ||
-      (currentUser.role === "uk" && ["uk_employee", "franchisee"].includes(targetUser.role)) ||
+      currentUser.role === "uk" ||
+      (currentUser.role === "uk_employee" && ["franchisee", "admin", "employee", "animator", "host", "dj"].includes(targetUser.role)) ||
       (currentUser.role === "franchisee" &&
         targetUser.franchiseeId === currentUser.franchiseeId &&
         ["admin", "employee", "animator", "host", "dj"].includes(targetUser.role))
@@ -130,8 +195,26 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    if (targetUser.franchiseeId) {
-      await sql`DELETE FROM "Personnel" WHERE "franchiseeId" = ${targetUser.franchiseeId} AND name = ${targetUser.name}`
+    // Nullify Deal.responsibleId to avoid FK violation on user deletion
+    await sql`UPDATE "Deal" SET "responsibleId" = NULL WHERE "responsibleId" = ${id}`
+
+    if (targetUser.role === 'franchisee' && targetUser.franchiseeId) {
+      // Deleting a franchisee-role user: also delete the entire Franchisee
+      const franchiseeId = targetUser.franchiseeId
+
+      // 1. Nullify franchiseeId for all users linked to this franchisee (remove FK constraint)
+      await sql`UPDATE "User" SET "franchiseeId" = NULL WHERE "franchiseeId" = ${franchiseeId}`
+
+      // 2. Delete the Franchisee — PostgreSQL cascades handle:
+      //    Personnel, Deals, Transactions, Expenses, Shifts, FranchiseeKPI,
+      //    Alerts, GamePipelines, GameLeads, GameSchedules, Games, etc.
+      await sql`DELETE FROM "Franchisee" WHERE id = ${franchiseeId}`
+
+      // Invalidate franchisees cache so dashboard updates immediately
+      await cache.invalidatePattern("franchisees:")
+    } else {
+      // Non-franchisee user: delete Personnel record (cascades to GameScheduleStaff, GameStaff, Shift)
+      await sql`DELETE FROM "Personnel" WHERE "userId" = ${id}`
     }
 
     await sql`DELETE FROM "User" WHERE id = ${id}`

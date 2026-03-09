@@ -1,11 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 // GET /api/social-integrations/[configId] - получить одну конфигурацию
-export async function GET(req: NextRequest, { params }: { params: { configId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ configId: string }> }) {
   try {
     const authHeader = req.headers.get("authorization")
     if (!authHeader?.startsWith("Bearer ")) {
@@ -13,13 +13,13 @@ export async function GET(req: NextRequest, { params }: { params: { configId: st
     }
 
     const token = authHeader.substring(7)
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
 
     if (!payload) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
-    const { configId } = params
+    const { configId } = await params
 
     const [config] = await sql`
       SELECT * FROM "SocialMediaConfig" WHERE "id" = ${configId}
@@ -38,13 +38,13 @@ export async function GET(req: NextRequest, { params }: { params: { configId: st
 
     return NextResponse.json({ success: true, data: config })
   } catch (error) {
-    console.error("[v0] Error fetching social integration:", error)
+    console.error("[v0] Error fetching social integration:")
     return NextResponse.json({ error: "Failed to fetch integration" }, { status: 500 })
   }
 }
 
 // PUT /api/social-integrations/[configId] - обновить конфигурацию
-export async function PUT(req: NextRequest, { params }: { params: { configId: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ configId: string }> }) {
   try {
     const authHeader = req.headers.get("authorization")
     if (!authHeader?.startsWith("Bearer ")) {
@@ -52,13 +52,13 @@ export async function PUT(req: NextRequest, { params }: { params: { configId: st
     }
 
     const token = authHeader.substring(7)
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
 
     if (!payload) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
-    const { configId } = params
+    const { configId } = await params
     const body = await req.json()
 
     const [existingConfig] = await sql`
@@ -95,13 +95,13 @@ export async function PUT(req: NextRequest, { params }: { params: { configId: st
 
     return NextResponse.json({ success: true, data: updated })
   } catch (error) {
-    console.error("[v0] Error updating social integration:", error)
+    console.error("[v0] Error updating social integration:")
     return NextResponse.json({ error: "Failed to update integration" }, { status: 500 })
   }
 }
 
 // DELETE /api/social-integrations/[configId] - удалить конфигурацию
-export async function DELETE(req: NextRequest, { params }: { params: { configId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ configId: string }> }) {
   try {
     const authHeader = req.headers.get("authorization")
     if (!authHeader?.startsWith("Bearer ")) {
@@ -109,13 +109,13 @@ export async function DELETE(req: NextRequest, { params }: { params: { configId:
     }
 
     const token = authHeader.substring(7)
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
 
     if (!payload) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
-    const { configId } = params
+    const { configId } = await params
 
     const [existingConfig] = await sql`
       SELECT * FROM "SocialMediaConfig" WHERE "id" = ${configId}
@@ -141,7 +141,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { configId:
 
     return NextResponse.json({ success: true, message: "Config deleted" })
   } catch (error) {
-    console.error("[v0] Error deleting social integration:", error)
+    console.error("[v0] Error deleting social integration:")
     return NextResponse.json({ error: "Failed to delete integration" }, { status: 500 })
   }
 }

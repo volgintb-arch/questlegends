@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { AlertTriangle, AlertCircle, CheckCircle, Info, Bell, Trash2, MessageSquare, ExternalLink } from "lucide-react"
+import { AlertTriangle, AlertCircle, CheckCircle, Info, Bell, Trash2, MessageSquare, ExternalLink, Banknote } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { NotificationDetailModal } from "./notification-detail-modal"
 import { useAuth } from "@/contexts/auth-context"
 
 interface Notification {
   id: string
-  type: "critical" | "warning" | "info" | "success" | "message" | "task"
+  type: "critical" | "warning" | "info" | "success" | "message" | "task" | "royalty_payment"
   title: string
   message: string
   timestamp: string
@@ -34,8 +34,9 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({})
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const { getAuthHeaders } = useAuth()
+  const { getAuthHeaders, user } = useAuth()
   const router = useRouter()
+  const isUkRole = user?.role === "uk" || user?.role === "uk_employee" || user?.role === "super_admin"
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -48,9 +49,11 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
       case "message":
         return <MessageSquare size={20} className="text-purple-500" />
       case "task":
-        return <CheckCircle size={20} className="text-blue-500" />
+        return <CheckCircle size={20} className="text-primary" />
+      case "royalty_payment":
+        return <Banknote size={20} className="text-amber-500" />
       default:
-        return <Info size={20} className="text-blue-500" />
+        return <Info size={20} className="text-primary" />
     }
   }
 
@@ -66,6 +69,8 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
         return "Сообщение"
       case "task":
         return "Задача"
+      case "royalty_payment":
+        return "Роялти"
       default:
         return "Информация"
     }
@@ -82,9 +87,11 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
       case "message":
         return "bg-purple-500/20 text-purple-500 border-purple-500/30"
       case "task":
-        return "bg-blue-500/20 text-blue-500 border-blue-500/30"
+        return "bg-primary/20 text-primary border-primary/30"
+      case "royalty_payment":
+        return "bg-amber-500/20 text-amber-500 border-amber-500/30"
       default:
-        return "bg-blue-500/20 text-blue-500 border-blue-500/30"
+        return "bg-primary/20 text-primary border-primary/30"
     }
   }
 
@@ -175,6 +182,50 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
     }
   }
 
+  const confirmRoyaltyPayment = async (id: string) => {
+    try {
+      const res = await fetch(`/api/notifications/${id}/confirm-payment`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      })
+      if (res.ok) {
+        // Remove all royalty_payment notifications with same marker (they get archived server-side)
+        setNotifications(notifications.filter((n) => {
+          if (n.type !== "royalty_payment") return true
+          // The confirmed one and related ones will be archived on server
+          // For simplicity, remove all unarchived royalty notifications
+          return n.id !== id
+        }))
+        // Re-fetch to get updated list
+        const response = await fetch(`/api/notifications?type=${filterType}&read=${filterRead}`, {
+          headers: getAuthHeaders(),
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.data?.notifications) {
+            const transformed = data.data.notifications.map((n: any) => ({
+              id: n.id,
+              type: n.type,
+              title: n.title,
+              message: n.message,
+              timestamp: new Date(n.createdAt).toLocaleString("ru-RU"),
+              read: n.isRead,
+              location: n.location,
+              dealId: n.dealId,
+              taskId: n.taskId,
+              comments: n.comments?.map((c: any) => c.text) || [],
+              archived: n.isArchived,
+              sender: n.sender?.name,
+            }))
+            setNotifications(transformed)
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error confirming royalty payment:", error)
+    }
+  }
+
   const unreadCount = notifications.filter((n) => !n.read && !n.archived).length
 
   const handleViewNotification = (notification: Notification) => {
@@ -227,7 +278,7 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
     }
 
     fetchNotifications()
-  }, [filterType, filterRead, getAuthHeaders])
+  }, [filterType, filterRead]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -293,6 +344,7 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
           className="bg-card border border-border rounded-lg px-4 py-2 text-sm outline-none focus:border-primary"
         >
           <option value="all">Все типы</option>
+          <option value="royalty_payment">Роялти</option>
           <option value="task">Задачи</option>
           <option value="message">Сообщения от УК</option>
           <option value="warning">Предупреждения</option>
@@ -335,7 +387,7 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
                       </span>
                     )}
                     {notification.dealId && (
-                      <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-500 flex items-center gap-1">
+                      <span className="text-xs px-2 py-1 rounded bg-primary/20 text-primary flex items-center gap-1">
                         <ExternalLink size={12} />
                         Открыть сделку
                       </span>
@@ -348,10 +400,19 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
                   >
                     <button
                       onClick={() => handleViewNotification(notification)}
-                      className="text-xs px-3 py-1 rounded bg-blue-500/20 text-blue-600 hover:bg-blue-500/30 transition-colors"
+                      className="text-xs px-3 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
                     >
                       Подробно
                     </button>
+                    {notification.type === "royalty_payment" && isUkRole && (
+                      <button
+                        onClick={() => confirmRoyaltyPayment(notification.id)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-green-500/20 text-green-600 hover:bg-green-500/30 transition-colors font-medium border border-green-500/30"
+                      >
+                        <Banknote size={14} className="inline mr-1" />
+                        Оплата прошла
+                      </button>
+                    )}
                     {!notification.read && (
                       <button
                         onClick={() => markAsRead(notification.id)}

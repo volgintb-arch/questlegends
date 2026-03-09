@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     }
 
     const token = authHeader.substring(7)
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
 
     if (!payload) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: configs })
   } catch (error) {
-    console.error("[v0] Error fetching social integrations:", error)
+    console.error("[v0] Error fetching social integrations:")
     return NextResponse.json({ error: "Failed to fetch integrations" }, { status: 500 })
   }
 }
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     }
 
     const token = authHeader.substring(7)
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
 
     if (!payload) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
@@ -79,31 +79,32 @@ export async function POST(req: NextRequest) {
 
     let config
 
+    const socialConfigId = globalThis.crypto.randomUUID()
     if (payload.role === "super_admin" || payload.role === "uk" || payload.role === "uk_employee") {
       ;[config] = await sql`
         INSERT INTO "SocialMediaConfig" (
-          "platform", "franchiseeId", "isGlobal", "isEnabled",
+          id, "platform", "franchiseeId", "isGlobal", "isEnabled",
           "apiKey", "apiSecret", "webhookUrl", "accessToken",
-          "pageId", "botToken", "accountUsername", "notes"
+          "pageId", "botToken", "accountUsername", "notes", "updatedAt"
         )
         VALUES (
-          ${platform}, NULL, true, ${isEnabled},
+          ${socialConfigId}, ${platform}, NULL, true, ${isEnabled},
           ${apiKey || null}, ${apiSecret || null}, ${webhookUrl || null}, ${accessToken || null},
-          ${pageId || null}, ${botToken || null}, ${accountUsername || null}, ${notes || null}
+          ${pageId || null}, ${botToken || null}, ${accountUsername || null}, ${notes || null}, NOW()
         )
         RETURNING *
       `
     } else if (payload.role === "franchisee" || payload.role === "own_point") {
       ;[config] = await sql`
         INSERT INTO "SocialMediaConfig" (
-          "platform", "franchiseeId", "isGlobal", "isEnabled",
+          id, "platform", "franchiseeId", "isGlobal", "isEnabled",
           "apiKey", "apiSecret", "webhookUrl", "accessToken",
-          "pageId", "botToken", "accountUsername", "notes"
+          "pageId", "botToken", "accountUsername", "notes", "updatedAt"
         )
         VALUES (
-          ${platform}, ${payload.franchiseeId}, false, ${isEnabled},
+          ${socialConfigId}, ${platform}, ${payload.franchiseeId}, false, ${isEnabled},
           ${apiKey || null}, ${apiSecret || null}, ${webhookUrl || null}, ${accessToken || null},
-          ${pageId || null}, ${botToken || null}, ${accountUsername || null}, ${notes || null}
+          ${pageId || null}, ${botToken || null}, ${accountUsername || null}, ${notes || null}, NOW()
         )
         RETURNING *
       `
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: config })
   } catch (error) {
-    console.error("[v0] Error creating social integration:", error)
+    console.error("[v0] Error creating social integration:")
     return NextResponse.json({ error: "Failed to create integration" }, { status: 500 })
   }
 }

@@ -38,6 +38,31 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+interface ExtrasItem {
+  name: string
+  amount: number
+}
+
+function parseExtras(extras: string | undefined): ExtrasItem[] {
+  if (!extras) return []
+  try {
+    const parsed = JSON.parse(extras)
+    if (Array.isArray(parsed)) return parsed
+  } catch {
+    // Legacy format: plain string
+    if (extras.trim()) return [{ name: extras, amount: 0 }]
+  }
+  return []
+}
+
+function serializeExtras(items: ExtrasItem[]): { extras: string; extrasAmount: number } {
+  const filtered = items.filter((i) => i.name.trim() || i.amount > 0)
+  return {
+    extras: filtered.length > 0 ? JSON.stringify(filtered) : "",
+    extrasAmount: filtered.reduce((sum, i) => sum + (i.amount || 0), 0),
+  }
+}
+
 interface FeedEvent {
   id: string
   type: string
@@ -90,6 +115,8 @@ interface GameData {
   hostRate: number
   djsCount: number
   djRate: number
+  extras?: string
+  extrasAmount?: number
 }
 
 interface PipelineStage {
@@ -153,6 +180,8 @@ export function GameCardFranchisee({
     hostRate: safeGame.hostRate ?? 2000,
     djsCount: safeGame.djsCount ?? 0, // Fixed: use safeGame
     djRate: safeGame.djRate ?? 2500, // Fixed: use safeGame
+    extras: safeGame.extras || "",
+    extrasAmount: safeGame.extrasAmount ?? 0,
   })
   const [events, setEvents] = useState<FeedEvent[]>([])
   const [tasks, setTasks] = useState<GameTask[]>([])
@@ -204,6 +233,8 @@ export function GameCardFranchisee({
         hostRate: game.hostRate ?? 2000,
         djsCount: game.djsCount ?? 0,
         djRate: game.djRate ?? 2500,
+        extras: game.extras || "",
+        extrasAmount: game.extrasAmount ?? 0,
       })
       // Renamed loadGameDetails to loadGameData to match the updates
       loadGameData()
@@ -241,6 +272,8 @@ export function GameCardFranchisee({
         hostRate: game.hostRate ?? 2000,
         djsCount: game.djsCount ?? 0,
         djRate: game.djRate ?? 2500,
+        extras: game.extras || "",
+        extrasAmount: game.extrasAmount ?? 0,
       })
     }
   }, [game])
@@ -249,7 +282,7 @@ export function GameCardFranchisee({
   const loadGameData = async () => {
     try {
       const res = await fetch(`/api/game-leads/${game.id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        headers: getAuthHeaders(),
       })
       if (res.ok) {
         const data = await res.json()
@@ -278,6 +311,8 @@ export function GameCardFranchisee({
             hostRate: data.data.hostRate ?? 2000,
             djsCount: data.data.djsCount ?? 0,
             djRate: data.data.djRate ?? 2500,
+            extras: data.data.extras || "",
+            extrasAmount: data.data.extrasAmount ?? 0,
           })
         }
       }
@@ -362,8 +397,8 @@ export function GameCardFranchisee({
       const res = await fetch(`/api/game-leads/${game.id}`, {
         method: "PATCH",
         headers: {
+          ...getAuthHeaders(),
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: JSON.stringify({ [field]: value }),
       })
@@ -431,11 +466,14 @@ export function GameCardFranchisee({
 
   const handleToggleTask = async (taskId: string, completed: boolean) => {
     try {
-      await fetch(`/api/game-leads/${game.id}/tasks/${taskId}`, {
+      const res = await fetch(`/api/game-leads/${game.id}/tasks/${taskId}`, {
         method: "PATCH",
         headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ completed }),
       })
+      if (!res.ok) {
+        console.error("[v0] Error toggling task: status", res.status)
+      }
       loadTasks() // Reload tasks to update the UI
     } catch (e) {
       console.error("[v0] Error toggling task:", e)
@@ -731,7 +769,7 @@ export function GameCardFranchisee({
                   {/* Hosts */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex items-center gap-2">
-                      <Mic className="h-4 w-4 text-blue-500" />
+                      <Mic className="h-4 w-4 text-primary" />
                       <span className="text-sm">Ведущие:</span>
                       <Input
                         type="number"
@@ -797,6 +835,88 @@ export function GameCardFranchisee({
               </div>
             </div>
 
+            {/* Extras (Допродажа) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase">Допродажа</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const items = parseExtras(gameData.extras)
+                    items.push({ name: "", amount: 0 })
+                    const { extras, extrasAmount } = serializeExtras(items)
+                    setGameData({ ...gameData, extras: JSON.stringify(items), extrasAmount })
+                  }}
+                  className="flex items-center gap-1 text-[10px] text-orange-500 hover:text-orange-400"
+                >
+                  <Plus size={12} /> Добавить
+                </button>
+              </div>
+              {parseExtras(gameData.extras).length === 0 ? (
+                <p className="text-[10px] text-muted-foreground">Нет допродаж</p>
+              ) : (
+                <div className="space-y-2">
+                  {parseExtras(gameData.extras).map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        value={item.name}
+                        onChange={(e) => {
+                          const items = parseExtras(gameData.extras)
+                          items[idx] = { ...items[idx], name: e.target.value }
+                          setGameData({ ...gameData, extras: JSON.stringify(items) })
+                        }}
+                        onBlur={() => {
+                          const { extras, extrasAmount } = serializeExtras(parseExtras(gameData.extras))
+                          handleSaveField("extras", extras)
+                          handleSaveField("extrasAmount", extrasAmount)
+                        }}
+                        placeholder="Торт, конфетти..."
+                        className="h-7 text-xs flex-1"
+                      />
+                      <Input
+                        type="number"
+                        min="0"
+                        value={item.amount || ""}
+                        onChange={(e) => {
+                          const items = parseExtras(gameData.extras)
+                          items[idx] = { ...items[idx], amount: Number(e.target.value) || 0 }
+                          const total = items.reduce((s, i) => s + (i.amount || 0), 0)
+                          setGameData({ ...gameData, extras: JSON.stringify(items), extrasAmount: total })
+                        }}
+                        onBlur={() => {
+                          const { extras, extrasAmount } = serializeExtras(parseExtras(gameData.extras))
+                          handleSaveField("extras", extras)
+                          handleSaveField("extrasAmount", extrasAmount)
+                        }}
+                        placeholder="₽"
+                        className="h-7 text-xs w-24"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const items = parseExtras(gameData.extras)
+                          items.splice(idx, 1)
+                          const { extras, extrasAmount } = serializeExtras(items)
+                          setGameData({ ...gameData, extras: items.length > 0 ? JSON.stringify(items) : "", extrasAmount })
+                          handleSaveField("extras", extras)
+                          handleSaveField("extrasAmount", extrasAmount)
+                        }}
+                        className="text-destructive hover:text-destructive/80"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(gameData.extrasAmount || 0) > 0 && (
+                <div className="flex justify-between text-xs text-orange-500 font-medium">
+                  <span>Итого допродажа</span>
+                  <span>+{(gameData.extrasAmount || 0).toLocaleString()} ₽</span>
+                </div>
+              )}
+            </div>
+
             {/* Source */}
             <div className="space-y-3">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase">Источник</h3>
@@ -821,7 +941,7 @@ export function GameCardFranchisee({
                     <div key={assignment.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                       <div className="flex items-center gap-2">
                         {assignment.role === "animator" && <Users className="h-3 w-3 text-purple-500" />}
-                        {assignment.role === "host" && <Mic className="h-3 w-3 text-blue-500" />}
+                        {assignment.role === "host" && <Mic className="h-3 w-3 text-primary" />}
                         {assignment.role === "dj" && <Music className="h-3 w-3 text-pink-500" />}
                         <span className="text-xs">{assignment.personnelName}</span>
                         <span className="text-[10px] text-muted-foreground">
@@ -843,7 +963,7 @@ export function GameCardFranchisee({
                     </div>
                   ))}
 
-                  <div className="grid grid-cols-3 gap-2 pt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
                     <Select
                       onValueChange={(id) => {
                         const p = personnel.find((x) => x.id === id)

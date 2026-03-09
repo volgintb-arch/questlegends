@@ -19,7 +19,7 @@ interface Shift {
 }
 
 export function DashboardEmployee() {
-  const { user } = useAuth()
+  const { user, getAuthHeaders } = useAuth()
   const [shifts, setShifts] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -32,7 +32,7 @@ export function DashboardEmployee() {
   const loadShifts = async () => {
     try {
       console.log("[v0] Loading shifts for employee")
-      const response = await fetch(`/api/shifts?userId=${user?.id}`)
+      const response = await fetch(`/api/shifts?userId=${user?.id}`, { headers: getAuthHeaders() })
 
       if (!response.ok) {
         console.error("[v0] Failed to load shifts:", response.status)
@@ -99,8 +99,8 @@ export function DashboardEmployee() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-lg bg-card border border-border p-6">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 rounded-lg bg-blue-500/10">
-              <Calendar className="w-5 h-5 text-blue-500" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Calendar className="w-5 h-5 text-primary" />
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{upcomingShifts.length}</p>
@@ -151,7 +151,7 @@ export function DashboardEmployee() {
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">Игроков: {shift.playersCount || 0}</p>
                   </div>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-500">
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                     {roleLabels[user?.role || ""] || "Персонал"}
                   </span>
                 </div>

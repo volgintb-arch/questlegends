@@ -96,7 +96,7 @@ export function SocialIntegrationsAdmin() {
     } finally {
       setIsLoading(false)
     }
-  }, [getAuthHeaders])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData()
@@ -200,19 +200,49 @@ export function SocialIntegrationsAdmin() {
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
         </div>
       ) : integrations.length === 0 ? (
-        <Card className="p-8 text-center">
-          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
-            <Zap className="w-5 h-5 text-muted-foreground" />
-          </div>
-          <h3 className="text-sm font-medium text-foreground mb-1">Нет подключенных каналов</h3>
-          <p className="text-xs text-muted-foreground mb-3">
-            Подключите Telegram, WhatsApp, Instagram, ВК или Авито для автоматического приема заявок
-          </p>
-          <Button onClick={() => setShowWizard(true)} size="sm" className="h-8 text-xs">
-            <Plus className="w-3 h-3 mr-1" />
-            Подключить первый канал
-          </Button>
-        </Card>
+        <div className="space-y-4">
+          <Card className="p-8 text-center">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+              <Zap className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <h3 className="text-sm font-medium text-foreground mb-1">Нет подключенных каналов</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Подключите мессенджеры и соцсети — входящие сообщения автоматически станут лидами в CRM
+            </p>
+            <Button onClick={() => setShowWizard(true)} size="sm" className="h-8 text-xs">
+              <Plus className="w-3 h-3 mr-1" />
+              Подключить первый канал
+            </Button>
+          </Card>
+
+          {/* Quick Start Guide */}
+          <Card className="p-5">
+            <h3 className="text-sm font-semibold mb-3">Как это работает?</h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="flex gap-3">
+                <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 text-xs font-bold">1</div>
+                <div>
+                  <p className="text-xs font-medium">Выберите канал</p>
+                  <p className="text-[10px] text-muted-foreground">Telegram, WhatsApp, Instagram, ВК или Авито</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 text-xs font-bold">2</div>
+                <div>
+                  <p className="text-xs font-medium">Введите данные</p>
+                  <p className="text-[10px] text-muted-foreground">Токен бота или API-ключ — пошаговая инструкция внутри</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 text-xs font-bold">3</div>
+                <div>
+                  <p className="text-xs font-medium">Готово!</p>
+                  <p className="text-[10px] text-muted-foreground">Входящие сообщения автоматически создают лидов в CRM</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
       ) : (
         <div className="space-y-5">
           {/* UK Integrations */}

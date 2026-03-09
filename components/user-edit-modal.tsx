@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/contexts/auth-context"
 import { Loader2, Eye, EyeOff } from "lucide-react"
+import { PhoneInput } from "@/components/ui/phone-input"
 
 interface UserEditModalProps {
   isOpen: boolean
@@ -120,16 +121,17 @@ export function UserEditModal({ isOpen, onClose, user, onUpdated }: UserEditModa
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="h-8 text-xs"
+              placeholder="Иван Иванов"
               required
             />
           </div>
 
           <div className="space-y-1">
             <Label className="text-xs">Телефон</Label>
-            <Input
+            <PhoneInput
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="h-8 text-xs"
+              onChange={(v) => setFormData({ ...formData, phone: v })}
+              size="sm"
               required
             />
           </div>

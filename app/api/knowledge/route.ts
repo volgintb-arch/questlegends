@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
 
 async function getCurrentUser(request: NextRequest) {
@@ -10,7 +10,7 @@ async function getCurrentUser(request: NextRequest) {
     }
 
     const token = authHeader.substring(7)
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
     if (!payload) return null
 
     return {
@@ -94,19 +94,24 @@ export async function GET(request: NextRequest) {
           size: f.size,
         }))
 
+        const quizRows = await sql`
+          SELECT id FROM "KnowledgeQuiz" WHERE "articleId" = ${article.id} LIMIT 1
+        `
+
         return {
           ...article,
           files: mappedFiles,
           isCompleted,
           completedAt,
+          hasQuiz: quizRows.length > 0,
         }
       }),
     )
 
     return NextResponse.json({ articles: articlesWithExtras })
   } catch (error: any) {
-    console.error("Knowledge articles fetch error:", error)
-    return NextResponse.json({ articles: [], error: error.message }, { status: 200 })
+    console.error("Knowledge articles fetch error:")
+    return NextResponse.json({ articles: [], error: "Internal server error" }, { status: 200 })
   }
 }
 
@@ -127,7 +132,7 @@ export async function POST(request: NextRequest) {
 
     const sql = neon(process.env.DATABASE_URL)
     const body = await request.json()
-    const { title, category, content, type, tags, videoUrl, files } = body
+    const { title, category, content, type, tags, videoUrl, files, targetRole } = body
 
     if (!title || !category || !content) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -137,8 +142,8 @@ export async function POST(request: NextRequest) {
     const tagsArray = tags || []
 
     const result = await sql`
-      INSERT INTO "KnowledgeArticle" (id, title, category, content, author, "authorId", type, tags, views, helpful, "videoUrl", "createdAt", "updatedAt")
-      VALUES (${id}, ${title}, ${category}, ${content}, ${user.name}, ${user.id}, ${type || "article"}, ${tagsArray}, 0, 0, ${videoUrl || null}, NOW(), NOW())
+      INSERT INTO "KnowledgeArticle" (id, title, category, content, author, "authorId", type, tags, views, helpful, "videoUrl", "targetRole", "createdAt", "updatedAt")
+      VALUES (${id}, ${title}, ${category}, ${content}, ${user.name}, ${user.id}, ${type || "article"}, ${tagsArray}, 0, 0, ${videoUrl || null}, ${targetRole || null}, NOW(), NOW())
       RETURNING *
     `
 
@@ -154,7 +159,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ article: result[0] }, { status: 201 })
   } catch (error: any) {
-    console.error("Knowledge article creation error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Knowledge article creation error:")
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

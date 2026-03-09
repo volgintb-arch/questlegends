@@ -1,19 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { DollarSign, TrendingUp, Users, BarChart3 } from "lucide-react"
+import { RussianRuble, TrendingUp, Users, BarChart3 } from "lucide-react"
 import { MetricCard } from "./metric-card"
-
-interface FranchiseData {
-  id: string
-  name: string
-  location: string
-  revenue: number
-  royalties: number
-  expenses: number
-  profit: number
-}
 
 export function DashboardUK() {
   const { user, getAuthHeaders } = useAuth()
@@ -26,6 +16,7 @@ export function DashboardUK() {
     averageCheck: 0,
     totalGames: 0,
   })
+
   const formatMoney = (value: number) => {
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M ₽`
     if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K ₽`
@@ -37,11 +28,11 @@ export function DashboardUK() {
       id: "1",
       name: "Общая Выручка Сети",
       value: formatMoney(metrics.totalRevenue),
-      icon: <DollarSign className="w-5 h-5" />,
+      icon: <RussianRuble className="w-5 h-5" />,
     },
     {
       id: "2",
-      name: "Сводное Роялти (7%)",
+      name: "Сводное Роялти",
       value: formatMoney(metrics.totalRoyalties),
       icon: <TrendingUp className="w-5 h-5" />,
     },
@@ -102,7 +93,7 @@ export function DashboardUK() {
           const franchiseeRevenue = transactionsData
             .filter((t) => t.franchiseeId === f.id && (t.type === "income" || t.type === "revenue"))
             .reduce((s, t) => s + (Number(t.amount) || 0), 0)
-          const royaltyPercent = Number(f.royaltyPercent) || 7.0
+          const royaltyPercent = Number(f.royaltyPercent) || 0
           return sum + (franchiseeRevenue * royaltyPercent) / 100
         }, 0)
 
@@ -127,6 +118,20 @@ export function DashboardUK() {
     return () => clearInterval(interval)
   }, [getAuthHeaders, user?.role, isUkEmployee])
 
+  // Обогащённые данные по каждому франчайзи (только базовые 4 метрики)
+  const enrichedFranchises = useMemo(() => {
+    return franchises.map((f) => {
+      const revenue = transactions
+        .filter((t) => t.franchiseeId === f.id && (t.type === "income" || t.type === "revenue"))
+        .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+      const royaltyPercent = Number(f.royaltyPercent) || 0
+      const royalty = Math.round((revenue * royaltyPercent) / 100)
+      const expenses = Number(f.totalExpenses) || 0
+      const profit = revenue - expenses - royalty
+      return { ...f, revenue, royalty, expenses, profit }
+    })
+  }, [franchises, transactions])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -137,6 +142,7 @@ export function DashboardUK() {
 
   return (
     <div className="space-y-6 sm:space-y-8">
+      {/* KPI блок */}
       <div className="space-y-3">
         <h2 className="text-lg sm:text-xl font-semibold text-foreground">
           {isUkEmployee ? "Ключевые Показатели ваших франчизи" : "Ключевые Показатели"}
@@ -154,6 +160,7 @@ export function DashboardUK() {
         </div>
       </div>
 
+      {/* Карточки франчайзи с базовыми метриками */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg sm:text-xl font-semibold text-foreground">
@@ -161,67 +168,46 @@ export function DashboardUK() {
           </h2>
           <span className="text-xs text-muted-foreground">{franchises.length} франшиз</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-10 gap-2">
-          {franchises.map((franchise) => {
-            const franchiseeRevenue = transactions
-              .filter((t) => t.franchiseeId === franchise.id && (t.type === "income" || t.type === "revenue"))
-              .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
 
-            return (
-              <div key={franchise.id} className="bg-card border border-border rounded-lg p-2.5">
-                <div className="space-y-1">
-                  <h3 className="font-medium text-foreground text-xs truncate">{franchise.name}</h3>
-                  <p className="text-[10px] text-muted-foreground truncate">{franchise.city}</p>
-                  <p className="text-xs font-semibold text-primary">{(franchiseeRevenue / 1000).toFixed(0)}K ₽</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+          {enrichedFranchises.length > 0 ? (
+            enrichedFranchises.map((f) => (
+              <div
+                key={f.id}
+                className="rounded-lg bg-card border border-border p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="mb-3">
+                  <p className="font-medium text-foreground text-sm truncate">{f.name}</p>
+                  <p className="text-xs text-muted-foreground">{f.city}</p>
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      <div className="rounded-lg bg-card border border-border p-4 sm:p-6">
-        <h3 className="text-sm sm:text-base font-semibold text-foreground mb-4">
-          Топ 10 Финансовых Показателей по Франчизи/Собственным Точкам
-        </h3>
-        {franchises.length > 0 ? (
-          <div className="space-y-2">
-            {franchises
-              .map((f) => ({
-                ...f,
-                revenue: transactions
-                  .filter((t) => t.franchiseeId === f.id && (t.type === "income" || t.type === "revenue"))
-                  .reduce((sum, t) => sum + (Number(t.amount) || 0), 0),
-              }))
-              .sort((a, b) => b.revenue - a.revenue)
-              .slice(0, 10)
-              .map((franchise, index) => (
-                <div
-                  key={franchise.id}
-                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg font-bold text-muted-foreground w-6">{index + 1}</span>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{franchise.name}</p>
-                      <p className="text-xs text-muted-foreground">{franchise.city}</p>
-                    </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Выручка</p>
+                    <p className="text-sm font-medium text-foreground">{formatMoney(f.revenue)}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-primary">{franchise.revenue.toLocaleString("ru-RU")} ₽</p>
-                    <p className="text-xs text-muted-foreground">
-                      Роялти:{" "}
-                      {((franchise.revenue * (Number(franchise.royaltyPercent) || 7)) / 100).toLocaleString("ru-RU")} ₽
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Расходы</p>
+                    <p className="text-sm font-medium text-muted-foreground">{formatMoney(f.expenses)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Роялти</p>
+                    <p className="text-sm font-medium text-muted-foreground">{formatMoney(f.royalty)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Прибыль</p>
+                    <p className={`text-sm font-semibold ${f.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatMoney(f.profit)}
                     </p>
                   </div>
                 </div>
-              ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground text-sm">
-            {loading ? "Загрузка данных..." : "Нет данных для отображения"}
-          </div>
-        )}
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full text-center py-8 text-muted-foreground text-sm">
+              Нет данных для отображения
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

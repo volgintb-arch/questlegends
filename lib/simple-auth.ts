@@ -55,7 +55,7 @@ export async function createSignedToken(payload: Omit<TokenPayload, "exp" | "iat
   const full: TokenPayload = {
     ...payload,
     iat: Date.now(),
-    exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
+    exp: Date.now() + 2 * 60 * 60 * 1000, // 2 hours
   }
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url")
   const body = Buffer.from(JSON.stringify(full)).toString("base64url")
@@ -86,19 +86,10 @@ export async function verifySimpleToken(token: string): Promise<TokenPayload | n
   }
 }
 
-// Synchronous wrapper kept for backward compatibility where await is unavailable.
-// Returns null for legacy unsigned tokens — forces re-authentication.
-export function verifyToken(token: string): TokenPayload | null {
-  try {
-    const parts = token.split(".")
-    if (parts.length !== 3) return null
-    // We cannot verify the HMAC synchronously here — reject and require the caller
-    // to use the async verifySimpleToken instead.
-    // This method intentionally returns null to avoid accepting unverified tokens.
-    return null
-  } catch {
-    return null
-  }
+// Async token verification — use this instead of the old sync stub.
+// Kept as "verifyToken" name for backward compatibility with existing imports.
+export async function verifyToken(token: string): Promise<TokenPayload | null> {
+  return verifySimpleToken(token)
 }
 
 export function extractToken(request: Request): string | null {

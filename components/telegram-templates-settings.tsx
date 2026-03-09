@@ -112,8 +112,8 @@ export function TelegramTemplatesSettings() {
       </div>
 
       {/* Info Alert */}
-      <div className="flex items-start gap-3 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-        <AlertCircle size={20} className="text-blue-500 mt-0.5" />
+      <div className="flex items-start gap-3 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+        <AlertCircle size={20} className="text-primary mt-0.5" />
         <div className="space-y-1">
           <p className="text-sm text-foreground font-medium">Доступные переменные:</p>
           <p className="text-xs text-muted-foreground">

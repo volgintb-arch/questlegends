@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
     return successResponse(deals)
   } catch (error) {
-    console.error("[B2B_DEALS_GET]", error)
+    console.error("[B2B_DEALS_GET]")
     return errorResponse("Failed to fetch B2B deals", 500)
   }
 }
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
     return successResponse(deal, 201)
   } catch (error) {
-    console.error("[B2B_DEALS_POST]", error)
+    console.error("[B2B_DEALS_POST]")
     return errorResponse("Failed to create B2B deal", 500)
   }
 }

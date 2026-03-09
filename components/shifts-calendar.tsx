@@ -69,7 +69,8 @@ export function ShiftsCalendar({ locationId, onCreateShift, onEditShift }: Shift
         </Button>
       </div>
 
-      <div className="grid grid-cols-7 gap-2">
+      <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+      <div className="grid grid-cols-7 gap-2 min-w-[700px]">
         {weekDays.map((day) => {
           const dayShifts = getShiftsForDay(day)
           const isToday = isSameDay(day, new Date())
@@ -102,6 +103,7 @@ export function ShiftsCalendar({ locationId, onCreateShift, onEditShift }: Shift
             </Card>
           )
         })}
+      </div>
       </div>
     </div>
   )

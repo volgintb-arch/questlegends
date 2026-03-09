@@ -10,7 +10,7 @@ import {
   CheckSquare,
   Send,
   Clock,
-  DollarSign,
+  RussianRuble,
   GripVertical,
   Edit3,
   ArrowRight,
@@ -46,7 +46,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
@@ -468,6 +468,7 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
 
       const uploadResponse = await fetch("/api/upload", {
         method: "POST",
+        headers: getAuthHeaders(),
         body: formData,
       })
 
@@ -645,6 +646,7 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
       {/* Replace div with Sheet */}
       <Sheet open={isOpen} onOpenChange={onClose}>
         <SheetContent className="w-full max-w-6xl sm:max-w-6xl p-0 overflow-hidden">
+          <SheetTitle className="sr-only">Карточка сделки</SheetTitle>
           {/* Header */}
           <div className="flex items-center justify-between p-3 border-b">
             <div className="flex items-center gap-3">
@@ -752,13 +754,13 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
                   {renderEditableField(
                     "paushalnyyVznos",
                     "Паушальный взнос",
-                    <DollarSign size={12} className="text-green-500" />,
+                    <RussianRuble size={12} className="text-green-500" />,
                     "number",
                   )}
                   {renderEditableField(
                     "investmentAmount",
                     "Сумма инвестиций",
-                    <DollarSign size={12} className="text-blue-500" />,
+                    <RussianRuble size={12} className="text-primary" />,
                     "number",
                   )}
 
@@ -967,7 +969,7 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
                               <span>Изменил этап: {event.content}</span>
                             </div>
                           ) : event.type === "task" ? (
-                            <div className="flex items-center gap-1 text-xs text-blue-500">
+                            <div className="flex items-center gap-1 text-xs text-primary">
                               <CheckSquare size={12} />
                               <span>{event.content}</span>
                             </div>

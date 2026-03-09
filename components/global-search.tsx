@@ -11,7 +11,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { Search, HandshakeIcon, TrendingUp, DollarSign, Users, BookOpen, Building2, FileText } from "lucide-react"
+import { Search, HandshakeIcon, TrendingUp, RussianRuble, Users, BookOpen, Building2, FileText } from "lucide-react"
 
 interface SearchResult {
   id: string
@@ -82,7 +82,7 @@ export function GlobalSearch() {
       case "transaction":
         return <TrendingUp className="w-4 h-4" />
       case "expense":
-        return <DollarSign className="w-4 h-4" />
+        return <RussianRuble className="w-4 h-4" />
       case "personnel":
         return <Users className="w-4 h-4" />
       case "article":

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -25,9 +25,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         WHERE "articleId" = ${articleId} AND "userId" = ${user.userId}
       `
     } else {
+      const id = globalThis.crypto.randomUUID()
       await sql`
         INSERT INTO "ArticleReadStatus" (id, "articleId", "userId", "readAt", "isCompleted", "completedAt")
-        VALUES (gen_random_uuid()::TEXT, ${articleId}, ${user.userId}, NOW(), true, NOW())
+        VALUES (${id}, ${articleId}, ${user.userId}, NOW(), true, NOW())
       `
     }
 

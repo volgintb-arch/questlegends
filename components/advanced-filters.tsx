@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Filter, X, Calendar, DollarSign, Users, MapPin, Tag } from "lucide-react"
+import { Filter, X, Calendar, RussianRuble, Users, MapPin, Tag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -461,7 +461,7 @@ export function AdvancedFilters({ type, filters, onFiltersChange, locations = []
                 <Separator />
                 <div className="space-y-4">
                   <Label className="flex items-center gap-2">
-                    <DollarSign className="w-4 h-4" />
+                    <RussianRuble className="w-4 h-4" />
                     Сумма (₽)
                   </Label>
                   <div className="grid grid-cols-2 gap-4">

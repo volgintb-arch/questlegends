@@ -236,182 +236,210 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
   const exportToExcel = () => {
     const workbook = XLSX.utils.book_new()
-
-    // Determine if user is UK/super_admin
     const isUK = role === "uk" || role === "uk_employee" || role === "super_admin"
 
-    // Sheet 1: Summary for Network (UK only) or Franchisee
+    const setColWidths = (ws: XLSX.WorkSheet, widths: number[]) => {
+      ws["!cols"] = widths.map((w) => ({ wch: w }))
+    }
+
+    // === Лист 1: Сводная ===
     if (isUK) {
-      // For UK: Calculate summary for entire network
       const totalRevenue = transactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
       const totalExpenses = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
-      const totalRoyalties = totalRevenue * 0.07 // 7% royalty
+      const totalRoyalties = Math.round(totalRevenue * 0.07)
       const totalProfit = totalRevenue - totalExpenses
+      const totalTransactions = transactions.length
+      const avgTransaction = totalTransactions > 0 ? Math.round((totalRevenue + totalExpenses) / totalTransactions) : 0
 
       const networkSummary = [
         { Показатель: "Выручка (вся сеть)", Значение: totalRevenue, Единица: "₽" },
         { Показатель: "Роялти (7%)", Значение: totalRoyalties, Единица: "₽" },
         { Показатель: "Расходы", Значение: totalExpenses, Единица: "₽" },
         { Показатель: "Прибыль", Значение: totalProfit, Единица: "₽" },
+        { Показатель: "Всего транзакций", Значение: totalTransactions, Единица: "шт" },
+        { Показатель: "Средняя транзакция", Значение: avgTransaction, Единица: "₽" },
+        { Показатель: "Маржа прибыли", Значение: totalRevenue > 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}%` : "0%", Единица: "" },
       ]
 
       const networkSheet = XLSX.utils.json_to_sheet(networkSummary)
+      setColWidths(networkSheet, [30, 18, 8])
       XLSX.utils.book_append_sheet(workbook, networkSheet, "Сводная по сети")
 
-      console.log("[v0] Export: Sample transaction", transactions[0])
-      console.log("[v0] Export: Unique franchisees", [
-        ...new Set(transactions.map((t) => t.franchiseeName || t.franchiseeCity || "Без франчайзи")),
-      ])
-
-      // Sheet 2: Breakdown by Franchisee
-      const franchiseeBreakdown: Record<
-        string,
-        { revenue: number; expenses: number; royalties: number; profit: number }
-      > = {}
+      // === Лист 2: По франчайзи ===
+      const franchiseeBreakdown: Record<string, { revenue: number; expenses: number; royalties: number; profit: number; txCount: number }> = {}
 
       transactions.forEach((t) => {
-        const franchiseeName = t.franchiseeName || t.franchiseeCity || "Без франчайзи"
-        if (!franchiseeBreakdown[franchiseeName]) {
-          franchiseeBreakdown[franchiseeName] = { revenue: 0, expenses: 0, royalties: 0, profit: 0 }
+        const name = t.franchiseeName || t.franchiseeCity || "Без франчайзи"
+        if (!franchiseeBreakdown[name]) {
+          franchiseeBreakdown[name] = { revenue: 0, expenses: 0, royalties: 0, profit: 0, txCount: 0 }
         }
-        if (t.type === "income") {
-          franchiseeBreakdown[franchiseeName].revenue += t.amount
-        } else {
-          franchiseeBreakdown[franchiseeName].expenses += t.amount
-        }
+        if (t.type === "income") franchiseeBreakdown[name].revenue += t.amount
+        else franchiseeBreakdown[name].expenses += t.amount
+        franchiseeBreakdown[name].txCount++
       })
 
-      // Calculate royalties and profit for each franchisee
       Object.keys(franchiseeBreakdown).forEach((name) => {
-        const data = franchiseeBreakdown[name]
-        data.royalties = Math.round(data.revenue * 0.07)
-        data.profit = data.revenue - data.expenses
+        const d = franchiseeBreakdown[name]
+        d.royalties = Math.round(d.revenue * 0.07)
+        d.profit = d.revenue - d.expenses
       })
 
-      const franchiseeData = Object.entries(franchiseeBreakdown).map(([name, data]) => ({
+      const fbData = Object.entries(franchiseeBreakdown).map(([name, d]) => ({
         Франчайзи: name,
-        Выручка: data.revenue,
-        "Роялти (7%)": data.royalties,
-        Расходы: data.expenses,
-        Прибыль: data.profit,
-        "Маржа %": data.revenue > 0 ? ((data.profit / data.revenue) * 100).toFixed(1) + "%" : "0%",
+        Выручка: d.revenue,
+        "Роялти (7%)": d.royalties,
+        Расходы: d.expenses,
+        Прибыль: d.profit,
+        "Маржа %": d.revenue > 0 ? `${((d.profit / d.revenue) * 100).toFixed(1)}%` : "0%",
+        Транзакций: d.txCount,
       }))
 
-      console.log("[v0] Export: Franchisee breakdown", franchiseeData)
-
-      const franchiseeSheet = XLSX.utils.json_to_sheet(franchiseeData)
+      const franchiseeSheet = XLSX.utils.json_to_sheet(fbData)
+      setColWidths(franchiseeSheet, [30, 15, 15, 15, 15, 12, 12])
       XLSX.utils.book_append_sheet(workbook, franchiseeSheet, "По франчайзи")
     } else {
       const totalRevenue = transactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
       const totalExpenses = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
-
-      // Calculate royalty only if not own_point
-      const royaltyPercent = franchiseeData?.royaltyPercent || 7
+      const royaltyPercent = Number(franchiseeData?.royaltyPercent) || 0
       const totalRoyalty = Math.round(totalRevenue * (royaltyPercent / 100))
       const totalProfit = totalRevenue - totalExpenses - totalRoyalty
 
-      const franchiseeSummary = [
+      const summary: { Показатель: string; Значение: number | string; Единица: string }[] = [
         { Показатель: "Выручка", Значение: totalRevenue, Единица: "₽" },
         { Показатель: "Расходы", Значение: totalExpenses, Единица: "₽" },
       ]
-
-      // Add royalty row only if not own_point
       if (!franchiseeData?.isOwnPoint) {
-        franchiseeSummary.push({
-          Показатель: `Роялти (${royaltyPercent}%)`,
-          Значение: totalRoyalty,
-          Единица: "₽",
-        })
+        summary.push({ Показатель: `Роялти (${royaltyPercent}%)`, Значение: totalRoyalty, Единица: "₽" })
       }
-
-      franchiseeSummary.push(
+      summary.push(
         { Показатель: "Прибыль", Значение: totalProfit, Единица: "₽" },
-        {
-          Показатель: "Маржа прибыли",
-          Значение: totalRevenue > 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}%` : "0%",
-          Единица: "",
-        },
+        { Показатель: "Маржа прибыли", Значение: totalRevenue > 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}%` : "0%", Единица: "" },
+        { Показатель: "Всего транзакций", Значение: transactions.length, Единица: "шт" },
       )
 
-      const summarySheet = XLSX.utils.json_to_sheet(franchiseeSummary)
+      const summarySheet = XLSX.utils.json_to_sheet(summary)
+      setColWidths(summarySheet, [30, 18, 8])
       XLSX.utils.book_append_sheet(workbook, summarySheet, "Сводная аналитика")
     }
 
-    // Sheet: Transactions data (for all roles)
+    // === Лист: Все транзакции ===
     const exportData = transactions.map((t) => ({
-      ID: t.id,
       Дата: new Date(t.date).toLocaleDateString("ru-RU"),
       Тип: t.type === "income" ? "Доход" : "Расход",
       Сумма: t.amount,
       Категория: getCategoryLabel(t.category),
       Описание: t.description,
       Франчайзи: t.franchiseeName || t.franchiseeCity || "",
-      Создано: new Date(t.createdAt).toLocaleDateString("ru-RU"),
     }))
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData)
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Транзакции")
+    const txSheet = XLSX.utils.json_to_sheet(exportData)
+    setColWidths(txSheet, [14, 10, 14, 22, 40, 28])
+    XLSX.utils.book_append_sheet(workbook, txSheet, "Транзакции")
 
-    // Sheet: Breakdown by Category
+    // === Лист: По категориям ===
     const categoryBreakdown: Record<string, { income: number; expense: number; count: number }> = {}
-
     transactions.forEach((t) => {
-      const categoryName = getCategoryLabel(t.category)
-      if (!categoryBreakdown[categoryName]) {
-        categoryBreakdown[categoryName] = { income: 0, expense: 0, count: 0 }
-      }
-      if (t.type === "income") {
-        categoryBreakdown[categoryName].income += t.amount
-      } else {
-        categoryBreakdown[categoryName].expense += t.amount
-      }
-      categoryBreakdown[categoryName].count++
+      const cat = getCategoryLabel(t.category)
+      if (!categoryBreakdown[cat]) categoryBreakdown[cat] = { income: 0, expense: 0, count: 0 }
+      if (t.type === "income") categoryBreakdown[cat].income += t.amount
+      else categoryBreakdown[cat].expense += t.amount
+      categoryBreakdown[cat].count++
     })
 
-    const categoryData = Object.entries(categoryBreakdown).map(([category, data]) => ({
-      Категория: category,
-      Доходы: data.income,
-      Расходы: data.expense,
-      Баланс: data.income - data.expense,
-      "Количество транзакций": data.count,
-    }))
+    const catData = Object.entries(categoryBreakdown)
+      .sort((a, b) => (b[1].income + b[1].expense) - (a[1].income + a[1].expense))
+      .map(([cat, d]) => ({
+        Категория: cat,
+        Доходы: d.income,
+        Расходы: d.expense,
+        Баланс: d.income - d.expense,
+        Транзакций: d.count,
+      }))
 
-    const categorySheet = XLSX.utils.json_to_sheet(categoryData)
-    XLSX.utils.book_append_sheet(workbook, categorySheet, "По категориям")
+    const catSheet = XLSX.utils.json_to_sheet(catData)
+    setColWidths(catSheet, [25, 15, 15, 15, 14])
+    XLSX.utils.book_append_sheet(workbook, catSheet, "По категориям")
 
-    // Sheet: Monthly Breakdown
-    const monthlyData: Record<string, { income: number; expense: number }> = {}
+    // === Лист: ФОТ (фонд оплаты труда) ===
+    const fotCategories = ["fot_animators", "fot_hosts", "fot_djs", "fot_admin", "fot"]
+    const fotTransactions = transactions.filter((t) => t.type === "expense" && fotCategories.includes(t.category || ""))
+    if (fotTransactions.length > 0) {
+      const fotBreakdown: Record<string, number> = {}
+      fotTransactions.forEach((t) => {
+        const cat = getCategoryLabel(t.category)
+        fotBreakdown[cat] = (fotBreakdown[cat] || 0) + t.amount
+      })
+      const totalFot = Object.values(fotBreakdown).reduce((s, v) => s + v, 0)
 
+      const fotData = Object.entries(fotBreakdown)
+        .sort((a, b) => b[1] - a[1])
+        .map(([cat, amount]) => ({
+          "Категория ФОТ": cat,
+          Сумма: amount,
+          "Доля %": totalFot > 0 ? `${((amount / totalFot) * 100).toFixed(1)}%` : "0%",
+        }))
+      fotData.push({ "Категория ФОТ": "ИТОГО", Сумма: totalFot, "Доля %": "100%" })
+
+      const fotSheet = XLSX.utils.json_to_sheet(fotData)
+      setColWidths(fotSheet, [25, 15, 12])
+      XLSX.utils.book_append_sheet(workbook, fotSheet, "ФОТ разбивка")
+    }
+
+    // === Лист: По месяцам ===
+    const monthlyData: Record<string, { income: number; expense: number; count: number }> = {}
     transactions.forEach((t) => {
-      const monthKey = new Date(t.date).toLocaleDateString("ru-RU", { year: "numeric", month: "long" })
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = { income: 0, expense: 0 }
-      }
-      if (t.type === "income") {
-        monthlyData[monthKey].income += t.amount
-      } else {
-        monthlyData[monthKey].expense += t.amount
-      }
+      const key = new Date(t.date).toLocaleDateString("ru-RU", { year: "numeric", month: "long" })
+      if (!monthlyData[key]) monthlyData[key] = { income: 0, expense: 0, count: 0 }
+      if (t.type === "income") monthlyData[key].income += t.amount
+      else monthlyData[key].expense += t.amount
+      monthlyData[key].count++
     })
 
-    const monthlyBreakdown = Object.entries(monthlyData).map(([month, data]) => ({
+    const monthlyBreakdown = Object.entries(monthlyData).map(([month, d]) => ({
       Месяц: month,
-      Доходы: data.income,
-      Расходы: data.expense,
-      Прибыль: data.income - data.expense,
-      Маржа: data.income > 0 ? `${(((data.income - data.expense) / data.income) * 100).toFixed(1)}%` : "0%",
+      Доходы: d.income,
+      Расходы: d.expense,
+      Прибыль: d.income - d.expense,
+      Маржа: d.income > 0 ? `${(((d.income - d.expense) / d.income) * 100).toFixed(1)}%` : "0%",
+      Транзакций: d.count,
     }))
 
     const monthlySheet = XLSX.utils.json_to_sheet(monthlyBreakdown)
+    setColWidths(monthlySheet, [22, 15, 15, 15, 12, 14])
     XLSX.utils.book_append_sheet(workbook, monthlySheet, "По месяцам")
 
+    // === Лист: По дням ===
+    const dailyData: Record<string, { income: number; expense: number; count: number }> = {}
+    transactions.forEach((t) => {
+      const key = new Date(t.date).toLocaleDateString("ru-RU")
+      if (!dailyData[key]) dailyData[key] = { income: 0, expense: 0, count: 0 }
+      if (t.type === "income") dailyData[key].income += t.amount
+      else dailyData[key].expense += t.amount
+      dailyData[key].count++
+    })
+
+    const dailyBreakdown = Object.entries(dailyData)
+      .sort((a, b) => new Date(a[0].split(".").reverse().join("-")).getTime() - new Date(b[0].split(".").reverse().join("-")).getTime())
+      .map(([day, d]) => ({
+        Дата: day,
+        Доходы: d.income,
+        Расходы: d.expense,
+        Прибыль: d.income - d.expense,
+        Транзакций: d.count,
+      }))
+
+    const dailySheet = XLSX.utils.json_to_sheet(dailyBreakdown)
+    setColWidths(dailySheet, [14, 15, 15, 15, 14])
+    XLSX.utils.book_append_sheet(workbook, dailySheet, "По дням")
+
+    // === Сохранение ===
     const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
     const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
 
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
-    link.download = `erp_analysis_${new Date().toISOString().split("T")[0]}.xlsx`
+    link.download = `ERP_Отчет_${new Date().toISOString().split("T")[0]}.xlsx`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -505,7 +533,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
   const profit = totalRevenue - totalExpenses
 
   const isOwnPoint = role === "own_point" || user?.role === "own_point" || franchiseeData?.isOwnPoint
-  const royaltyPercent = isOwnPoint ? 0 : franchiseeData?.royaltyPercent || 7
+  const royaltyPercent = isOwnPoint ? 0 : Number(franchiseeData?.royaltyPercent) || 0
   const royaltyAmount = isOwnPoint ? 0 : Math.round(totalRevenue * (royaltyPercent / 100))
 
   const isFranchiseeOrAdmin = role === "franchisee" || role === "admin"
@@ -513,7 +541,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
   if (role === "uk" || role === "uk_employee" || role === "super_admin") {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Финансы / ERP</h1>
             <p className="text-sm text-muted-foreground mt-1">Полный контроль финансовых показателей всей сети</p>
@@ -542,7 +570,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Финансовая Аналитика / ERP</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -552,7 +580,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <Button onClick={handleAddIncome} className="bg-green-600 hover:bg-green-700 text-white">
             <ArrowDownCircle size={16} className="mr-2" />
             Добавить поступление
@@ -565,8 +593,8 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
       </div>
 
       {/* Date filter row */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-3 bg-card border border-border rounded-lg p-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-card border border-border rounded-lg p-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">От</label>
             <input
@@ -598,7 +626,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <p className="text-sm font-medium text-muted-foreground mb-2">Общий Доход</p>
           <p className="text-3xl font-bold text-green-500">{totalRevenue.toLocaleString()} ₽</p>
@@ -620,7 +648,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
         {!isOwnPoint && isFranchiseeOrAdmin && (
           <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
             <p className="text-sm font-medium text-muted-foreground mb-2">Роялти к оплате</p>
-            <p className="text-3xl font-bold text-blue-500">{royaltyAmount.toLocaleString()} ₽</p>
+            <p className="text-3xl font-bold text-primary">{royaltyAmount.toLocaleString()} ₽</p>
             <p className="text-xs text-muted-foreground mt-2">{royaltyPercent}% от дохода</p>
           </div>
         )}
@@ -708,15 +736,15 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
                 }}
                 formatter={(value: number) => [`${value.toLocaleString()} ₽`, "Прибыль"]}
               />
-              <Bar dataKey="profit" fill="#3b82f6" name="Прибыль" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="profit" fill="#8B5CF6" name="Прибыль" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       {/* Transactions Table */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-border flex items-center justify-between">
+      <div className="bg-card border border-border rounded-xl overflow-hidden overflow-x-auto shadow-sm">
+        <div className="p-4 border-b border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-foreground">Транзакции</h2>
           <div className="relative">
             <Search size={16} className="absolute left-3 top-2.5 text-muted-foreground" />

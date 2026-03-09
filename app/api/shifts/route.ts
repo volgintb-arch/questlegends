@@ -1,10 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(req.url)
     const franchiseeId = searchParams.get("franchiseeId")
     const personnelId = searchParams.get("personnelId")
@@ -12,7 +18,6 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
 
-    console.log("[v0] Shifts API GET:", { userId, franchiseeId, personnelId, startDate, endDate })
 
     if (userId) {
       // Find personnel record for this user
@@ -21,7 +26,6 @@ export async function GET(req: NextRequest) {
       `
 
       if (personnelRecords.length === 0) {
-        console.log("[v0] No personnel record found for userId:", userId)
         return NextResponse.json({ success: true, data: [] })
       }
 
@@ -51,7 +55,6 @@ export async function GET(req: NextRequest) {
         ORDER BY gs."gameDate", gs."gameTime"
       `
 
-      console.log("[v0] Found shifts for employee:", shifts.length)
 
       return NextResponse.json({ success: true, data: shifts })
     }
@@ -105,11 +108,10 @@ export async function GET(req: NextRequest) {
 
     const shifts = await sql(query, params)
 
-    console.log("[v0] Found shifts:", shifts.length)
 
     return NextResponse.json({ success: true, data: shifts })
   } catch (error) {
-    console.error("[v0] SHIFTS_GET error:", error)
+    console.error("[v0] SHIFTS_GET error:")
     return NextResponse.json({ error: "Failed to fetch shifts" }, { status: 500 })
   }
 }

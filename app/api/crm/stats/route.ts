@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyToken } from "@/lib/simple-auth"
 
@@ -7,7 +7,7 @@ async function verifyAuth(request: NextRequest) {
   if (!authHeader?.startsWith("Bearer ")) return null
 
   const token = authHeader.substring(7)
-  const payload = verifyToken(token)
+  const payload = await verifyToken(token)
   return payload as { id: string; role: string; name: string } | null
 }
 
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
             COUNT(*) as "completedCount"
           FROM "Deal" d
           JOIN "PipelineStage" s ON d."stageId" = s.id
-          WHERE s."stageType" = 'completed' AND d."pipelineId" = ${pipelineId}::uuid
+          WHERE s."stageType" = 'completed' AND d."pipelineId" = ${pipelineId}
         `
       : sql`
           SELECT 
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
             COUNT(*) as "cancelledCount"
           FROM "Deal" d
           JOIN "PipelineStage" s ON d."stageId" = s.id
-          WHERE s."stageType" = 'cancelled' AND d."pipelineId" = ${pipelineId}::uuid
+          WHERE s."stageType" = 'cancelled' AND d."pipelineId" = ${pipelineId}
         `
       : sql`
           SELECT 
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Error fetching CRM stats:", error)
+    console.error("Error fetching CRM stats:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

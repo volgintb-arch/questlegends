@@ -116,6 +116,7 @@ export function B2BTaskModal({ isOpen, onClose, b2bDealId, task, ukEmployees, on
               id="title"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="Например: Согласовать договор"
               required
             />
           </div>

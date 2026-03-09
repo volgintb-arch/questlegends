@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
 
@@ -19,8 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
          FROM "PipelineStage" s 
          WHERE s."pipelineId" = p.id) as stages
       FROM "Pipeline" p
-      WHERE p.id = ${id}::uuid
-    `
+      WHERE p.id = ${id}    `
 
     if (!pipeline) {
       return NextResponse.json({ error: "Pipeline not found" }, { status: 404 })
@@ -28,7 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ data: pipeline })
   } catch (error) {
-    console.error("Error fetching pipeline:", error)
+    console.error("Error fetching pipeline:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -56,8 +55,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         color = COALESCE(${color}, color),
         "isDefault" = COALESCE(${isDefault}, "isDefault"),
         "updatedAt" = NOW()
-      WHERE id = ${id}::uuid
-      RETURNING *
+      WHERE id = ${id}      RETURNING *
     `
 
     if (!pipeline) {
@@ -66,12 +64,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     // If setting as default, unset others
     if (isDefault) {
-      await sql`UPDATE "Pipeline" SET "isDefault" = false WHERE id != ${id}::uuid`
+      await sql`UPDATE "Pipeline" SET "isDefault" = false WHERE id != ${id}`
     }
 
     return NextResponse.json({ data: pipeline })
   } catch (error) {
-    console.error("Error updating pipeline:", error)
+    console.error("Error updating pipeline:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -91,8 +89,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     // Check if pipeline has deals
     const [dealCount] = await sql`
-      SELECT COUNT(*) as count FROM "Deal" WHERE "pipelineId" = ${id}::uuid
-    `
+      SELECT COUNT(*) as count FROM "Deal" WHERE "pipelineId" = ${id}    `
 
     if (Number.parseInt(dealCount.count) > 0) {
       return NextResponse.json(
@@ -103,11 +100,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       )
     }
 
-    await sql`DELETE FROM "Pipeline" WHERE id = ${id}::uuid`
+    await sql`DELETE FROM "Pipeline" WHERE id = ${id}`
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error deleting pipeline:", error)
+    console.error("Error deleting pipeline:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
 
@@ -20,8 +20,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { name, color, order } = body
 
     const [existingStage] = await sql`
-      SELECT "isFixed", "stageType" FROM "PipelineStage" WHERE id = ${stageId}::uuid
-    `
+      SELECT "isFixed", "stageType" FROM "PipelineStage" WHERE id = ${stageId}    `
 
     if (existingStage?.isFixed && name) {
       return NextResponse.json({ error: "Cannot rename fixed stage" }, { status: 400 })
@@ -33,8 +32,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         name = COALESCE(${existingStage?.isFixed ? null : name}, name),
         color = COALESCE(${color}, color),
         "order" = COALESCE(${order}, "order")
-      WHERE id = ${stageId}::uuid AND "pipelineId" = ${id}::uuid
-      RETURNING *
+      WHERE id = ${stageId} AND "pipelineId" = ${id}      RETURNING *
     `
 
     if (!stage) {
@@ -43,7 +41,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     return NextResponse.json({ data: stage })
   } catch (error) {
-    console.error("Error updating stage:", error)
+    console.error("Error updating stage:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -62,8 +60,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { id, stageId } = await params
 
     const [stage] = await sql`
-      SELECT "isFixed" FROM "PipelineStage" WHERE id = ${stageId}::uuid
-    `
+      SELECT "isFixed" FROM "PipelineStage" WHERE id = ${stageId}    `
 
     if (stage?.isFixed) {
       return NextResponse.json({ error: "Нельзя удалить фиксированный этап" }, { status: 400 })
@@ -71,8 +68,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     // Check if stage has deals
     const [dealCount] = await sql`
-      SELECT COUNT(*) as count FROM "Deal" WHERE "stageId" = ${stageId}::uuid
-    `
+      SELECT COUNT(*) as count FROM "Deal" WHERE "stageId" = ${stageId}    `
 
     if (Number.parseInt(dealCount.count) > 0) {
       return NextResponse.json(
@@ -85,25 +81,22 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     await sql`
       DELETE FROM "PipelineStage" 
-      WHERE id = ${stageId}::uuid AND "pipelineId" = ${id}::uuid
-    `
+      WHERE id = ${stageId} AND "pipelineId" = ${id}    `
 
     // Reorder remaining stages
     const stages = await sql`
       SELECT id FROM "PipelineStage"
-      WHERE "pipelineId" = ${id}::uuid
-      ORDER BY "order" ASC
+      WHERE "pipelineId" = ${id}      ORDER BY "order" ASC
     `
 
     for (let i = 0; i < stages.length; i++) {
       await sql`
-        UPDATE "PipelineStage" SET "order" = ${i} WHERE id = ${stages[i].id}::uuid
-      `
+        UPDATE "PipelineStage" SET "order" = ${i} WHERE id = ${stages[i].id}      `
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error deleting stage:", error)
+    console.error("Error deleting stage:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

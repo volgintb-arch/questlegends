@@ -1,10 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await verifyRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
 
@@ -38,13 +44,18 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, games })
   } catch (error) {
-    console.error("[v0] Games GET error:", error)
+    console.error("[v0] Games GET error:")
     return NextResponse.json({ success: false, error: "Failed to fetch games" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await verifyRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await request.json()
     const {
       franchiseeId,
@@ -67,22 +78,23 @@ export async function POST(request: NextRequest) {
       totalAmount,
     } = body
 
+    const gameId = globalThis.crypto.randomUUID()
     const result = await sql`
       INSERT INTO "Game" (
-        "franchiseeId", "clientName", "clientPhone", "gameDate", "gameStartTime", "gameEndTime",
+        id, "franchiseeId", "clientName", "clientPhone", "gameDate", "gameStartTime", "gameEndTime",
         "playersCount", "packageType", "packagePrice", "animatorsCount", "hostsCount", "djsCount",
-        "animatorRate", "hostRate", "djRate", "prepayment", "notes", "totalAmount", "status"
+        "animatorRate", "hostRate", "djRate", "prepayment", "notes", "totalAmount", "status", "updatedAt"
       ) VALUES (
-        ${franchiseeId}, ${clientName}, ${clientPhone}, ${gameDate}, ${gameStartTime}, ${gameEndTime},
+        ${gameId}, ${franchiseeId}, ${clientName}, ${clientPhone}, ${gameDate}, ${gameStartTime}, ${gameEndTime},
         ${playersCount}, ${packageType}, ${packagePrice}, ${animatorsCount || 0}, ${hostsCount || 0}, ${djsCount || 0},
-        ${animatorRate || 1500}, ${hostRate || 2000}, ${djRate || 2500}, ${prepayment || 0}, ${notes || ""}, ${totalAmount}, 'pending'
+        ${animatorRate || 1500}, ${hostRate || 2000}, ${djRate || 2500}, ${prepayment || 0}, ${notes || ""}, ${totalAmount}, 'pending', NOW()
       )
       RETURNING *
     `
 
     return NextResponse.json({ success: true, game: result[0] })
   } catch (error) {
-    console.error("[v0] Games POST error:", error)
+    console.error("[v0] Games POST error:")
     return NextResponse.json({ success: false, error: "Failed to create game" }, { status: 500 })
   }
 }

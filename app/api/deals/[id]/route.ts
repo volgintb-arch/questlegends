@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 import crypto from "crypto"
 
@@ -31,12 +31,14 @@ async function logDealAction(
   },
 ) {
   try {
+    const logId = globalThis.crypto.randomUUID()
     await sql`
-      INSERT INTO "DealLog" ("dealId", action, "fromStageId", "toStageId", "fromStageName", "toStageName", "pipelineId", "pipelineName", details, "userId", "userName")
+      INSERT INTO "DealLog" (id, "dealId", action, "fromStageId", "toStageId", "fromStageName", "toStageName", "pipelineId", "pipelineName", details, "userId", "userName")
       VALUES (
-        ${dealId}, 
-        ${action}, 
-        ${details?.fromStageId || null}, 
+        ${logId},
+        ${dealId},
+        ${action},
+        ${details?.fromStageId || null},
         ${details?.toStageId || null},
         ${details?.fromStageName || null},
         ${details?.toStageName || null},
@@ -48,18 +50,18 @@ async function logDealAction(
       )
     `
   } catch (error) {
-    console.error("Error logging deal action:", error)
+    console.error("Error logging deal action:")
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await getCurrentUser(request)
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     const sql = neon(process.env.DATABASE_URL!)
     const deals = await sql`
@@ -80,6 +82,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const deal = deals[0]
 
+    // H3: Cross-tenant check — non-UK roles can only access their own franchisee's deals
+    if (!["uk", "super_admin", "uk_employee"].includes(user.role)) {
+      if (deal.franchiseeId && user.franchiseeId && deal.franchiseeId !== user.franchiseeId) {
+        return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 })
+      }
+    }
+
     return NextResponse.json({
       success: true,
       ...deal,
@@ -91,22 +100,30 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       },
     })
   } catch (error) {
-    console.error("[v0] DEAL_GET error:", error)
+    console.error("[v0] DEAL_GET error:")
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await getCurrentUser(request)
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
 
     const sql = neon(process.env.DATABASE_URL!)
+
+    // H3: Cross-tenant check for PATCH
+    if (!["uk", "super_admin", "uk_employee"].includes(user.role) && user.franchiseeId) {
+      const [dealCheck] = await sql`SELECT "franchiseeId" FROM "Deal" WHERE id = ${id}`
+      if (dealCheck && dealCheck.franchiseeId && dealCheck.franchiseeId !== user.franchiseeId) {
+        return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 })
+      }
+    }
 
     if (body.stage !== undefined) {
       // Get old stage info for logging
@@ -120,11 +137,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
       if (body.stageId) {
         // Get new stage info
-        const [newStage] = await sql`SELECT name FROM "PipelineStage" WHERE id = ${body.stageId}::uuid`
+        const [newStage] = await sql`SELECT name FROM "PipelineStage" WHERE id = ${body.stageId}`
 
         await sql`
           UPDATE "Deal" 
-          SET "stage" = ${body.stage}, "stageId" = ${body.stageId}::uuid, "updatedAt" = NOW() 
+          SET "stage" = ${body.stage}, "stageId" = ${body.stageId}, "updatedAt" = NOW() 
           WHERE id = ${id}
         `
 
@@ -209,7 +226,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       changedFields.push("notes")
     }
     if (body.pipelineId !== undefined) {
-      await sql`UPDATE "Deal" SET "pipelineId" = ${body.pipelineId}::uuid, "updatedAt" = NOW() WHERE id = ${id}`
+      await sql`UPDATE "Deal" SET "pipelineId" = ${body.pipelineId}, "updatedAt" = NOW() WHERE id = ${id}`
       changedFields.push("pipelineId")
     }
 
@@ -252,12 +269,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     return NextResponse.json({ success: true, data: result[0] })
   } catch (error) {
-    console.error("[v0] DEAL_PATCH error:", error)
+    console.error("[v0] DEAL_PATCH error:")
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await getCurrentUser(request)
     if (!user) {
@@ -268,7 +285,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     const sql = neon(process.env.DATABASE_URL!)
 
@@ -284,7 +301,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] DEAL_DELETE error:", error)
+    console.error("[v0] DEAL_DELETE error:")
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }

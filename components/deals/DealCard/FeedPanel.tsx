@@ -38,7 +38,7 @@ function EventItem({ event }: { event: FeedEvent }) {
               <span>Изменил этап: {event.content}</span>
             </div>
           ) : event.type === "task" ? (
-            <div className="flex items-center gap-1 text-xs text-blue-500">
+            <div className="flex items-center gap-1 text-xs text-primary">
               <CheckSquare size={12} />
               <span>{event.content}</span>
             </div>

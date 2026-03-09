@@ -1,10 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; stageId: string }> }) {
   try {
+    const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { stageId } = await params
     const body = await req.json()
 
@@ -27,13 +33,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error updating stage:", error)
+    console.error("[v0] Error updating stage:")
     return NextResponse.json({ error: "Failed to update stage" }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; stageId: string }> }) {
   try {
+    const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { stageId } = await params
 
     // Check if stage is fixed
@@ -52,7 +63,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error deleting stage:", error)
+    console.error("[v0] Error deleting stage:")
     return NextResponse.json({ error: "Failed to delete stage" }, { status: 500 })
   }
 }

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import bcrypt from "bcryptjs"
 import { v4 as uuidv4 } from "uuid"
 import { verifyRequest } from "@/lib/simple-auth"
+import { cache } from "@/lib/cache"
 
 // getCurrentUser is unused — authentication is handled via verifyRequest from simple-auth
 
@@ -27,11 +28,13 @@ export async function GET(request: Request) {
       if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
         users = await sql`
           SELECT 
-            u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
-            u."telegramId", u.description, u."isActive", u."createdAt",
-            f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+            u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp,
+            u."telegramId", u.description, u."avatarUrl", u."isActive", u."createdAt",
+            f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity",
+            p.role as "personnelRole"
           FROM "User" u
           LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+          LEFT JOIN "Personnel" p ON p."userId" = u.id
           WHERE u."franchiseeId" = ${user.franchiseeId}
             AND u.role = ANY(${roles})
           ORDER BY u.name ASC
@@ -39,20 +42,33 @@ export async function GET(request: Request) {
       } else {
         users = await sql`
           SELECT 
-            u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
-            u."telegramId", u.description, u."isActive", u."createdAt",
-            f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+            u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp,
+            u."telegramId", u.description, u."avatarUrl", u."isActive", u."createdAt",
+            f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity",
+            p.role as "personnelRole"
           FROM "User" u
           LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+          LEFT JOIN "Personnel" p ON p."userId" = u.id
           WHERE u.role = ANY(${roles})
           ORDER BY u.name ASC
         `
       }
+    } else if (roleFilter === "uk_employee") {
+      users = await sql`
+        SELECT
+          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp,
+          u."telegramId", u.description, u."avatarUrl", u."isActive", u."createdAt",
+          f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+        FROM "User" u
+        LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+        WHERE u.role = 'uk_employee'
+        ORDER BY u.name ASC
+      `
     } else if (roleFilter === "uk") {
       users = await sql`
         SELECT 
-          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
-          u."telegramId", u.description, u."isActive", u."createdAt",
+          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp,
+          u."telegramId", u.description, u."avatarUrl", u."isActive", u."createdAt",
           f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
         FROM "User" u
         LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
@@ -61,34 +77,40 @@ export async function GET(request: Request) {
       `
     } else if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
       users = await sql`
-        SELECT 
-          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
-          u."telegramId", u.description, u."isActive", u."createdAt",
-          f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+        SELECT
+          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp,
+          u."telegramId", u.description, u."avatarUrl", u."isActive", u."createdAt",
+          f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity",
+          p.role as "personnelRole"
         FROM "User" u
         LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+        LEFT JOIN "Personnel" p ON p."userId" = u.id
         WHERE u."franchiseeId" = ${user.franchiseeId}
         ORDER BY u."createdAt" DESC
       `
     } else if (franchiseeId) {
       users = await sql`
-        SELECT 
-          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
-          u."telegramId", u.description, u."isActive", u."createdAt",
-          f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+        SELECT
+          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp,
+          u."telegramId", u.description, u."avatarUrl", u."isActive", u."createdAt",
+          f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity",
+          p.role as "personnelRole"
         FROM "User" u
         LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+        LEFT JOIN "Personnel" p ON p."userId" = u.id
         WHERE u."franchiseeId" = ${franchiseeId}
         ORDER BY u."createdAt" DESC
       `
     } else {
       users = await sql`
-        SELECT 
-          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp, 
-          u."telegramId", u.description, u."isActive", u."createdAt",
-          f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity"
+        SELECT
+          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp,
+          u."telegramId", u.description, u."avatarUrl", u."isActive", u."createdAt",
+          f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity",
+          p.role as "personnelRole"
         FROM "User" u
         LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+        LEFT JOIN "Personnel" p ON p."userId" = u.id
         ORDER BY u."createdAt" DESC
       `
     }
@@ -97,13 +119,15 @@ export async function GET(request: Request) {
       id: u.id,
       phone: u.phone,
       name: u.name,
-      role: u.role,
+      role: u.personnelRole || u.role,
       telegram: u.telegram,
       whatsapp: u.whatsapp,
       telegramId: u.telegramId,
       description: u.description,
+      avatarUrl: u.avatarUrl || null,
       isActive: u.isActive,
       createdAt: u.createdAt,
+      franchiseeId: u.franchiseeId || null,
       franchisee: u.franchiseeId
         ? {
             id: u.franchiseeId,
@@ -189,10 +213,12 @@ export async function POST(request: Request) {
         )
       }
     } else if (user.role === "uk_employee") {
-      return NextResponse.json(
-        { error: "UK employees cannot create users" },
-        { status: 403 },
-      )
+      if (!["franchisee", "own_point"].includes(role)) {
+        return NextResponse.json(
+          { error: "UK employees can only create franchisee and own_point roles" },
+          { status: 403 },
+        )
+      }
     }
 
     const sql = neon(process.env.DATABASE_URL!)
@@ -219,11 +245,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Пользователь с таким email уже существует" }, { status: 400 })
     }
 
-    if (!password) {
-      return NextResponse.json({ error: "Password is required" }, { status: 400 })
+    if (!password || password.length < 8) {
+      return NextResponse.json({ error: "Пароль должен быть не менее 8 символов" }, { status: 400 })
     }
     // Store only the bcrypt hash — never store plaintext passwords
-    const passwordHash = await bcrypt.hash(password, 10)
+    const passwordHash = await bcrypt.hash(password, 12)
 
     let userFranchiseeId = franchiseeId || user.franchiseeId
 
@@ -249,7 +275,7 @@ export async function POST(request: Request) {
       userFranchiseeId = null
     }
 
-    const finalRole = ["animator", "host", "dj"].includes(role) ? "employee" : role
+    const finalRole = ["animator", "host", "dj"].includes(role) ? "employee" : role === "own_point" ? "franchisee" : role
 
     const userUUID = uuidv4()
     const newUser = await sql`
@@ -267,16 +293,22 @@ export async function POST(request: Request) {
     }
 
     if (role === "admin" && permissions) {
+      const permId = uuidv4()
       await sql`
-        INSERT INTO "UserPermission" ("userId", "canViewDeals", "canEditDeals", "canViewFinances", "canViewMarketing", "canViewKb", "canManageSchedule", "canManagePersonnel")
-        VALUES (${newUser[0].id}, ${permissions.canViewDeals || false}, ${permissions.canEditDeals || false}, ${permissions.canViewFinances || false}, ${permissions.canViewMarketing || false}, ${permissions.canViewKb || false}, ${permissions.canViewSchedule || false}, ${permissions.canViewPersonnel || false})
+        INSERT INTO "UserPermission" (id, "userId", "canViewDeals", "canEditDeals", "canViewFinances", "canViewKnowledgeBase", "canManageSchedule", "canManagePersonnel", "updatedAt")
+        VALUES (${permId}, ${newUser[0].id}, ${permissions.canViewDeals || false}, ${permissions.canEditDeals || false}, ${permissions.canViewFinances || false}, ${permissions.canViewKb || false}, ${permissions.canViewSchedule || false}, ${permissions.canViewPersonnel || false}, NOW())
       `
     }
 
-    // Return only safe fields — never include password in the response
-    return NextResponse.json({ user: newUser[0] })
+    // Invalidate caches so new data appears immediately
+    if (role === "franchisee" || role === "own_point") {
+      await cache.invalidatePattern("franchisees:")
+    }
+
+    // Return created user — password is NOT included in response for security
+    return NextResponse.json({ success: true, data: newUser[0] })
   } catch (error: any) {
-    console.error("[users] POST error")
-    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+    console.error("[users] POST error:", error?.message || error)
+    return NextResponse.json({ error: error?.message || "Internal error" }, { status: 500 })
   }
 }

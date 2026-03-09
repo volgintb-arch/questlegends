@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
+import { verifyRequest } from "@/lib/simple-auth"
 
 export async function GET(request: Request) {
   try {
+    const user = await verifyRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const sql = neon(process.env.DATABASE_URL!)
     const { searchParams } = new URL(request.url)
     const franchiseeId = searchParams.get("franchiseeId")
@@ -42,7 +48,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ success: true, data: result.rows })
   } catch (error) {
-    console.error("Error fetching tasks:", error)
+    console.error("Error fetching tasks:")
     return NextResponse.json({ success: false, error: "Failed to fetch tasks" }, { status: 500 })
   }
 }

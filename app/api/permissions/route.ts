@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
 
 async function getCurrentUser(request: Request) {
@@ -10,7 +10,7 @@ async function getCurrentUser(request: Request) {
 
   const token = authHeader.substring(7)
   try {
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
     if (!payload) return null
 
     return {
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
           LEFT JOIN "UserPermission" up ON u.id = up."userId"
           LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
           WHERE u."franchiseeId" = ${franchiseeId}
-            AND u.role IN ('admin', 'employee', 'animator', 'host', 'dj')
+            AND u.role IN ('admin', 'employee')
             AND u."isActive" = true
           ORDER BY u."createdAt" DESC
         `
@@ -96,7 +96,7 @@ export async function GET(request: Request) {
         LEFT JOIN "UserPermission" up ON u.id = up."userId"
         LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
         WHERE u."franchiseeId" = ${fId}
-          AND u.role IN ('admin', 'employee', 'animator', 'host', 'dj')
+          AND u.role IN ('admin', 'employee')
           AND u."isActive" = true
         ORDER BY u."createdAt" DESC
       `
@@ -133,7 +133,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ users: formattedUsers })
   } catch (error) {
-    console.error("[v0] Error fetching permissions:", error)
+    console.error("[v0] Error fetching permissions:")
     return NextResponse.json({ error: "Failed to fetch permissions" }, { status: 500 })
   }
 }
@@ -196,18 +196,18 @@ export async function PUT(request: Request) {
         if (Object.keys(updates).length > 0) {
           await sql`
             UPDATE "UserPermission"
-            SET 
-              "canViewDashboard" = COALESCE(${updates.canViewDashboard}, "canViewDashboard"),
-              "canViewCrm" = COALESCE(${updates.canViewCrm}, "canViewCrm"),
-              "canViewErp" = COALESCE(${updates.canViewErp}, "canViewErp"),
-              "canViewMessages" = COALESCE(${updates.canViewMessages}, "canViewMessages"),
-              "canViewKnowledgeBase" = COALESCE(${updates.canViewKnowledgeBase}, "canViewKnowledgeBase"),
-              "canViewUsers" = COALESCE(${updates.canViewUsers}, "canViewUsers"),
-              "canViewAccess" = COALESCE(${updates.canViewAccess}, "canViewAccess"),
-              "canViewNotifications" = COALESCE(${updates.canViewNotifications}, "canViewNotifications"),
-              "canManageSchedule" = COALESCE(${updates.canManageSchedule}, "canManageSchedule"),
-              "canManagePersonnel" = COALESCE(${updates.canManagePersonnel}, "canManagePersonnel"),
-              "canManageUsers" = COALESCE(${updates.canManageUsers}, "canManageUsers"),
+            SET
+              "canViewDashboard" = COALESCE(${updates.canViewDashboard ?? null}, "canViewDashboard"),
+              "canViewCrm" = COALESCE(${updates.canViewCrm ?? null}, "canViewCrm"),
+              "canViewErp" = COALESCE(${updates.canViewErp ?? null}, "canViewErp"),
+              "canViewMessages" = COALESCE(${updates.canViewMessages ?? null}, "canViewMessages"),
+              "canViewKnowledgeBase" = COALESCE(${updates.canViewKnowledgeBase ?? null}, "canViewKnowledgeBase"),
+              "canViewUsers" = COALESCE(${updates.canViewUsers ?? null}, "canViewUsers"),
+              "canViewAccess" = COALESCE(${updates.canViewAccess ?? null}, "canViewAccess"),
+              "canViewNotifications" = COALESCE(${updates.canViewNotifications ?? null}, "canViewNotifications"),
+              "canManageSchedule" = COALESCE(${updates.canManageSchedule ?? null}, "canManageSchedule"),
+              "canManagePersonnel" = COALESCE(${updates.canManagePersonnel ?? null}, "canManagePersonnel"),
+              "canManageUsers" = COALESCE(${updates.canManageUsers ?? null}, "canManageUsers"),
               "updatedAt" = NOW()
             WHERE "userId" = ${userId}
           `
@@ -256,7 +256,7 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error updating permissions:", error)
+    console.error("[v0] Error updating permissions:")
     return NextResponse.json(
       {
         success: false,

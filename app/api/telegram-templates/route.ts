@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
     return successResponse(templates)
   } catch (error) {
-    console.error("[TELEGRAM_TEMPLATES_GET]", error)
+    console.error("[TELEGRAM_TEMPLATES_GET]")
     return errorResponse("Failed to fetch templates", 500)
   }
 }
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 
     return successResponse(template)
   } catch (error) {
-    console.error("[TELEGRAM_TEMPLATES_POST]", error)
+    console.error("[TELEGRAM_TEMPLATES_POST]")
     return errorResponse("Failed to save template", 500)
   }
 }

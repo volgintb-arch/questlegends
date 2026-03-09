@@ -114,7 +114,7 @@ export function GameScheduleGrid() {
     } finally {
       setLoading(false)
     }
-  }, [user?.franchiseeId, currentWeekStart, getAuthHeaders])
+  }, [user?.franchiseeId, currentWeekStart]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const normalizeDate = (dateStr: string | Date | null | undefined): string => {
     if (!dateStr) return ""
@@ -159,7 +159,7 @@ export function GameScheduleGrid() {
     } catch (e) {
       console.error("[v0] Error fetching personnel:", e)
     }
-  }, [user?.franchiseeId, getAuthHeaders])
+  }, [user?.franchiseeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const getItemsForSlot = (date: Date, time: string) => {
     const dateStr = normalizeDate(date)

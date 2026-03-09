@@ -68,10 +68,10 @@ export function calcNetProfit(totalRevenue: number, royalty: number, fot: number
  * Calculate all metrics at once
  * Returns complete calculation results
  */
-export function calculateAll(inputs: CalculationInputs, expenses = 0): CalculationResults {
+export function calculateAll(inputs: CalculationInputs, expenses = 0, royaltyPercent = 0.07): CalculationResults {
   const totalRevenue = calcTotalRevenue(inputs.participants, inputs.checkPerPerson)
   const fot = calcFOT(inputs.animatorsCount, inputs.animatorRate, inputs.hostRate, inputs.djRate)
-  const royalty = calcRoyalty(totalRevenue)
+  const royalty = calcRoyalty(totalRevenue, royaltyPercent)
   const netProfit = calcNetProfit(totalRevenue, royalty, fot, expenses)
 
   return {

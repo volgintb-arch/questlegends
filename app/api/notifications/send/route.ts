@@ -126,7 +126,7 @@ export async function POST(request: Request) {
       message: `Successfully sent ${successCount} notifications`,
     })
   } catch (error) {
-    console.error("[NOTIFICATIONS_SEND]", error)
+    console.error("[NOTIFICATIONS_SEND]")
     return errorResponse("Failed to send notifications", 500)
   }
 }

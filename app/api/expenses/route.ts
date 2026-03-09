@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
 
 async function getCurrentUser(request: Request) {
@@ -10,7 +10,7 @@ async function getCurrentUser(request: Request) {
 
   const token = authHeader.substring(7)
   try {
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
     if (!payload) return null
 
     return {
@@ -40,29 +40,29 @@ export async function GET(request: Request) {
 
     let expenses
 
-    if (user.role === "uk" || user.role === "UK") {
+    if (["uk", "UK", "super_admin", "uk_employee"].includes(user.role)) {
       // UK can see all or filter by franchiseeId
       if (franchiseeId) {
         expenses = await sql`
-          SELECT e.*
+          SELECT e.*, e."expenseDate" as date
           FROM "Expense" e
           WHERE e."franchiseeId" = ${franchiseeId}
-          ORDER BY e.date DESC
+          ORDER BY e."expenseDate" DESC
         `
       } else {
         expenses = await sql`
-          SELECT e.*
+          SELECT e.*, e."expenseDate" as date
           FROM "Expense" e
-          ORDER BY e.date DESC
+          ORDER BY e."expenseDate" DESC
         `
       }
     } else if (user.franchiseeId) {
       // Others see only their franchisee expenses
       expenses = await sql`
-        SELECT e.*
+        SELECT e.*, e."expenseDate" as date
         FROM "Expense" e
         WHERE e."franchiseeId" = ${user.franchiseeId}
-        ORDER BY e.date DESC
+        ORDER BY e."expenseDate" DESC
       `
     } else {
       expenses = []
@@ -89,27 +89,34 @@ export async function POST(request: Request) {
     const sql = neon(process.env.DATABASE_URL)
     const body = await request.json()
 
-    const targetFranchiseeId = body.franchiseeId || user.franchiseeId
+    // H7: Non-UK roles must use their own franchiseeId — prevent cross-tenant write
+    let targetFranchiseeId: string
+    if (["uk", "super_admin", "uk_employee"].includes(user.role)) {
+      targetFranchiseeId = body.franchiseeId || user.franchiseeId
+    } else {
+      targetFranchiseeId = user.franchiseeId!
+    }
 
     if (!targetFranchiseeId) {
       return NextResponse.json({ error: "Franchisee ID is required" }, { status: 400 })
     }
 
     // Insert new expense
+    const expenseId = globalThis.crypto.randomUUID()
     const result = await sql`
       INSERT INTO "Expense" (
-        id, category, amount, date, description, "fileUrl", "franchiseeId", "createdAt"
+        id, category, amount, "expenseDate", description, "franchiseeId", "createdById", "createdAt"
       ) VALUES (
-        gen_random_uuid(),
+        ${expenseId},
         ${body.category || "other"},
         ${body.amount || 0},
         ${body.date ? new Date(body.date).toISOString() : new Date().toISOString()},
         ${body.description || ""},
-        ${body.fileUrl || null},
         ${targetFranchiseeId},
+        ${user.id},
         NOW()
       )
-      RETURNING *
+      RETURNING *, "expenseDate" as date
     `
 
     return NextResponse.json(result[0])

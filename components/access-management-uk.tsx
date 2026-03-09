@@ -299,7 +299,7 @@ export function AccessManagementUK() {
                       Права доступа к модулям:
                       {!canEdit && <span className="text-muted-foreground ml-1">(только просмотр)</span>}
                     </p>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       {(Object.keys(permissionLabels) as Array<keyof UserPermissions>).map((key) => (
                         <div key={key} className="flex items-center gap-1">
                           <Checkbox

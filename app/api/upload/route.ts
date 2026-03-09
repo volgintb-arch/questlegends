@@ -1,4 +1,5 @@
-import { put } from "@vercel/blob"
+import { writeFile, mkdir } from "fs/promises"
+import path from "path"
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
 
@@ -8,7 +9,6 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/png",
   "image/gif",
   "image/webp",
-  "image/svg+xml",
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -19,6 +19,8 @@ const ALLOWED_MIME_TYPES = new Set([
   "video/mp4",
   "video/webm",
 ])
+
+const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads")
 
 export async function POST(request: NextRequest) {
   const user = await verifyRequest(request)
@@ -34,25 +36,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
-    // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: "File too large. Maximum size is 10 MB." }, { status: 400 })
     }
 
-    // Validate MIME type against allowlist
     if (!ALLOWED_MIME_TYPES.has(file.type)) {
       return NextResponse.json({ error: "File type not allowed." }, { status: 400 })
     }
 
-    // Upload to Vercel Blob with random suffix for unique filenames
-    const blob = await put(file.name, file, {
-      access: "public",
-      addRandomSuffix: true,
-    })
+    await mkdir(UPLOAD_DIR, { recursive: true })
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+    const uniqueName = `${Date.now()}-${crypto.randomUUID()}-${safeName}`
+    const filePath = path.join(UPLOAD_DIR, uniqueName)
+
+    const buffer = Buffer.from(await file.arrayBuffer())
+    await writeFile(filePath, buffer)
 
     return NextResponse.json({
       success: true,
-      url: blob.url,
+      url: `/uploads/${uniqueName}`,
       filename: file.name,
       size: file.size,
       type: file.type,

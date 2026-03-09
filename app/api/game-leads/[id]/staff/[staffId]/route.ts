@@ -1,10 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; staffId: string }> }) {
   try {
+    const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { id, staffId } = await params
 
     const [assignment] = await sql`
@@ -26,7 +32,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error removing staff:", error)
+    console.error("[v0] Error removing staff:")
     return NextResponse.json({ error: "Failed to remove staff" }, { status: 500 })
   }
 }

@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
 
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: pipelines })
   } catch (error) {
-    console.error("Error fetching pipelines:", error)
+    console.error("Error fetching pipelines:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -45,10 +45,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 })
     }
 
-    // Create pipeline
+    // Create pipeline (generate ID since Prisma cuid() doesn't work at DB level)
+    const pipelineId = globalThis.crypto.randomUUID()
     const [pipeline] = await sql`
-      INSERT INTO "Pipeline" (name, description, color, "createdById")
-      VALUES (${name}, ${description || null}, ${color || "#3B82F6"}, ${user.userId})
+      INSERT INTO "Pipeline" (id, name, description, color, "createdById")
+      VALUES (${pipelineId}, ${name}, ${description || null}, ${color || "#3B82F6"}, ${user.userId})
       RETURNING *
     `
 
@@ -59,21 +60,24 @@ export async function POST(request: NextRequest) {
 
     // Add user-provided stages
     for (const stage of defaultStages) {
+      const stageId = globalThis.crypto.randomUUID()
       await sql`
-        INSERT INTO "PipelineStage" ("pipelineId", name, color, "order", "isFixed", "stageType")
-        VALUES (${pipeline.id}, ${stage.name}, ${stage.color || "#6B7280"}, ${stage.order}, ${stage.isFixed || false}, ${stage.stageType || null})
+        INSERT INTO "PipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType")
+        VALUES (${stageId}, ${pipeline.id}, ${stage.name}, ${stage.color || "#6B7280"}, ${stage.order}, ${stage.isFixed || false}, ${stage.stageType || null})
       `
     }
 
     // Always add fixed stages at the end
     const lastOrder = defaultStages.length
+    const completedStageId = globalThis.crypto.randomUUID()
     await sql`
-      INSERT INTO "PipelineStage" ("pipelineId", name, color, "order", "isFixed", "stageType")
-      VALUES (${pipeline.id}, 'Завершен', '#22C55E', ${lastOrder}, true, 'completed')
+      INSERT INTO "PipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType")
+      VALUES (${completedStageId}, ${pipeline.id}, 'Завершен', '#22C55E', ${lastOrder}, true, 'completed')
     `
+    const cancelledStageId = globalThis.crypto.randomUUID()
     await sql`
-      INSERT INTO "PipelineStage" ("pipelineId", name, color, "order", "isFixed", "stageType")
-      VALUES (${pipeline.id}, 'Отказ', '#EF4444', ${lastOrder + 1}, true, 'cancelled')
+      INSERT INTO "PipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType")
+      VALUES (${cancelledStageId}, ${pipeline.id}, 'Отказ', '#EF4444', ${lastOrder + 1}, true, 'cancelled')
     `
 
     // Fetch pipeline with stages
@@ -88,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: result })
   } catch (error) {
-    console.error("Error creating pipeline:", error)
+    console.error("Error creating pipeline:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -2,7 +2,7 @@ import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/utils/response"
 
-export async function PATCH(request: Request, { params }: { params: { templateId: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ templateId: string }> }) {
   try {
     const user = await verifyRequest(request as any)
     if (!user) {
@@ -13,12 +13,13 @@ export async function PATCH(request: Request, { params }: { params: { templateId
       return errorResponse("Forbidden", 403)
     }
 
+    const { templateId } = await params
     const body = await request.json()
     const { isActive } = body
 
     const template = await prisma.telegramTemplate.update({
       where: {
-        id: params.templateId,
+        id: templateId,
         franchiseeId: user.franchiseeId!,
       },
       data: {
@@ -28,7 +29,7 @@ export async function PATCH(request: Request, { params }: { params: { templateId
 
     return successResponse(template)
   } catch (error) {
-    console.error("[TELEGRAM_TEMPLATE_PATCH]", error)
+    console.error("[TELEGRAM_TEMPLATE_PATCH]")
     return errorResponse("Failed to update template", 500)
   }
 }

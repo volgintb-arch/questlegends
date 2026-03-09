@@ -89,8 +89,8 @@ export function MarketingAutomation() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Send className="w-5 h-5 text-blue-600" />
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Send className="w-5 h-5 text-primary" />
             </div>
             <div>
               <div className="text-2xl font-bold">{campaigns.reduce((sum, c) => sum + c.sent_count, 0)}</div>
@@ -163,7 +163,7 @@ export function MarketingAutomation() {
 
                   <p className="text-sm text-muted-foreground mb-4">{campaign.message_template}</p>
 
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <p className="text-xs text-muted-foreground">Отправлено</p>
                       <p className="text-lg font-semibold">{campaign.sent_count}</p>

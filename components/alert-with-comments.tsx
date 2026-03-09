@@ -168,7 +168,7 @@ export function AlertWithComments({
                         <span
                           className={`text-xs px-1.5 py-0.5 rounded ${
                             comment.role === "system"
-                              ? "bg-blue-500/20 text-blue-600"
+                              ? "bg-primary/20 text-primary"
                               : comment.role === "ai"
                                 ? "bg-purple-500/20 text-purple-600"
                                 : "bg-green-500/20 text-green-600"
@@ -192,7 +192,7 @@ export function AlertWithComments({
                 >
                   Анализ AI
                 </button>
-                <button className="flex-1 px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-600 text-xs font-medium rounded transition-colors">
+                <button className="flex-1 px-3 py-2 bg-primary/20 hover:bg-primary/30 text-primary text-xs font-medium rounded transition-colors">
                   Отправить франчайзи
                 </button>
               </div>

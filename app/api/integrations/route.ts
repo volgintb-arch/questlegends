@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       webhookUrl: i.webhook_url,
       assignmentStrategy: i.assignment_strategy,
       autoLeadCreation: i.auto_lead_creation,
-      credentials: i.credentials || {},
+      credentials: "***REDACTED***",
       lastMessageAt: i.last_message_at,
       createdAt: i.created_at,
       updatedAt: i.updated_at,
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ integrations: mapped })
   } catch (error) {
-    console.error("[v0] Error fetching integrations:", error)
+    console.error("[v0] Error fetching integrations:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
         is_active,
         priority
       ) VALUES (
-        ${integration.id}::uuid,
+        ${integration.id},
         'first_message',
         '{}'::text[],
         'any',
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ integration }, { status: 201 })
   } catch (error) {
-    console.error("[v0] Error creating integration:", error)
+    console.error("[v0] Error creating integration:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

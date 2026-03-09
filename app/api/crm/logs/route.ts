@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 
 export async function GET(request: NextRequest) {
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ logs })
   } catch (error) {
-    console.error("[v0] Error fetching CRM logs:", error)
+    console.error("[v0] Error fetching CRM logs:")
     return NextResponse.json({ error: "Internal error", logs: [] }, { status: 500 })
   }
 }

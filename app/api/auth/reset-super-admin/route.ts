@@ -5,39 +5,28 @@ import { prisma } from "@/lib/prisma"
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { apiKey } = body
+    const { apiKey, phone, password } = body
 
-    // Простая защита endpoint
     if (apiKey !== process.env.INTERNAL_API_KEY) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("[v0] Generating bcrypt hash for admin123...")
+    if (!phone || !password || password.length < 8) {
+      return NextResponse.json(
+        { error: "Phone and password (min 8 chars) are required" },
+        { status: 400 },
+      )
+    }
 
-    // Генерируем хэш для пароля admin123
-    const hashedPassword = await bcrypt.hash("admin123", 10)
-    console.log("[v0] Generated hash:", hashedPassword)
+    const hashedPassword = await bcrypt.hash(password, 12)
 
-    // Обновляем пароль супер-админа
-    const updatedUser = await prisma.user.update({
-      where: { phone: "+79000000000" },
-      data: { password: hashedPassword },
+    await prisma.user.update({
+      where: { phone },
+      data: { passwordHash: hashedPassword },
     })
 
-    console.log("[v0] Updated user:", updatedUser.phone)
-
-    return NextResponse.json({
-      success: true,
-      message: "Super admin password updated successfully",
-      hash: hashedPassword,
-    })
-  } catch (error: any) {
-    console.error("[v0] Error updating super admin password:", error)
-    return NextResponse.json(
-      {
-        error: error.message || "Failed to update password",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

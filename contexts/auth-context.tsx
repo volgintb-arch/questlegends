@@ -164,6 +164,7 @@ export interface User {
   description?: string
   telegram_id?: string
   whatsapp?: string
+  avatarUrl?: string
   permissions?: UserPermissions
 }
 
@@ -258,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const data = await response.json()
 
           let permissions: UserPermissions | undefined
-          if (data.user.role === "uk" || data.user.role === "uk_employee" || data.user.role === "super_admin") {
+          if (["uk", "uk_employee", "super_admin", "admin"].includes(data.user.role)) {
             permissions = await loadUserPermissions(data.user.id, storedToken)
           }
 
@@ -319,7 +320,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(data.token)
 
       let permissions: UserPermissions | undefined
-      if (data.user.role === "uk" || data.user.role === "uk_employee" || data.user.role === "super_admin") {
+      if (["uk", "uk_employee", "super_admin", "admin"].includes(data.user.role)) {
         permissions = await loadUserPermissions(data.user.id, data.token)
       }
 
@@ -417,6 +418,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           canViewNotifications: true,
         }
         return ukEmployeeDefaults[module]
+      }
+      return user.permissions[module]
+    }
+
+    // admin — check permissions (no finances by default)
+    if (user.role === "admin") {
+      if (!user.permissions) {
+        const adminDefaults: Record<keyof UserPermissions, boolean> = {
+          canViewDashboard: true,
+          canViewCrm: true,
+          canViewErp: false,
+          canViewKpi: true, // schedule access
+          canViewMessages: false,
+          canViewKnowledgeBase: true,
+          canViewUsers: false,
+          canViewAccess: false,
+          canViewNotifications: true,
+        }
+        return adminDefaults[module]
       }
       return user.permissions[module]
     }

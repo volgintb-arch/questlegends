@@ -14,13 +14,14 @@ const updateSchema = z.object({
   rescheduledReason: z.string().optional(),
 })
 
-export async function PATCH(request: Request, { params }: { params: { taskId: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ taskId: string }> }) {
   try {
     const user = await verifyRequest(request as any)
     if (!user) {
       return unauthorizedResponse()
     }
 
+    const { taskId } = await params
     const body = await request.json()
     const validation = updateSchema.safeParse(body)
 
@@ -29,7 +30,7 @@ export async function PATCH(request: Request, { params }: { params: { taskId: st
     }
 
     const task = await prisma.dealTask.findUnique({
-      where: { id: params.taskId },
+      where: { id: taskId },
       include: {
         deal: {
           include: {
@@ -61,7 +62,7 @@ export async function PATCH(request: Request, { params }: { params: { taskId: st
       updateData.rescheduledReason = validation.data.rescheduledReason
 
     const updatedTask = await prisma.dealTask.update({
-      where: { id: params.taskId },
+      where: { id: taskId },
       data: updateData,
       include: {
         deal: true,
@@ -72,20 +73,21 @@ export async function PATCH(request: Request, { params }: { params: { taskId: st
 
     return successResponse(updatedTask)
   } catch (error) {
-    console.error("[TASK_PATCH]", error)
+    console.error("[TASK_PATCH]")
     return errorResponse("Failed to update task", 500)
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { taskId: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ taskId: string }> }) {
   try {
     const user = await verifyRequest(request as any)
     if (!user) {
       return unauthorizedResponse()
     }
 
+    const { taskId } = await params
     const task = await prisma.dealTask.findUnique({
-      where: { id: params.taskId },
+      where: { id: taskId },
       include: {
         deal: true,
       },
@@ -101,12 +103,12 @@ export async function DELETE(request: Request, { params }: { params: { taskId: s
     }
 
     await prisma.dealTask.delete({
-      where: { id: params.taskId },
+      where: { id: taskId },
     })
 
     return successResponse({ message: "Task deleted" })
   } catch (error) {
-    console.error("[TASK_DELETE]", error)
+    console.error("[TASK_DELETE]")
     return errorResponse("Failed to delete task", 500)
   }
 }

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
 
 function getSql() {
@@ -14,7 +14,7 @@ async function getCurrentUser(request: NextRequest) {
 
   const token = authHeader.substring(7)
   try {
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
     if (!payload) return null
 
     return {
@@ -43,7 +43,6 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("[v0] Notifications API: GET request started")
 
     const user = await getCurrentUser(request)
     if (!user) {
@@ -155,14 +154,13 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: { notifications: transformed } })
   } catch (error) {
-    console.error("[v0] NOTIFICATIONS_GET error:", error)
+    console.error("[v0] NOTIFICATIONS_GET error:")
     return NextResponse.json({ success: true, data: { notifications: [] }, count: 0 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("[v0] Notifications API: POST request started")
 
     const user = await getCurrentUser(request)
     if (!user) {
@@ -189,7 +187,6 @@ export async function POST(request: NextRequest) {
       )
     `
 
-    console.log("[v0] Notification created successfully")
 
     return NextResponse.json({
       success: true,
@@ -210,7 +207,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[v0] NOTIFICATIONS_POST error:", error)
+    console.error("[v0] NOTIFICATIONS_POST error:")
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }

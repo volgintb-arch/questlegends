@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
@@ -12,7 +12,7 @@ async function getCurrentUser(request: NextRequest) {
 
   const token = authHeader.substring(7)
   try {
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
     if (!payload) return null
 
     return {
@@ -75,10 +75,11 @@ export async function GET(request: NextRequest) {
           ) sub
           ORDER BY partner_id, "createdAt" DESC
         )
-        SELECT 
+        SELECT
           lm.*,
           u.name as "partnerName",
           u.role as "partnerRole",
+          u."avatarUrl" as "partnerAvatar",
           (
             SELECT COUNT(*) FROM "Message" 
             WHERE "senderId" = lm.partner_id 
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data: conversations })
     }
   } catch (error) {
-    console.error("[v0] Messages GET error:", error)
+    console.error("[v0] Messages GET error:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[v0] Messages POST error:", error)
+    console.error("[v0] Messages POST error:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -179,7 +180,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Messages DELETE error:", error)
+    console.error("[v0] Messages DELETE error:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

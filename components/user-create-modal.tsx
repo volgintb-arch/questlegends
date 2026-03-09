@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth, type UserRole } from "@/contexts/auth-context"
 import { toast } from "@/hooks/use-toast"
 import { User, Phone, FileText, MapPin } from "lucide-react"
+import { PhoneInput } from "@/components/ui/phone-input"
 import { RF_CITIES } from "@/lib/constants/rf-cities"
 
 interface UserCreateModalProps {
@@ -41,6 +42,11 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
       { value: "franchisee", label: "Франчайзи" },
       { value: "own_point", label: "Собственная Точка" },
       { value: "uk_employee", label: "Сотрудник УК" },
+    )
+  } else if (currentUser.role === "uk_employee") {
+    availableRoles.push(
+      { value: "franchisee", label: "Франчайзи" },
+      { value: "own_point", label: "Собственная Точка" },
     )
   } else if (currentUser.role === "franchisee" || currentUser.role === "own_point") {
     availableRoles.push(
@@ -135,7 +141,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
 
       toast({
         title: "Пользователь создан",
-        description: `Логин: ${formData.phone}\nПароль: ${data.tempPassword || password}`,
+        description: `Логин: ${formData.phone}\nПароль: ${password}`,
       })
 
       onSuccess?.()
@@ -154,7 +160,10 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
   }
 
   const generatePassword = () => {
-    return Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase()
+    const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    let pwd = ""
+    for (let i = 0; i < 10; i++) pwd += chars[Math.floor(Math.random() * chars.length)]
+    return pwd
   }
 
   const resetForm = () => {
@@ -173,6 +182,9 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
     if (currentUser.role === "uk" || currentUser.role === "super_admin") {
       return "Создать франчайзи, собственную точку или сотрудника УК"
     }
+    if (currentUser.role === "uk_employee") {
+      return "Создать франчайзи или собственную точку"
+    }
     if (currentUser.role === "franchisee" || currentUser.role === "own_point") {
       return "Создать администратора или сотрудника"
     }
@@ -184,7 +196,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-sm">{getModalTitle()}</DialogTitle>
         </DialogHeader>
@@ -211,17 +223,13 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
             <Label htmlFor="phone" className="text-xs">
               Номер телефона <span className="text-red-500">*</span>
             </Label>
-            <div className="relative">
-              <Phone className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+7 (999) 123-45-67"
-                className="pl-7 h-8 text-xs"
-                required
-              />
-            </div>
+            <PhoneInput
+              id="phone"
+              value={formData.phone}
+              onChange={(v) => setFormData({ ...formData, phone: v })}
+              size="sm"
+              required
+            />
             <p className="text-[10px] text-muted-foreground">Будет использоваться как логин</p>
           </div>
 
@@ -246,7 +254,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
             </Select>
           </div>
 
-          {(currentUser.role === "uk" || currentUser.role === "super_admin") &&
+          {(currentUser.role === "uk" || currentUser.role === "super_admin" || currentUser.role === "uk_employee") &&
             (formData.role === "franchisee" || formData.role === "own_point") && (
               <div className="space-y-1">
                 <Label htmlFor="city" className="text-xs">
@@ -268,7 +276,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
                   </Select>
                 </div>
                 {formData.role === "own_point" && (
-                  <p className="text-[10px] text-blue-500">Собственная точка не платит роялти</p>
+                  <p className="text-[10px] text-primary">Собственная точка не платит роялти</p>
                 )}
               </div>
             )}
@@ -325,7 +333,11 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               placeholder="Автогенерация если пусто"
               className="h-8 text-xs"
+              minLength={8}
             />
+            {formData.password && formData.password.length > 0 && formData.password.length < 8 && (
+              <p className="text-[10px] text-red-500">Минимум 8 символов</p>
+            )}
           </div>
 
           <DialogFooter className="gap-2">

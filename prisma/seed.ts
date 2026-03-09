@@ -4,24 +4,35 @@ import bcrypt from "bcryptjs"
 const prisma = new PrismaClient()
 
 async function main() {
-  // Hash default password
   const defaultPassword = await bcrypt.hash("123456", 10)
+  const adminPassword = await bcrypt.hash("admin123", 10)
 
-  // 1. Create UK user
+  // 1. Create UK (head office) user
   const uk = await prisma.user.create({
     data: {
-      phone: "+79991111111",
-      passwordHash: defaultPassword,
-      name: "Иван Петров",
+      phone: "+79000000000",
+      passwordHash: adminPassword,
+      name: "Главный Администратор",
       role: "uk",
-      telegram: "@ivan_uk",
+      telegram: "@admin_uk",
       description: "Директор УК",
     },
   })
 
-  console.log("✅ Created UK user")
+  // Create AdminPermission for UK user
+  await prisma.adminPermission.create({
+    data: {
+      userId: uk.id,
+      canManagePersonnel: true,
+      canManageDeals: true,
+      canViewFinances: true,
+      canManageSchedule: true,
+    },
+  })
 
-  // 2. Create 4 franchisees with 12 locations total
+  console.log("Created UK user: +79000000000 / admin123")
+
+  // 2. Create 4 franchisees
   const franchisees = []
   const cities = ["Москва", "Санкт-Петербург", "Казань", "Екатеринбург"]
 
@@ -31,33 +42,27 @@ async function main() {
         name: `Франшиза ${cities[i]}`,
         city: cities[i],
         address: `ул. Ленина, ${i + 10}`,
-        kpi: {
-          create: {
-            targetRevenue: 1000000 + i * 200000,
-            targetGames: 50 + i * 10,
-            maxExpenses: 500000 + i * 100000,
-          },
-        },
-        telegramTemplates: {
-          create: [
-            {
-              type: "TWO_DAYS_BEFORE",
-              message: "Привет! Напоминаем, что через 2 дня вас ждёт квест. До встречи!",
-              isActive: true,
-            },
-            {
-              type: "AFTER_GAME",
-              message: "Спасибо за игру! Будем рады видеть вас снова!",
-              isActive: true,
-            },
-          ],
-        },
+        royaltyPercent: 10,
       },
     })
 
     franchisees.push(franchisee)
 
-    // Create franchisee user
+    // Create KPI for current month
+    const now = new Date()
+    await prisma.franchiseeKPI.create({
+      data: {
+        franchiseeId: franchisee.id,
+        periodType: "month",
+        periodNumber: now.getMonth() + 1,
+        periodYear: now.getFullYear(),
+        targetRevenue: 1000000 + i * 200000,
+        targetGames: 50 + i * 10,
+        maxExpenses: 500000 + i * 100000,
+      },
+    })
+
+    // Create franchisee owner user
     await prisma.user.create({
       data: {
         phone: `+7999222${i}${i}${i}${i}`,
@@ -70,69 +75,71 @@ async function main() {
     })
   }
 
-  console.log("✅ Created 4 franchisees")
+  console.log("Created 4 franchisees with owners")
 
   // 3. Create admins and personnel for each franchisee
-  for (const franchisee of franchisees) {
-    // 3 admins per franchisee
-    for (let j = 0; j < 3; j++) {
+  for (let fi = 0; fi < franchisees.length; fi++) {
+    const franchisee = franchisees[fi]
+    // 2 admins per franchisee
+    for (let j = 0; j < 2; j++) {
       const admin = await prisma.user.create({
         data: {
-          phone: `+7999${franchisee.id.slice(0, 3)}${j}${j}${j}`,
+          phone: `+78880${fi}${j}0${fi}${j}00`,
           passwordHash: defaultPassword,
-          name: `Администратор ${j + 1}`,
+          name: `Администратор ${j + 1} (${franchisee.city})`,
           role: "admin",
           franchiseeId: franchisee.id,
-          permissions: {
-            create: {
-              canCRM: true,
-              canExpenses: j === 0,
-              canSchedule: true,
-              canKnowledge: true,
-              canUsers: j === 0,
-            },
-          },
+        },
+      })
+
+      await prisma.adminPermission.create({
+        data: {
+          userId: admin.id,
+          canManagePersonnel: true,
+          canManageDeals: true,
+          canViewFinances: j === 0,
+          canManageSchedule: true,
         },
       })
     }
 
-    // 15 personnel per franchisee
-    const roles = ["animator", "host", "dj"] as const
-    for (let k = 0; k < 15; k++) {
-      const personnelUser = await prisma.user.create({
+    // 6 personnel per franchisee
+    const personnelRoles = ["animator", "host", "dj"] as const
+    for (let k = 0; k < 6; k++) {
+      const empUser = await prisma.user.create({
         data: {
-          phone: `+7999${franchisee.id.slice(4, 7)}${k}${k}`,
+          phone: `+77770${fi}${k}0${fi}${k}00`,
           passwordHash: defaultPassword,
-          name: `Сотрудник ${k + 1}`,
+          name: `Сотрудник ${k + 1} (${franchisee.city})`,
           role: "employee",
           franchiseeId: franchisee.id,
-          telegram: `@employee_${k}`,
+          telegram: `@emp_${fi}_${k}`,
         },
       })
 
       await prisma.personnel.create({
         data: {
           franchiseeId: franchisee.id,
-          name: `Сотрудник ${k + 1}`,
-          role: roles[k % 3],
-          phone: `+7999${franchisee.id.slice(4, 7)}${k}${k}`,
-          telegram: `@employee_${k}`,
-          userId: personnelUser.id,
+          name: empUser.name,
+          role: personnelRoles[k % 3],
+          phone: empUser.phone,
+          telegram: empUser.telegram,
+          userId: empUser.id,
         },
       })
     }
   }
 
-  console.log("✅ Created personnel for all franchisees")
+  console.log("Created admins and personnel")
 
-  // 4. Create 80 deals across all franchisees
+  // 4. Create deals across all franchisees
   const stages = ["NEW", "NEGOTIATION", "PREPAID", "SCHEDULED", "COMPLETED", "CANCELLED"] as const
   const sources = ["Instagram", "WhatsApp", "Telegram", "VK", "Сайт"]
 
   for (const franchisee of franchisees) {
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 15; i++) {
       const gameDate = new Date()
-      gameDate.setDate(gameDate.getDate() + Math.floor(Math.random() * 30))
+      gameDate.setDate(gameDate.getDate() + Math.floor(Math.random() * 30) - 10)
 
       const participants = 8 + Math.floor(Math.random() * 12)
       const checkPerPerson = 5000 + Math.floor(Math.random() * 3000)
@@ -142,9 +149,9 @@ async function main() {
       const deal = await prisma.deal.create({
         data: {
           title: `Игра ${i + 1}`,
-          stage: stage,
+          stage,
           source: sources[Math.floor(Math.random() * sources.length)],
-          priority: ["LOW", "MEDIUM", "HIGH"][Math.floor(Math.random() * 3)] as any,
+          priority: (["LOW", "MEDIUM", "HIGH"] as const)[Math.floor(Math.random() * 3)],
           clientName: `Клиент ${i + 1}`,
           clientPhone: `+7999${Math.random().toString().slice(2, 9)}`,
           clientTelegram: `@client_${i}`,
@@ -162,52 +169,52 @@ async function main() {
       // Create transaction for completed deals
       if (stage === "COMPLETED") {
         const revenue = participants * checkPerPerson
-        const fot = animatorsCount * 3000 + 5000 + 4000
-        const royalty = Math.floor(revenue * 0.07)
+        const royalty = Math.floor(revenue * (franchisee.royaltyPercent / 100))
 
         await prisma.transaction.create({
           data: {
             dealId: deal.id,
             franchiseeId: franchisee.id,
-            date: gameDate,
-            participants,
-            checkPerPerson,
-            revenue,
-            fot,
-            royalty,
+            amount: revenue,
+            paymentMethod: ["cash", "card", "transfer"][Math.floor(Math.random() * 3)],
+            paymentDate: gameDate,
+            royaltyAmount: royalty,
           },
         })
       }
     }
   }
 
-  console.log("✅ Created 80 deals with transactions")
+  console.log("Created 60 deals with transactions")
 
-  // 5. Create some expenses
+  // 5. Create expenses
+  const categories = ["Аренда", "Коммунальные услуги", "Маркетинг", "Оборудование", "Зарплата"]
+
   for (const franchisee of franchisees) {
-    const franchiseeUser = await prisma.user.findFirst({
+    const owner = await prisma.user.findFirst({
       where: { franchiseeId: franchisee.id, role: "franchisee" },
     })
 
-    if (franchiseeUser) {
-      const categories = ["Аренда", "Коммунальные услуги", "Маркетинг", "Оборудование"]
+    if (owner) {
       for (let i = 0; i < 5; i++) {
         await prisma.expense.create({
           data: {
             franchiseeId: franchisee.id,
             category: categories[i % categories.length],
             amount: 50000 + Math.floor(Math.random() * 100000),
-            description: `Расход ${i + 1}`,
-            date: new Date(),
-            createdById: franchiseeUser.id,
+            description: `Расход: ${categories[i % categories.length]}`,
+            createdById: owner.id,
           },
         })
       }
     }
   }
 
-  console.log("✅ Created expenses")
-  console.log("🎉 Seed completed successfully!")
+  console.log("Created expenses")
+  console.log("")
+  console.log("=== SEED COMPLETE ===")
+  console.log("Login: +79000000000 / admin123 (UK admin)")
+  console.log("Franchisee owners: +79992220000..3333 / 123456")
 }
 
 main()

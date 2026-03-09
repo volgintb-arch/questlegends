@@ -71,7 +71,7 @@ export async function GET(request: Request) {
 
     return successResponse(tasks)
   } catch (error) {
-    console.error("[TASKS_GET]", error)
+    console.error("[TASKS_GET]")
     return errorResponse("Failed to fetch tasks", 500)
   }
 }
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
 
     return successResponse(task, 201)
   } catch (error) {
-    console.error("[TASKS_POST]", error)
+    console.error("[TASKS_POST]")
     return errorResponse("Failed to create task", 500)
   }
 }
@@ -167,6 +167,6 @@ ${task.dueTime ? `⏳ *Дедлайн:* ${new Date(task.dueTime).toLocaleString(
       }),
     })
   } catch (error) {
-    console.error("[TELEGRAM_NOTIFICATION]", error)
+    console.error("[TELEGRAM_NOTIFICATION]")
   }
 }

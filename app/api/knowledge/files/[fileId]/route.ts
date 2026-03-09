@@ -1,10 +1,16 @@
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { type NextRequest, NextResponse } from "next/server"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
   try {
+    const user = await verifyRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { fileId } = await params
 
     // Получаем информацию о файле из базы данных
@@ -48,11 +54,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       headers: {
         "Content-Type": contentType,
         "Content-Disposition": `inline; filename="${encodeURIComponent(file.name)}"`,
-        "Cache-Control": "public, max-age=31536000",
+        "Cache-Control": "private, no-cache",
       },
     })
   } catch (error) {
-    console.error("[v0] Error proxying file:", error)
+    console.error("[knowledge-files] Error proxying file")
     return NextResponse.json({ error: "Failed to proxy file" }, { status: 500 })
   }
 }

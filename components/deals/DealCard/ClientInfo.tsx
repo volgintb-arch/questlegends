@@ -3,6 +3,7 @@
 import type React from "react"
 import { User, Phone, Link, MapPin, Edit3 } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { PhoneInput } from "@/components/ui/phone-input"
 import type { DealData, PipelineStage } from "./types"
 
 interface ClientInfoProps {
@@ -43,6 +44,23 @@ function EditableField({
     <div className="space-y-1">
       <label className="text-[10px] font-medium text-muted-foreground">{label}</label>
       {isEditing ? (
+        type === "tel" ? (
+          <div onBlur={(e) => {
+            // Only save if focus leaves the entire phone input area
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              setEditingField(null)
+              saveDeal({ [fieldKey]: dealData[fieldKey] })
+            }
+          }}>
+            <PhoneInput
+              size="sm"
+              value={(value as string) || ""}
+              onChange={(v) => {
+                setDealData({ ...dealData, [fieldKey]: v })
+              }}
+            />
+          </div>
+        ) : (
         <Input
           type={type}
           className="h-7 text-xs"
@@ -62,6 +80,7 @@ function EditableField({
           }}
           autoFocus
         />
+        )
       ) : (
         <div
           className="flex items-center gap-2 p-1.5 bg-muted/30 rounded cursor-pointer hover:bg-muted/50 transition-colors text-xs"

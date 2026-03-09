@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { DollarSign, Briefcase, Users, Edit3 } from "lucide-react"
+import { RussianRuble, Briefcase, Users, Edit3 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -97,8 +97,8 @@ export function FinancialInfo({
         Данные сделки
       </h3>
       <div className="space-y-2">
-        <EditableNumberField fieldKey="paushalnyyVznos" label="Паушальный взнос" icon={<DollarSign size={12} className="text-green-500" />} {...numFieldProps} />
-        <EditableNumberField fieldKey="investmentAmount" label="Сумма инвестиций" icon={<DollarSign size={12} className="text-blue-500" />} {...numFieldProps} />
+        <EditableNumberField fieldKey="paushalnyyVznos" label="Паушальный взнос" icon={<RussianRuble size={12} className="text-green-500" />} {...numFieldProps} />
+        <EditableNumberField fieldKey="investmentAmount" label="Сумма инвестиций" icon={<RussianRuble size={12} className="text-primary" />} {...numFieldProps} />
 
         {/* Lead Source */}
         <div className="space-y-1">

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { cookies } from "next/headers"
 
 export async function GET(request: NextRequest) {
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     // For now return empty array as there's no GameAssignment table yet
     return NextResponse.json([])
   } catch (error) {
-    console.error("[v0] Game assignments error:", error)
+    console.error("[v0] Game assignments error:")
     return NextResponse.json([])
   }
 }

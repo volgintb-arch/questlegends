@@ -99,7 +99,7 @@ export function AlertDetailModal({ isOpen, onClose, alert, onAddComment }: Alert
                       <span
                         className={`text-xs px-1.5 py-0.5 rounded ${
                           comment.role === "system"
-                            ? "bg-blue-500/20 text-blue-600"
+                            ? "bg-primary/20 text-primary"
                             : comment.role === "ai"
                               ? "bg-purple-500/20 text-purple-600"
                               : "bg-green-500/20 text-green-600"

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 
 export async function GET(request: NextRequest) {
@@ -27,7 +27,6 @@ export async function GET(request: NextRequest) {
       FROM "Franchisee" f
       LEFT JOIN "Transaction" t ON t."franchiseeId" = f.id
         AND t."createdAt" >= NOW() - INTERVAL '30 days'
-        AND t.type = 'income'
       GROUP BY f.id, f.name, f.city
       ORDER BY revenue DESC
       LIMIT 5

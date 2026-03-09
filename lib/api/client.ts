@@ -13,7 +13,7 @@ export class ApiError extends Error {
 
 async function getAuthToken(): Promise<string | null> {
   if (typeof window === "undefined") return null
-  return localStorage.getItem("auth_token")
+  return localStorage.getItem("auth-token")
 }
 
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -42,10 +42,12 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
   const data = await response.json()
 
   if (!response.ok) {
+    const errorMsg = data.error?.message || data.message || data.error || "An error occurred"
+    console.error(`[fetchApi] ${response.status} ${url}: ${typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg)}`)
     throw new ApiError(
-      data.error?.code || data.error || "UNKNOWN_ERROR",
-      data.error?.message || data.message || "An error occurred",
-      data.error?.details,
+      data.error?.code || (typeof data.error === "string" ? data.error : "UNKNOWN_ERROR"),
+      typeof errorMsg === "string" ? errorMsg : "An error occurred",
+      { status: response.status, url, ...data.error?.details },
     )
   }
 

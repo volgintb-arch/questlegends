@@ -18,6 +18,16 @@
     "@prisma/client": "5.8.1",
     "prisma": "5.8.1"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma",
+      "sharp",
+      "unrs-resolver"
+    ]
+  },
   "dependencies": {
     "@auth/core": "latest",
     "@hello-pangea/dnd": "^16.6.0",
@@ -76,6 +86,8 @@
     "next-auth": "4.24.13",
     "next-themes": "^0.4.6",
     "nodemailer": "latest",
+    "postgres": "^3.4.8",
+    "radix-ui": "^1.4.3",
     "react": "19.2.0",
     "react-day-picker": "9.8.0",
     "react-dom": "19.2.0",

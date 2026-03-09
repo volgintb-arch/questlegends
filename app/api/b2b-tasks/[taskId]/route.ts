@@ -2,7 +2,7 @@ import { verifyRequest } from "@/lib/simple-auth"
 import { prisma } from "@/lib/prisma"
 import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/utils/response"
 
-export async function PATCH(request: Request, { params }: { params: { taskId: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ taskId: string }> }) {
   try {
     const user = await verifyRequest(request as any)
     if (!user) {
@@ -14,12 +14,13 @@ export async function PATCH(request: Request, { params }: { params: { taskId: st
       return errorResponse("Only UK can update B2B tasks", 403)
     }
 
+    const { taskId } = await params
     const body = await request.json()
     const { title, description, assignedToUserId, startTime, dueTime, status, rescheduledTime, rescheduledReason } =
       body
 
     const existingTask = await prisma.b2BTask.findUnique({
-      where: { id: params.taskId },
+      where: { id: taskId },
       include: {
         b2bDeal: true,
         assignedTo: true,
@@ -56,7 +57,7 @@ export async function PATCH(request: Request, { params }: { params: { taskId: st
     if (rescheduledReason !== undefined) updateData.rescheduledReason = rescheduledReason
 
     const updatedTask = await prisma.b2BTask.update({
-      where: { id: params.taskId },
+      where: { id: taskId },
       data: updateData,
       include: {
         b2bDeal: true,
@@ -92,12 +93,12 @@ export async function PATCH(request: Request, { params }: { params: { taskId: st
 
     return successResponse(updatedTask)
   } catch (error) {
-    console.error("[B2B_TASK_PATCH]", error)
+    console.error("[B2B_TASK_PATCH]")
     return errorResponse("Failed to update B2B task", 500)
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { taskId: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ taskId: string }> }) {
   try {
     const user = await verifyRequest(request as any)
     if (!user) {
@@ -109,8 +110,9 @@ export async function DELETE(request: Request, { params }: { params: { taskId: s
       return errorResponse("Only UK can delete B2B tasks", 403)
     }
 
+    const { taskId } = await params
     const task = await prisma.b2BTask.findUnique({
-      where: { id: params.taskId },
+      where: { id: taskId },
     })
 
     if (!task) {
@@ -118,7 +120,7 @@ export async function DELETE(request: Request, { params }: { params: { taskId: s
     }
 
     await prisma.b2BTask.delete({
-      where: { id: params.taskId },
+      where: { id: taskId },
     })
 
     // Create activity record
@@ -134,7 +136,7 @@ export async function DELETE(request: Request, { params }: { params: { taskId: s
 
     return successResponse({ message: "Task deleted successfully" })
   } catch (error) {
-    console.error("[B2B_TASK_DELETE]", error)
+    console.error("[B2B_TASK_DELETE]")
     return errorResponse("Failed to delete B2B task", 500)
   }
 }
@@ -176,6 +178,6 @@ ${task.rescheduledReason ? `💬 *Причина:* ${task.rescheduledReason}` : 
       }),
     })
   } catch (error) {
-    console.error("[B2B_TASK_UPDATE_NOTIFICATION]", error)
+    console.error("[B2B_TASK_UPDATE_NOTIFICATION]")
   }
 }

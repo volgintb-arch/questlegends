@@ -149,7 +149,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
     if (user) {
       fetchPipelines()
     }
-  }, [user, getAuthHeaders])
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const fetchDeals = async () => {
@@ -590,7 +590,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
 
       {showFilters && (
         <div className="border-b p-3 bg-muted/30 shrink-0">
-          <div className="grid grid-cols-6 gap-2 mb-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-2">
             <div className="relative">
               <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
               <Input

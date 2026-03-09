@@ -1,17 +1,22 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(req.url)
     const franchiseeId = searchParams.get("franchiseeId")
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
     const personnelId = searchParams.get("personnelId")
 
-    console.log("[v0] Game schedule GET:", { franchiseeId, startDate, endDate, personnelId })
 
     if (personnelId) {
       const schedules = await sql`
@@ -35,7 +40,6 @@ export async function GET(req: NextRequest) {
         ORDER BY gs."gameDate", gs."gameTime"
       `
 
-      console.log("[v0] Schedules found for personnel:", schedules.length)
 
       return NextResponse.json({ success: true, data: schedules })
     }
@@ -89,12 +93,6 @@ export async function GET(req: NextRequest) {
       `
     }
 
-    console.log(
-      "[v0] Schedules found:",
-      schedules.length,
-      schedules.map((s) => ({ id: s.id, gameDate: s.gameDate, clientName: s.clientName })),
-    )
-
     // Get staff for each schedule
     for (const schedule of schedules) {
       const staff = await sql`
@@ -108,7 +106,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: schedules })
   } catch (error) {
-    console.error("[v0] Error fetching schedule:", error)
+    console.error("[v0] Error fetching schedule:")
     return NextResponse.json({ error: "Failed to fetch schedule" }, { status: 500 })
   }
 }

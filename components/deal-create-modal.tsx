@@ -2,7 +2,8 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { X, Save, User, MapPin, Phone, FileText, DollarSign, Link } from "lucide-react"
+import { X, Save, User, MapPin, Phone, FileText, RussianRuble, Link } from "lucide-react"
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useAuth } from "@/contexts/auth-context"
 import { RF_CITIES } from "@/lib/constants/rf-cities"
 
@@ -167,17 +168,12 @@ export function DealCreateModal({ isOpen, onClose, onCreated, pipeline, role }: 
             {/* Contact Phone */}
             <div className="space-y-1">
               <label className="text-[10px] font-medium text-foreground">Номер телефона *</label>
-              <div className="relative">
-                <Phone size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="tel"
-                  value={formData.contactPhone}
-                  onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                  placeholder="+7 (999) 123-45-67"
-                  className="w-full bg-background border border-border rounded pl-7 pr-2 py-1.5 text-xs outline-none focus:border-primary"
-                  required
-                />
-              </div>
+              <PhoneInput
+                value={formData.contactPhone}
+                onChange={(v) => setFormData({ ...formData, contactPhone: v })}
+                size="sm"
+                required
+              />
             </div>
 
             {/* Messenger Link */}
@@ -225,7 +221,7 @@ export function DealCreateModal({ isOpen, onClose, onCreated, pipeline, role }: 
             <div className="space-y-1">
               <label className="text-[10px] font-medium text-foreground">Паушальный взнос (₽)</label>
               <div className="relative">
-                <DollarSign size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <RussianRuble size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="number"
                   value={formData.paushalnyyVznos}
@@ -240,7 +236,7 @@ export function DealCreateModal({ isOpen, onClose, onCreated, pipeline, role }: 
             <div className="space-y-1">
               <label className="text-[10px] font-medium text-foreground">Сумма инвестиций (₽)</label>
               <div className="relative">
-                <DollarSign size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <RussianRuble size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="number"
                   value={formData.investmentAmount}

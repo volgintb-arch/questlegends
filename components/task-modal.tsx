@@ -119,6 +119,7 @@ export function TaskModal({ isOpen, onClose, dealId, task, personnel, onSave }: 
               id="title"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="Например: Подготовить отчёт"
               required
             />
           </div>
@@ -130,6 +131,7 @@ export function TaskModal({ isOpen, onClose, dealId, task, personnel, onSave }: 
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
+              placeholder="Подробности задачи..."
             />
           </div>
 
@@ -153,7 +155,7 @@ export function TaskModal({ isOpen, onClose, dealId, task, personnel, onSave }: 
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="startTime">
                 <Calendar className="inline w-4 h-4 mr-1" />

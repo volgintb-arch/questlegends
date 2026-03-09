@@ -1,15 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     const sql = neon(process.env.DATABASE_URL!)
 
     // Only allow deleting own messages
@@ -25,19 +25,19 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error deleting message:", error)
+    console.error("[v0] Error deleting message:")
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     const { content } = await request.json()
 
     if (!content || !content.trim()) {

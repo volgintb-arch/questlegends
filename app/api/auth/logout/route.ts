@@ -13,7 +13,7 @@ export async function POST(request: Request) {
 
     return response
   } catch (error) {
-    console.error("[v0] Logout error:", error)
+    console.error("[v0] Logout error:")
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

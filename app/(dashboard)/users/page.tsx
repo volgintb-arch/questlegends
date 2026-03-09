@@ -1,14 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserCreateModal } from "@/components/user-create-modal"
 import { UserEditModal } from "@/components/user-edit-modal"
 import { useAuth } from "@/contexts/auth-context"
-import { Search, UserPlus, Phone, Calendar, Pencil, Trash2 } from "lucide-react"
+import { Search, UserPlus, Phone, Calendar, Pencil, Trash2, Users, Building2, Briefcase, ShieldCheck, Music, Mic, PartyPopper } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 
 interface User {
@@ -26,6 +27,32 @@ interface User {
     name: string
     city: string
   }
+}
+
+const roleLabels: Record<string, string> = {
+  uk: "УК",
+  super_admin: "Суперадмин",
+  uk_employee: "Сотрудник УК",
+  franchisee: "Франчайзи",
+  own_point: "Собственная точка",
+  admin: "Администратор",
+  employee: "Сотрудник",
+  animator: "Аниматор",
+  host: "Ведущий",
+  dj: "DJ",
+}
+
+const roleBadgeVariants: Record<string, "default" | "secondary" | "outline"> = {
+  uk: "default",
+  super_admin: "default",
+  uk_employee: "secondary",
+  franchisee: "secondary",
+  own_point: "secondary",
+  admin: "outline",
+  employee: "outline",
+  animator: "outline",
+  host: "outline",
+  dj: "outline",
 }
 
 export default function UsersPage() {
@@ -57,18 +84,15 @@ export default function UsersPage() {
       // Filter based on current user role
       let filteredUsers = allUsers
       if (user?.role === "uk" || user?.role === "super_admin") {
-        // UK Owner видит всех подчинённых (кроме себя)
         filteredUsers = allUsers.filter(
           (u: User) => u.id !== user.id && ["uk_employee", "franchisee", "own_point", "admin", "employee", "animator", "host", "dj"].includes(u.role),
         )
       } else if (user?.role === "franchisee" || user?.role === "own_point") {
-        // Франчайзи видит только своих сотрудников
         filteredUsers = allUsers.filter(
           (u: User) =>
             u.franchisee?.id === user.franchiseeId && ["admin", "employee", "animator", "host", "dj"].includes(u.role),
         )
       } else if (user?.role === "admin") {
-        // Администратор видит только персонал своей точки
         filteredUsers = allUsers.filter(
           (u: User) =>
             u.franchisee?.id === user.franchiseeId && ["employee", "animator", "host", "dj"].includes(u.role),
@@ -109,29 +133,175 @@ export default function UsersPage() {
     }
   }
 
-  const getRoleBadge = (role: string) => {
-    const roleMap = {
-      uk: { label: "УК", variant: "default" as const },
-      uk_employee: { label: "Сотрудник УК", variant: "secondary" as const },
-      franchisee: { label: "Франчайзи", variant: "secondary" as const },
-      own_point: { label: "Собственная точка", variant: "secondary" as const },
-      admin: { label: "Администратор", variant: "outline" as const },
-      employee: { label: "Сотрудник", variant: "outline" as const },
-      animator: { label: "Аниматор", variant: "outline" as const },
-      host: { label: "Ведущий", variant: "outline" as const },
-      dj: { label: "DJ", variant: "outline" as const },
-    }
-    return roleMap[role as keyof typeof roleMap] || { label: role, variant: "outline" as const }
+  // Search filter
+  const filterBySearch = (list: User[]) => {
+    if (!searchQuery) return list
+    const query = searchQuery.toLowerCase()
+    return list.filter(
+      (u) =>
+        u.name.toLowerCase().includes(query) ||
+        u.phone?.toLowerCase().includes(query) ||
+        u.franchisee?.city?.toLowerCase().includes(query) ||
+        u.franchisee?.name?.toLowerCase().includes(query),
+    )
   }
 
-  const filteredUsers = users.filter((userItem) => {
-    const query = searchQuery.toLowerCase()
+  // Categorize users into tabs based on current user's role
+  const tabs = useMemo(() => {
+    const isUK = user?.role === "uk" || user?.role === "super_admin"
+    const isFranchisee = user?.role === "franchisee" || user?.role === "own_point"
+    const isAdmin = user?.role === "admin"
+
+    if (isUK) {
+      return [
+        {
+          id: "franchisees",
+          label: "Франчайзи",
+          icon: Building2,
+          roles: ["franchisee", "own_point"],
+          users: users.filter((u) => ["franchisee", "own_point"].includes(u.role)),
+        },
+        {
+          id: "uk_staff",
+          label: "Сотрудники УК",
+          icon: Briefcase,
+          roles: ["uk_employee"],
+          users: users.filter((u) => u.role === "uk_employee"),
+        },
+        {
+          id: "location_staff",
+          label: "Персонал локаций",
+          icon: Users,
+          roles: ["admin", "employee", "animator", "host", "dj"],
+          users: users.filter((u) => ["admin", "employee", "animator", "host", "dj"].includes(u.role)),
+        },
+      ]
+    }
+
+    if (isFranchisee) {
+      return [
+        {
+          id: "admins",
+          label: "Администраторы",
+          icon: ShieldCheck,
+          roles: ["admin"],
+          users: users.filter((u) => u.role === "admin"),
+        },
+        {
+          id: "animators",
+          label: "Аниматоры",
+          icon: PartyPopper,
+          roles: ["animator"],
+          users: users.filter((u) => u.role === "animator"),
+        },
+        {
+          id: "hosts",
+          label: "Ведущие",
+          icon: Mic,
+          roles: ["host"],
+          users: users.filter((u) => u.role === "host"),
+        },
+        {
+          id: "djs",
+          label: "Диджеи",
+          icon: Music,
+          roles: ["dj"],
+          users: users.filter((u) => u.role === "dj"),
+        },
+      ]
+    }
+
+    // Admin — single list, no tabs needed
+    if (isAdmin) {
+      return [
+        {
+          id: "staff",
+          label: "Персонал",
+          icon: Users,
+          roles: ["employee", "animator", "host", "dj"],
+          users: users.filter((u) => ["employee", "animator", "host", "dj"].includes(u.role)),
+        },
+      ]
+    }
+
+    return [{ id: "all", label: "Все", icon: Users, roles: [], users }]
+  }, [users, user?.role])
+
+  const renderUserCard = (userItem: User) => {
+    const variant = roleBadgeVariants[userItem.role] || "outline"
+    const label = roleLabels[userItem.role] || userItem.role
+
     return (
-      userItem.name.toLowerCase().includes(query) ||
-      userItem.phone?.toLowerCase().includes(query) ||
-      userItem.franchisee?.city.toLowerCase().includes(query)
+      <Card key={userItem.id} className="p-3">
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <h3 className="text-sm font-semibold">{userItem.name}</h3>
+            <div className="flex items-center gap-1.5 mt-1">
+              <Badge variant={variant} className="text-[9px] h-4">
+                {label}
+              </Badge>
+              {userItem.isActive ? (
+                <Badge variant="default" className="text-[9px] h-4 bg-green-500">
+                  Активен
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="text-[9px] h-4">
+                  Неактивен
+                </Badge>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-1">
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingUser(userItem)}>
+              <Pencil size={12} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-destructive"
+              onClick={() => handleDeleteUser(userItem.id)}
+            >
+              <Trash2 size={12} />
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-1 text-xs">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Phone size={10} />
+            <span>{userItem.phone}</span>
+          </div>
+          {userItem.franchisee && (
+            <p className="text-[10px] text-muted-foreground">
+              {userItem.franchisee.name} — {userItem.franchisee.city}
+            </p>
+          )}
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px]">
+            <Calendar size={10} />
+            <span>{new Date(userItem.createdAt).toLocaleDateString("ru-RU")}</span>
+          </div>
+        </div>
+      </Card>
     )
-  })
+  }
+
+  const renderUserGrid = (userList: User[]) => {
+    const filtered = filterBySearch(userList)
+    if (filtered.length === 0) {
+      return (
+        <div className="text-center py-8 text-xs text-muted-foreground">
+          {searchQuery ? "Не найдено" : "Нет пользователей"}
+        </div>
+      )
+    }
+    return (
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {filtered.map(renderUserCard)}
+      </div>
+    )
+  }
+
+  const useSingleTab = tabs.length === 1
 
   return (
     <div className="p-4 space-y-4">
@@ -151,7 +321,7 @@ export default function UsersPage() {
       <div className="relative">
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
         <Input
-          placeholder="Поиск..."
+          placeholder="Поиск по имени, телефону, городу..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-7 h-8 text-xs"
@@ -160,66 +330,33 @@ export default function UsersPage() {
 
       {isLoading ? (
         <div className="text-center py-8 text-xs text-muted-foreground">Загрузка...</div>
-      ) : filteredUsers.length === 0 ? (
-        <div className="text-center py-8 text-xs text-muted-foreground">
-          {searchQuery ? "Не найдено" : "Нет пользователей"}
-        </div>
+      ) : useSingleTab ? (
+        // Single tab — no Tabs wrapper needed
+        renderUserGrid(tabs[0].users)
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {filteredUsers.map((userItem) => {
-            const roleBadge = getRoleBadge(userItem.role)
-            return (
-              <Card key={userItem.id} className="p-3">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h3 className="text-sm font-semibold">{userItem.name}</h3>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <Badge variant={roleBadge.variant} className="text-[9px] h-4">
-                        {roleBadge.label}
-                      </Badge>
-                      {userItem.isActive ? (
-                        <Badge variant="default" className="text-[9px] h-4 bg-green-500">
-                          Активен
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="text-[9px] h-4">
-                          Неактивен
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingUser(userItem)}>
-                      <Pencil size={12} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-destructive"
-                      onClick={() => handleDeleteUser(userItem.id)}
-                    >
-                      <Trash2 size={12} />
-                    </Button>
-                  </div>
-                </div>
+        <Tabs defaultValue={tabs[0]?.id} className="space-y-3">
+          <TabsList className="h-9">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              const count = filterBySearch(tab.users).length
+              return (
+                <TabsTrigger key={tab.id} value={tab.id} className="text-xs gap-1.5 px-3">
+                  <Icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                  <Badge variant="secondary" className="text-[9px] h-4 ml-1 min-w-[18px] justify-center">
+                    {count}
+                  </Badge>
+                </TabsTrigger>
+              )
+            })}
+          </TabsList>
 
-                <div className="space-y-1 text-xs">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Phone size={10} />
-                    <span>{userItem.phone}</span>
-                  </div>
-                  {userItem.franchisee && (
-                    <p className="text-[10px] text-muted-foreground">{userItem.franchisee.city}</p>
-                  )}
-                  <div className="flex items-center gap-1.5 text-muted-foreground text-[10px]">
-                    <Calendar size={10} />
-                    <span>{new Date(userItem.createdAt).toLocaleDateString("ru-RU")}</span>
-                  </div>
-                </div>
-              </Card>
-            )
-          })}
-        </div>
+          {tabs.map((tab) => (
+            <TabsContent key={tab.id} value={tab.id}>
+              {renderUserGrid(tab.users)}
+            </TabsContent>
+          ))}
+        </Tabs>
       )}
 
       <UserCreateModal

@@ -4,10 +4,9 @@ import { IntegrationHub } from "@/lib/integration-hub/integration-hub"
 import { RoutingEngine } from "@/lib/integration-hub/routing-engine"
 import { LeadCreator } from "@/lib/integration-hub/lead-creator"
 
-export async function POST(request: NextRequest, { params }: { params: { channel: string; integrationId: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ channel: string; integrationId: string }> }) {
   try {
-    const { channel, integrationId } = params
-    console.log("[v0] Webhook received", { channel, integrationId })
+    const { channel, integrationId } = await params
 
     // Получить payload
     const payload = await request.json()
@@ -41,14 +40,14 @@ export async function POST(request: NextRequest, { params }: { params: { channel
 
     return NextResponse.json({ success: true, routing })
   } catch (error) {
-    console.error("[v0] Webhook error", error)
+    console.error("[v0] Webhook error")
     return NextResponse.json({ error: String(error) }, { status: 500 })
   }
 }
 
 // GET для верификации webhook (для некоторых платформ)
-export async function GET(request: NextRequest, { params }: { params: { channel: string; integrationId: string } }) {
-  const { channel } = params
+export async function GET(request: NextRequest, { params }: { params: Promise<{ channel: string; integrationId: string }> }) {
+  const { channel } = await params
   const searchParams = request.nextUrl.searchParams
 
   // Telegram webhook verification

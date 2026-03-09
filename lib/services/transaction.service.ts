@@ -36,7 +36,7 @@ export function generateIdempotencyKey(dealId: string, stage: string): string {
  * Create transaction from deal data
  * Implements idempotency to prevent duplicate transactions
  */
-export async function createTransactionFromDeal(deal: Deal, idempotencyKey?: string): Promise<TransactionResult> {
+export async function createTransactionFromDeal(deal: Deal, idempotencyKey?: string, royaltyPercent = 0.07): Promise<TransactionResult> {
   // Validate required fields
   if (!deal.participants || !deal.checkPerPerson) {
     throw new Error("Missing required fields: participants and checkPerPerson")
@@ -52,8 +52,8 @@ export async function createTransactionFromDeal(deal: Deal, idempotencyKey?: str
     djRate: deal.djRate || 0,
   }
 
-  // Calculate all financial metrics
-  const calculations = calculateAll(inputs)
+  // Calculate all financial metrics using franchisee-specific royalty percent
+  const calculations = calculateAll(inputs, 0, royaltyPercent)
 
   // Create historical rates snapshot
   const historicalRates = createHistoricalRates(inputs)

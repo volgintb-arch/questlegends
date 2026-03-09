@@ -1,6 +1,6 @@
 "use client"
 import {
-  DollarSign,
+  RussianRuble,
   Percent,
   Calendar,
   TrendingUp,
@@ -69,7 +69,7 @@ export function DashboardFranchisee() {
     completedGames: 0,
     upcomingGames: 0,
     totalFot: 0,
-    royaltyPercent: 7,
+    royaltyPercent: 0,
     royaltyAmount: 0,
     profit: 0,
     unreadNotifications: 0,
@@ -118,7 +118,7 @@ export function DashboardFranchisee() {
         notificationsList = notificationsData?.data?.notifications || []
       }
 
-      const royaltyPercent = franchiseeData?.data?.royaltyPercent ?? franchiseeData?.royaltyPercent ?? 7
+      const royaltyPercent = Number(franchiseeData?.data?.royaltyPercent ?? franchiseeData?.royaltyPercent) || 0
 
       const revenue = transactions
         .filter((t: any) => t.type === "income")
@@ -136,12 +136,14 @@ export function DashboardFranchisee() {
       ).length
 
       const today = new Date().toISOString().split("T")[0]
+      const closedTypes = ["completed", "lost", "won"]
+      const closedNames = ["завершен", "отменен", "проигран", "закрыт"]
       const upcoming = leads.filter(
         (l) =>
           l.gameDate &&
           l.gameDate >= today &&
-          l.stageType !== "completed" &&
-          !l.stageName?.toLowerCase().includes("завершен"),
+          !closedTypes.includes(l.stageType) &&
+          !closedNames.some((name) => l.stageName?.toLowerCase().includes(name)),
       )
 
       const sortedNotifications = Array.isArray(notificationsList)
@@ -171,7 +173,7 @@ export function DashboardFranchisee() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [user?.franchiseeId, getAuthHeaders])
+  }, [user?.franchiseeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (authLoading) return
@@ -184,30 +186,41 @@ export function DashboardFranchisee() {
   }
 
   const handleNotificationClick = async (notification: Notification) => {
-    console.log("[v0] Dashboard: Notification clicked:", notification.id, notification.relatedDealId)
+    // Mark as read
+    try {
+      await fetch(`/api/notifications/${notification.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ isRead: true }),
+      })
+
+      // Update local state so badge count syncs immediately
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notification.id ? { ...n, isRead: true } : n)),
+      )
+      setStats((prev) => ({
+        ...prev,
+        unreadNotifications: Math.max(0, prev.unreadNotifications - (notification.isRead ? 0 : 1)),
+      }))
+      // Sync header notification badge
+      window.dispatchEvent(new Event("refreshNotificationCount"))
+    } catch (e) {
+      console.error("[v0] Dashboard: Error marking notification as read:", e)
+    }
 
     if (notification.relatedDealId) {
-      try {
-        await fetch(`/api/notifications/${notification.id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthHeaders(),
-          },
-          body: JSON.stringify({ isRead: true }),
-        })
-        console.log("[v0] Dashboard: Notification marked as read")
-      } catch (e) {
-        console.error("[v0] Dashboard: Error marking notification as read:", e)
-      }
-
       const taskParam = notification.relatedTaskId ? `&taskId=${notification.relatedTaskId}` : ""
-      const url = `/crm?dealId=${notification.relatedDealId}${taskParam}`
-      console.log("[v0] Dashboard: Navigating to:", url)
-      router.push(url)
+      router.push(`/crm?dealId=${notification.relatedDealId}${taskParam}`)
     } else {
-      console.log("[v0] Dashboard: No relatedDealId in notification")
+      router.push("/notifications")
     }
+  }
+
+  const handleGameClick = (game: any) => {
+    router.push(`/crm?leadId=${game.id}`)
   }
 
   const isOwnPoint = user?.role === "own_point"
@@ -228,7 +241,7 @@ export function DashboardFranchisee() {
           <h1 className="text-2xl font-bold">Дашборд</h1>
           <p className="text-muted-foreground">
             Обзор ключевых показателей
-            {isOwnPoint && <span className="ml-2 text-blue-500">(Собственная точка)</span>}
+            {isOwnPoint && <span className="ml-2 text-primary">(Собственная точка)</span>}
           </p>
         </div>
         <Button variant="outline" size="icon" onClick={handleRefresh} disabled={refreshing}>
@@ -241,7 +254,7 @@ export function DashboardFranchisee() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Доход</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-500" />
+            <RussianRuble className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{stats.totalRevenue.toLocaleString("ru-RU")} ₽</div>
@@ -252,10 +265,10 @@ export function DashboardFranchisee() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Прибыль</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-500" />
+            <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className={cn("text-2xl font-bold", stats.profit >= 0 ? "text-blue-600" : "text-red-600")}>
+            <div className={cn("text-2xl font-bold", stats.profit >= 0 ? "text-primary" : "text-red-600")}>
               {isOwnPoint
                 ? (stats.totalRevenue - stats.totalFot).toLocaleString("ru-RU")
                 : stats.profit.toLocaleString("ru-RU")}{" "}
@@ -293,7 +306,7 @@ export function DashboardFranchisee() {
       </div>
 
       {/* Games Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Всего игр</CardTitle>
@@ -317,16 +330,16 @@ export function DashboardFranchisee() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Предстоящие</CardTitle>
-            <Calendar className="h-4 w-4 text-blue-500" />
+            <Calendar className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.upcomingGames}</div>
+            <div className="text-2xl font-bold text-primary">{stats.upcomingGames}</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Two columns: Upcoming Games and Notifications */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
         {/* Upcoming Games */}
         <Card>
           <CardHeader>
@@ -341,7 +354,7 @@ export function DashboardFranchisee() {
             ) : (
               <div className="space-y-3">
                 {upcomingGames.map((game) => (
-                  <div key={game.id} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                  <div key={game.id} onClick={() => handleGameClick(game)} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors">
                     <div>
                       <p className="font-medium">{game.clientName}</p>
                       <p className="text-sm text-muted-foreground">

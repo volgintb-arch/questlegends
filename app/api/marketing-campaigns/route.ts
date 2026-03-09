@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     const campaigns = await sql`SELECT * FROM "MarketingCampaign" ORDER BY "createdAt" DESC`
     return NextResponse.json(campaigns)
   } catch (error) {
-    console.error("Error fetching marketing campaigns:", error)
+    console.error("Error fetching marketing campaigns:")
     return NextResponse.json([])
   }
 }

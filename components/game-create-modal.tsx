@@ -2,7 +2,8 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { X, Save, User, Phone, Calendar, Users, DollarSign, FileText, Clock, Mic, Music } from "lucide-react"
+import { X, Save, User, Phone, Calendar, Users, RussianRuble, FileText, Clock, Mic, Music, ShoppingBag, Plus, Trash2 } from "lucide-react"
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useAuth } from "@/contexts/auth-context"
 
 interface Stage {
@@ -53,6 +54,7 @@ export function GameCreateModal({
     djsCount: "0",
     djRate: "2500",
   })
+  const [extrasItems, setExtrasItems] = useState<{ name: string; amount: string }[]>([])
 
   const totalAmount = Number(formData.playersCount) * Number(formData.packagePrice)
   const staffCost =
@@ -115,6 +117,10 @@ export function GameCreateModal({
         hostRate: Number(formData.hostRate),
         djsCount: Number(formData.djsCount),
         djRate: Number(formData.djRate),
+        extras: extrasItems.filter((i) => i.name.trim() || Number(i.amount) > 0).length > 0
+          ? JSON.stringify(extrasItems.filter((i) => i.name.trim() || Number(i.amount) > 0).map((i) => ({ name: i.name, amount: Number(i.amount) || 0 })))
+          : undefined,
+        extrasAmount: extrasItems.reduce((sum, i) => sum + (Number(i.amount) || 0), 0),
       }
 
       const response = await fetch("/api/game-leads", {
@@ -158,6 +164,7 @@ export function GameCreateModal({
         djsCount: "0",
         djRate: "2500",
       })
+      setExtrasItems([])
     } catch (error) {
       console.error("[v0] Failed to create game:", error)
       alert(`Ошибка при создании заявки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
@@ -181,7 +188,7 @@ export function GameCreateModal({
           <div className="space-y-2">
             <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Клиент</h3>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-foreground">ФИО клиента *</label>
                 <div className="relative">
@@ -199,16 +206,11 @@ export function GameCreateModal({
 
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-foreground">Телефон</label>
-                <div className="relative">
-                  <Phone size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="tel"
-                    value={formData.clientPhone}
-                    onChange={(e) => setFormData({ ...formData, clientPhone: e.target.value })}
-                    placeholder="+7 (999) 123-45-67"
-                    className="w-full bg-background border border-border rounded pl-7 pr-2 py-1.5 text-xs outline-none focus:border-primary"
-                  />
-                </div>
+                <PhoneInput
+                  value={formData.clientPhone}
+                  onChange={(v) => setFormData({ ...formData, clientPhone: v })}
+                  size="sm"
+                />
               </div>
             </div>
           </div>
@@ -217,7 +219,7 @@ export function GameCreateModal({
           <div className="space-y-2 pt-2 border-t border-border">
             <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Данные игры</h3>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-foreground">Дата игры *</label>
                 <div className="relative">
@@ -246,7 +248,7 @@ export function GameCreateModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-foreground">Количество игроков *</label>
                 <div className="relative">
@@ -257,6 +259,7 @@ export function GameCreateModal({
                     value={formData.playersCount}
                     onChange={(e) => setFormData({ ...formData, playersCount: e.target.value })}
                     className="w-full bg-background border border-border rounded pl-7 pr-2 py-1.5 text-xs outline-none focus:border-primary"
+                    placeholder="10"
                     required
                   />
                 </div>
@@ -265,13 +268,14 @@ export function GameCreateModal({
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-foreground">Цена за человека (₽) *</label>
                 <div className="relative">
-                  <DollarSign size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <RussianRuble size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="number"
                     min="0"
                     value={formData.packagePrice}
                     onChange={(e) => setFormData({ ...formData, packagePrice: e.target.value })}
                     className="w-full bg-background border border-border rounded pl-7 pr-2 py-1.5 text-xs outline-none focus:border-primary"
+                    placeholder="2500"
                     required
                   />
                 </div>
@@ -283,7 +287,7 @@ export function GameCreateModal({
             <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Персонал</h3>
 
             {/* Animators */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-foreground flex items-center gap-1">
                   <Users size={10} className="text-purple-500" /> Кол-во аниматоров
@@ -294,6 +298,7 @@ export function GameCreateModal({
                   value={formData.animatorsCount}
                   onChange={(e) => setFormData({ ...formData, animatorsCount: e.target.value })}
                   className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  placeholder="2"
                 />
               </div>
               <div className="space-y-1">
@@ -304,15 +309,16 @@ export function GameCreateModal({
                   value={formData.animatorRate}
                   onChange={(e) => setFormData({ ...formData, animatorRate: e.target.value })}
                   className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  placeholder="1500"
                 />
               </div>
             </div>
 
             {/* Hosts */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-foreground flex items-center gap-1">
-                  <Mic size={10} className="text-blue-500" /> Кол-во ведущих
+                  <Mic size={10} className="text-primary" /> Кол-во ведущих
                 </label>
                 <input
                   type="number"
@@ -320,6 +326,7 @@ export function GameCreateModal({
                   value={formData.hostsCount}
                   onChange={(e) => setFormData({ ...formData, hostsCount: e.target.value })}
                   className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  placeholder="1"
                 />
               </div>
               <div className="space-y-1">
@@ -330,12 +337,13 @@ export function GameCreateModal({
                   value={formData.hostRate}
                   onChange={(e) => setFormData({ ...formData, hostRate: e.target.value })}
                   className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  placeholder="2000"
                 />
               </div>
             </div>
 
             {/* DJs */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-foreground flex items-center gap-1">
                   <Music size={10} className="text-pink-500" /> Кол-во DJ
@@ -346,6 +354,7 @@ export function GameCreateModal({
                   value={formData.djsCount}
                   onChange={(e) => setFormData({ ...formData, djsCount: e.target.value })}
                   className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  placeholder="1"
                 />
               </div>
               <div className="space-y-1">
@@ -356,26 +365,90 @@ export function GameCreateModal({
                   value={formData.djRate}
                   onChange={(e) => setFormData({ ...formData, djRate: e.target.value })}
                   className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  placeholder="2500"
                 />
               </div>
             </div>
+          </div>
+
+          {/* Extras Section */}
+          <div className="space-y-2 pt-2 border-t border-border">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                <ShoppingBag size={10} className="text-orange-500" /> Допродажа
+              </h3>
+              <button
+                type="button"
+                onClick={() => setExtrasItems([...extrasItems, { name: "", amount: "" }])}
+                className="flex items-center gap-1 text-[10px] text-orange-500 hover:text-orange-400"
+              >
+                <Plus size={12} /> Добавить
+              </button>
+            </div>
+            {extrasItems.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground">Нажмите "Добавить" для допродажи</p>
+            ) : (
+              <div className="space-y-2">
+                {extrasItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={item.name}
+                      onChange={(e) => {
+                        const items = [...extrasItems]
+                        items[idx] = { ...items[idx], name: e.target.value }
+                        setExtrasItems(items)
+                      }}
+                      placeholder="Торт, конфетти, фотограф..."
+                      className="flex-1 bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      value={item.amount}
+                      onChange={(e) => {
+                        const items = [...extrasItems]
+                        items[idx] = { ...items[idx], amount: e.target.value }
+                        setExtrasItems(items)
+                      }}
+                      placeholder="₽"
+                      className="w-24 bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setExtrasItems(extrasItems.filter((_, i) => i !== idx))}
+                      className="text-destructive hover:text-destructive/80"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                {extrasItems.some((i) => Number(i.amount) > 0) && (
+                  <div className="flex justify-between text-xs text-orange-500 font-medium pt-1">
+                    <span>Итого допродажа</span>
+                    <span>+{extrasItems.reduce((s, i) => s + (Number(i.amount) || 0), 0).toLocaleString()} ₽</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Finance Section */}
           <div className="space-y-2 pt-2 border-t border-border">
             <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Финансы</h3>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-[10px] font-medium text-foreground">Предоплата (₽)</label>
                 <div className="relative">
-                  <DollarSign size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <RussianRuble size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="number"
                     min="0"
                     value={formData.prepayment}
                     onChange={(e) => setFormData({ ...formData, prepayment: e.target.value })}
                     className="w-full bg-background border border-border rounded pl-7 pr-2 py-1.5 text-xs outline-none focus:border-primary"
+                    placeholder="5000"
                   />
                 </div>
               </div>

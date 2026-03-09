@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
@@ -10,21 +10,30 @@ async function getCurrentUser(request: Request) {
     let token = authHeader?.replace("Bearer ", "")
 
     if (!token) {
-      const cookieStore = await cookies()
-      token = cookieStore.get("auth-token")?.value
+      try {
+        const cookieStore = await cookies()
+        token = cookieStore.get("auth-token")?.value
+      } catch {}
     }
 
-    if (!token) return null
+    if (!token) {
+      console.error("[deals] No token found. authHeader:", authHeader ? "present" : "missing")
+      return null
+    }
 
-    const payload = verifyToken(token)
-    if (!payload) return null
+    const payload = await verifyToken(token)
+    if (!payload) {
+      console.error("[deals] Token verification failed")
+      return null
+    }
 
     return {
       id: payload.userId as string,
       role: payload.role as string,
       franchiseeId: payload.franchiseeId as string | null,
     }
-  } catch {
+  } catch (e: any) {
+    console.error("[deals] getCurrentUser error:", e?.message)
     return null
   }
 }
@@ -36,7 +45,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("[v0] Deals API GET: user role:", user.role, "franchiseeId:", user.franchiseeId)
 
     const sql = neon(process.env.DATABASE_URL!)
     const { searchParams } = new URL(request.url)
@@ -45,7 +53,6 @@ export async function GET(request: Request) {
     const pipelineId = searchParams.get("pipelineId")
     const includeTasks = searchParams.get("includeTasks") === "true"
 
-    console.log("[v0] Deals API GET: pipelineId:", pipelineId, "franchiseeId param:", franchiseeId)
 
     let deals: any[]
 
@@ -55,7 +62,7 @@ export async function GET(request: Request) {
         SELECT 
           COUNT(*) as "taskCount",
           COUNT(*) FILTER (WHERE dt."isCompleted" = true) as "completedTaskCount",
-          COUNT(*) FILTER (WHERE dt."isCompleted" = false AND dt."dueDate" < NOW()) as "overdueTaskCount"
+          COUNT(*) FILTER (WHERE dt."isCompleted" = false AND dt."deadline" < NOW()) as "overdueTaskCount"
         FROM "DealTask" dt
         WHERE dt."dealId" = d.id
       ) tc ON true
@@ -84,7 +91,7 @@ export async function GET(request: Request) {
           LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
           ${taskCountsSubquery}
           WHERE d."franchiseeId" = ${user.franchiseeId}
-          ${pipelineId ? sql`AND d."pipelineId" = ${pipelineId}::uuid` : sql``}
+          ${pipelineId ? sql`AND d."pipelineId" = ${pipelineId}` : sql``}
           ${stage ? sql`AND d.stage = ${stage}` : sql``}
           ORDER BY d."createdAt" DESC
         `
@@ -100,7 +107,7 @@ export async function GET(request: Request) {
           LEFT JOIN "User" u ON d."responsibleId" = u.id
           LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
           ${taskCountsSubquery}
-          ${pipelineId ? sql`WHERE d."pipelineId" = ${pipelineId}::uuid` : sql``}
+          ${pipelineId ? sql`WHERE d."pipelineId" = ${pipelineId}` : sql``}
           ${stage && pipelineId ? sql`AND d.stage = ${stage}` : stage ? sql`WHERE d.stage = ${stage}` : sql``}
           ORDER BY d."createdAt" DESC
         `
@@ -118,7 +125,7 @@ export async function GET(request: Request) {
         LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
         ${taskCountsSubquery}
         WHERE d."franchiseeId" = ${franchiseeId}
-        ${pipelineId ? sql`AND d."pipelineId" = ${pipelineId}::uuid` : sql``}
+        ${pipelineId ? sql`AND d."pipelineId" = ${pipelineId}` : sql``}
         ${stage ? sql`AND d.stage = ${stage}` : sql``}
         ORDER BY d."createdAt" DESC
       `
@@ -134,13 +141,12 @@ export async function GET(request: Request) {
         LEFT JOIN "User" u ON d."responsibleId" = u.id
         LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
         ${taskCountsSubquery}
-        ${pipelineId ? sql`WHERE d."pipelineId" = ${pipelineId}::uuid` : sql``}
+        ${pipelineId ? sql`WHERE d."pipelineId" = ${pipelineId}` : sql``}
         ${stage && pipelineId ? sql`AND d.stage = ${stage}` : stage ? sql`WHERE d.stage = ${stage}` : sql``}
         ORDER BY d."createdAt" DESC
       `
     }
 
-    console.log("[v0] Deals API GET: Found", deals.length, "deals")
 
     const formattedDeals = deals.map((deal: any) => ({
       ...deal,
@@ -156,8 +162,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data: formattedDeals })
   } catch (error: any) {
-    console.error("DEALS_GET error:", error)
-    return NextResponse.json({ error: "Failed to fetch deals", details: error.message }, { status: 500 })
+    console.error("DEALS_GET error:", error?.message || error, error?.stack?.substring(0, 500))
+    return NextResponse.json({ error: "Failed to fetch deals" }, { status: 500 })
   }
 }
 
@@ -174,42 +180,45 @@ export async function POST(request: Request) {
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
 
+    const paushalnyyVznos = body.paushalnyyVznos ? parseInt(body.paushalnyyVznos, 10) : null
+    const investmentAmount = body.investmentAmount ? parseInt(body.investmentAmount, 10) : null
+
     await sql`
       INSERT INTO "Deal" (
-        id, 
+        id,
         "clientName",
-        "contactName", 
-        "contactPhone", 
-        "messengerLink", 
+        "contactName",
+        "contactPhone",
+        "messengerLink",
         "city",
         "paushalnyyVznos",
         "investmentAmount",
         "leadSource",
         "responsibleId",
         "additionalComment",
-        source, 
-        stage, 
-        "stageId", 
+        source,
+        stage,
+        "stageId",
         "pipelineId",
-        "createdAt", 
+        "createdAt",
         "updatedAt"
       ) VALUES (
-        ${id}, 
+        ${id},
         ${body.contactName || body.clientName || null},
         ${body.contactName || null},
         ${body.contactPhone || null},
         ${body.messengerLink || null},
         ${body.city || null},
-        ${body.paushalnyyVznos || null},
-        ${body.investmentAmount || null},
+        ${Number.isNaN(paushalnyyVznos) ? null : paushalnyyVznos},
+        ${Number.isNaN(investmentAmount) ? null : investmentAmount},
         ${body.leadSource || body.source || null},
         ${body.responsibleId || user.id},
         ${body.additionalComment || null},
         ${body.leadSource || body.source || null},
-        ${body.stage || "Новый"}, 
-        ${body.stageId ? sql`${body.stageId}::uuid` : sql`NULL`},
-        ${body.pipelineId ? sql`${body.pipelineId}::uuid` : sql`NULL`},
-        ${now}, 
+        ${body.stage || "Новый"},
+        ${body.stageId || null},
+        ${body.pipelineId || null},
+        ${now},
         ${now}
       )
     `
@@ -218,7 +227,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(deal, { status: 201 })
   } catch (error: any) {
-    console.error("DEALS_POST error:", error)
-    return NextResponse.json({ error: "Failed to create deal", details: error.message }, { status: 500 })
+    console.error("DEALS_POST error:", error?.message || error)
+    return NextResponse.json({ error: "Failed to create deal" }, { status: 500 })
   }
 }

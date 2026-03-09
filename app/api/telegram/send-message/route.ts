@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       telegramMessageId: result.result.message_id,
     })
   } catch (error) {
-    console.error("[TELEGRAM_SEND_MESSAGE]", error)
+    console.error("[TELEGRAM_SEND_MESSAGE]")
     return NextResponse.json(
       {
         error: "Internal server error",

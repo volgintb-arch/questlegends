@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
 
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ tasks })
   } catch (error) {
-    console.error("Error fetching tasks:", error)
+    console.error("Error fetching tasks:")
     return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 })
   }
 }
@@ -58,9 +58,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     `
 
     // Create event for task creation
+    const dealEventId = globalThis.crypto.randomUUID()
     await sql`
-      INSERT INTO "DealEvent" ("dealId", type, content, "userId", "userName", metadata)
-      VALUES (${dealId}, 'task', ${`Создана задача: ${title}`}, ${user.userId}, ${user.name}, ${JSON.stringify({ taskId: task.id })})
+      INSERT INTO "DealEvent" (id, "dealId", type, content, "userId", "userName", metadata)
+      VALUES (${dealEventId}, ${dealId}, 'task', ${`Создана задача: ${title}`}, ${user.userId}, ${user.name}, ${JSON.stringify({ taskId: task.id })})
     `
 
     if (assigneeId) {
@@ -79,7 +80,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           ${user.userId}, ${assigneeId}, ${dealId}, ${task.id}, false, false, ${now}, ${now}
         )
       `
-      console.log("[v0] Notification created for assignee:", assigneeId)
     }
 
     return NextResponse.json({
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       success: true,
     })
   } catch (error: any) {
-    console.error("[v0] Error creating task:", error.message)
-    return NextResponse.json({ error: "Failed to create task", details: error.message }, { status: 500 })
+    console.error("[v0] Error creating task:")
+    return NextResponse.json({ error: "Failed to create task" }, { status: 500 })
   }
 }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PhoneInput } from "@/components/ui/phone-input"
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -36,22 +37,22 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-mesh p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">QuestLegends OS</CardTitle>
+          <div className="flex justify-center mb-2">
+            <img src="/logo.png" alt="Легенда об Искателях" className="w-20 h-20 object-contain" />
+          </div>
           <CardDescription className="text-center">Войдите в систему управления</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="phone">Номер телефона</Label>
-              <Input
+              <PhoneInput
                 id="phone"
-                type="tel"
-                placeholder="+79000000000"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={setPhone}
                 required
                 disabled={loading}
               />

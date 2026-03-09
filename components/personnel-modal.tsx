@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { X, User, Phone, Mail, MapPin, Clock, MessageCircle, Save } from "lucide-react"
+import { PhoneInput } from "@/components/ui/phone-input"
 
 interface Staff {
   id: string
@@ -77,7 +78,7 @@ export function PersonnelModal({ isOpen, staff, onClose, onSave }: PersonnelModa
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div>
@@ -130,12 +131,9 @@ export function PersonnelModal({ isOpen, staff, onClose, onSave }: PersonnelModa
                 <Phone size={16} className="text-muted-foreground" />
                 Телефон
               </label>
-              <input
-                type="tel"
+              <PhoneInput
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-primary"
-                placeholder="+7 (999) 123-45-67"
+                onChange={(v) => setFormData({ ...formData, phone: v })}
               />
             </div>
 
@@ -196,9 +194,9 @@ export function PersonnelModal({ isOpen, staff, onClose, onSave }: PersonnelModa
               />
             </div>
 
-            <div className="md:col-span-2 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+            <div className="md:col-span-2 bg-primary/10 border border-primary/30 rounded-lg p-4">
               <label className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-                <MessageCircle size={16} className="text-blue-500" />
+                <MessageCircle size={16} className="text-primary" />
                 Telegram ID (для уведомлений)
               </label>
               <input

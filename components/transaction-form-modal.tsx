@@ -45,9 +45,7 @@ export function TransactionFormModal({
   }, [defaultType, transaction])
 
   const incomeCategories = [
-    { value: "prepayment", label: "Предоплата" },
-    { value: "postpayment", label: "Постоплата" },
-    { value: "other_income", label: "Прочий доход" },
+    { value: "extras", label: "Допродажа" },
   ]
 
   const expenseCategories = [
@@ -58,6 +56,7 @@ export function TransactionFormModal({
     { value: "rent", label: "Аренда" },
     { value: "marketing", label: "Маркетинг" },
     { value: "equipment", label: "Оборудование" },
+    { value: "consumables", label: "Расходные материалы" },
     { value: "other_expense", label: "Прочий расход" },
   ]
 

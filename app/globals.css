@@ -4,76 +4,76 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* QuestLegends OS 2.0 - Light Mode (rarely used) */
-  --background: oklch(0.98 0 0);
-  --foreground: oklch(0.15 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0 0);
-  --primary: oklch(0.35 0.15 265);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.15 0 0);
-  --muted: oklch(0.9 0 0);
-  --muted-foreground: oklch(0.5 0 0);
-  --accent: oklch(0.6 0.2 25);
-  --accent-foreground: oklch(1 0 0);
-  --destructive: oklch(0.6 0.2 25);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.92 0 0);
-  --input: oklch(0.95 0 0);
-  --ring: oklch(0.4 0.15 265);
-  --chart-1: oklch(0.4 0.15 265);
-  --chart-2: oklch(0.6 0.2 25);
-  --chart-3: oklch(0.5 0.15 145);
-  --chart-4: oklch(0.55 0.18 45);
-  --chart-5: oklch(0.45 0.12 310);
-  --radius: 0.5rem;
-  --sidebar: oklch(0.96 0 0);
-  --sidebar-foreground: oklch(0.15 0 0);
-  --sidebar-primary: oklch(0.35 0.15 265);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.6 0.2 25);
-  --sidebar-accent-foreground: oklch(1 0 0);
-  --sidebar-border: oklch(0.92 0 0);
-  --sidebar-ring: oklch(0.4 0.15 265);
+  /* Легенда об Искателях — Light Mode */
+  --background: #FAF8F5;
+  --foreground: #1C1A17;
+  --card: rgba(255, 255, 255, 0.75);
+  --card-foreground: #1C1A17;
+  --popover: rgba(255, 255, 255, 0.88);
+  --popover-foreground: #1C1A17;
+  --primary: #C45A2D;
+  --primary-foreground: #ffffff;
+  --secondary: rgba(196, 90, 45, 0.08);
+  --secondary-foreground: #3D2314;
+  --muted: rgba(0, 0, 0, 0.04);
+  --muted-foreground: #7A6E62;
+  --accent: #D4952B;
+  --accent-foreground: #ffffff;
+  --destructive: #DC2626;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.05);
+  --ring: #C45A2D;
+  --chart-1: #C45A2D;
+  --chart-2: #D4952B;
+  --chart-3: #5BA8A0;
+  --chart-4: #E8B84B;
+  --chart-5: #8B6914;
+  --radius: 0.625rem;
+  --sidebar: rgba(255, 252, 248, 0.7);
+  --sidebar-foreground: #1C1A17;
+  --sidebar-primary: #C45A2D;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(196, 90, 45, 0.1);
+  --sidebar-accent-foreground: #1C1A17;
+  --sidebar-border: rgba(0, 0, 0, 0.06);
+  --sidebar-ring: #C45A2D;
 }
 
 .dark {
-  /* QuestLegends OS 2.0 - Dark Mode (Primary) */
-  --background: #060606;
-  --foreground: #eeeeee;
-  --card: #121212;
-  --card-foreground: oklch(0.95 0 0);
-  --popover: #121212;
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: #ffffff;
-  --primary-foreground: rgb(25, 25, 25);
-  --secondary: #222222;
-  --secondary-foreground: oklch(0.95 0 0);
-  --muted: #2e2e2e;
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: #4aee34;
-  --accent-foreground: oklch(0.98 0 0);
-  --destructive: #39c500;
-  --destructive-foreground: oklch(0.95 0 0);
-  --border: #222222;
-  --input: #1b1b1b;
-  --ring: #d32963;
-  --chart-1: #d32963;
-  --chart-2: #4aee34;
-  --chart-3: #1a0078;
-  --chart-4: #00b13f;
-  --chart-5: #a87b4b;
-  --sidebar: #0b0b0b;
-  --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.5 0.2 265);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.62 0.22 25);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.25 0 0);
-  --sidebar-ring: oklch(0.5 0.2 265);
+  /* Легенда об Искателях — Dark Mode */
+  --background: #0F0D0A;
+  --foreground: #F0EBE4;
+  --card: rgba(255, 255, 255, 0.04);
+  --card-foreground: #F0EBE4;
+  --popover: rgba(22, 18, 14, 0.92);
+  --popover-foreground: #F0EBE4;
+  --primary: #E8884A;
+  --primary-foreground: #1C1A17;
+  --secondary: rgba(232, 136, 74, 0.1);
+  --secondary-foreground: #F0EBE4;
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: #A09486;
+  --accent: #E8B84B;
+  --accent-foreground: #1C1A17;
+  --destructive: #EF4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.06);
+  --ring: #E8884A;
+  --chart-1: #E8884A;
+  --chart-2: #E8B84B;
+  --chart-3: #6EC4BB;
+  --chart-4: #D4952B;
+  --chart-5: #C45A2D;
+  --sidebar: rgba(15, 13, 10, 0.85);
+  --sidebar-foreground: #F0EBE4;
+  --sidebar-primary: #E8884A;
+  --sidebar-primary-foreground: #1C1A17;
+  --sidebar-accent: rgba(232, 136, 74, 0.15);
+  --sidebar-accent-foreground: #F0EBE4;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #E8884A;
 }
 
 @theme inline {
@@ -124,7 +124,6 @@
   body {
     @apply bg-background text-foreground;
   }
-  /* Compact base font sizes */
   html {
     font-size: 14px;
   }
@@ -150,38 +149,158 @@
   }
 }
 
-/* QuestLegends custom styles */
-.quest-glow {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+/* ============================================
+   Легенда об Искателях — Glassmorphism Design
+   ============================================ */
+
+/* Glass base */
+.glass {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: var(--card);
+  border: 1px solid var(--border);
 }
 
+/* Glass card with hover glow */
+.glass-card {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: var(--card);
+  border: 1px solid var(--border);
+  transition: all 0.3s ease;
+}
+.glass-card:hover {
+  border-color: rgba(232, 136, 74, 0.2);
+  box-shadow: 0 4px 24px rgba(232, 136, 74, 0.08);
+}
+:root .glass-card:hover {
+  border-color: rgba(196, 90, 45, 0.15);
+  box-shadow: 0 4px 24px rgba(196, 90, 45, 0.06);
+}
+
+/* Glass sidebar */
+.glass-sidebar {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: var(--sidebar);
+  border-right: 1px solid var(--sidebar-border);
+}
+
+/* Glass header */
+.glass-header {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Glass popover/dropdown */
+.glass-popover {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: var(--popover);
+  border: 1px solid var(--border);
+}
+
+/* Gradient primary — warm gold-terracotta */
+.gradient-primary {
+  background: linear-gradient(135deg, #E8884A 0%, #C45A2D 100%);
+}
+:root .gradient-primary {
+  background: linear-gradient(135deg, #C45A2D 0%, #A0431E 100%);
+}
+
+/* Gradient text — gold */
+.gradient-primary-text {
+  background: linear-gradient(135deg, #E8B84B 0%, #D4952B 50%, #C45A2D 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+:root .gradient-primary-text {
+  background: linear-gradient(135deg, #D4952B 0%, #C45A2D 50%, #A0431E 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Warm glow */
+.glow-purple {
+  box-shadow: 0 0 20px rgba(232, 136, 74, 0.3), 0 0 40px rgba(212, 149, 43, 0.1);
+}
+.glow-purple-sm {
+  box-shadow: 0 0 10px rgba(232, 136, 74, 0.25);
+}
+:root .glow-purple {
+  box-shadow: 0 0 20px rgba(196, 90, 45, 0.25), 0 0 40px rgba(196, 90, 45, 0.08);
+}
+:root .glow-purple-sm {
+  box-shadow: 0 0 10px rgba(196, 90, 45, 0.2);
+}
+
+/* Mesh background */
+.bg-mesh {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(232, 136, 74, 0.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(212, 149, 43, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(91, 168, 160, 0.04) 0%, transparent 50%);
+}
+:root .bg-mesh {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(196, 90, 45, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(212, 149, 43, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(91, 168, 160, 0.03) 0%, transparent 50%);
+}
+
+/* Notification badge pulse */
+.notification-pulse {
+  animation: notification-pulse 2s infinite;
+}
+@keyframes notification-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232, 136, 74, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(232, 136, 74, 0); }
+}
+
+/* Critical pulse */
 .critical-pulse {
   animation: critical-pulse 2s infinite;
 }
-
 @keyframes critical-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(249, 115, 22, 0);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(196, 90, 45, 0.5); }
+  50% { box-shadow: 0 0 0 10px rgba(196, 90, 45, 0); }
 }
 
-/* Compact UI utilities */
+/* Glass scrollbar */
+.glass-sidebar::-webkit-scrollbar,
+.glass-card::-webkit-scrollbar {
+  width: 4px;
+}
+.glass-sidebar::-webkit-scrollbar-track,
+.glass-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+.glass-sidebar::-webkit-scrollbar-thumb,
+.glass-card::-webkit-scrollbar-thumb {
+  background: rgba(212, 149, 43, 0.25);
+  border-radius: 2px;
+}
+.glass-sidebar::-webkit-scrollbar-thumb:hover,
+.glass-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 149, 43, 0.45);
+}
+
+/* Compact utilities */
 .compact-card {
   @apply p-3 rounded-md;
 }
-
 .compact-input {
   @apply h-8 text-xs px-2;
 }
-
 .compact-button {
   @apply h-7 px-2 text-xs;
 }
-
 .compact-table th,
 .compact-table td {
   @apply py-1.5 px-2 text-xs;

@@ -3,7 +3,6 @@
  * Доступ только для SUPER_ADMIN (read-only)
  */
 
-import { neon } from "@neondatabase/serverless"
 import { sql } from "@/lib/db"
 
 export type AuditAction =

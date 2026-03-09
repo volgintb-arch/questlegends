@@ -4,7 +4,7 @@ import type React from "react"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { GripVertical } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { format } from "date-fns"
 
 import type { DealData, DealTask, FeedEvent, DealFile, Employee, DealCardAmoCRMProps } from "./types"
@@ -268,7 +268,7 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
     try {
       const formData = new FormData()
       formData.append("file", file)
-      const uploadResponse = await fetch("/api/upload", { method: "POST", body: formData })
+      const uploadResponse = await fetch("/api/upload", { method: "POST", headers: getAuthHeaders(), body: formData })
       if (!uploadResponse.ok) throw new Error("Failed to upload file to storage")
       const uploadedFile = await uploadResponse.json()
       const saveResponse = await fetch(`/api/deals/${deal.id}/files`, {
@@ -363,6 +363,7 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
     <>
       <Sheet open={isOpen} onOpenChange={onClose}>
         <SheetContent className="w-full max-w-6xl sm:max-w-6xl p-0 overflow-hidden">
+          <SheetTitle className="sr-only">Карточка сделки</SheetTitle>
           <Header
             dealData={dealData}
             setDealData={setDealData}

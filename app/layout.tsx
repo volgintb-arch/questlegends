@@ -11,9 +11,12 @@ const _ubuntu = V0_Font_Ubuntu({ subsets: ['latin'], weight: ["300","400","500",
 const _geistMono = V0_Font_Geist_Mono({ subsets: ['latin'], weight: ["100","200","300","400","500","600","700","800","900"] })
 
 export const metadata: Metadata = {
-  title: "QuestLegends OS 2.0 - Dashboard",
-  description: "Professional Quest Management System Dashboard",
-  generator: "v0.app",
+  title: "Легенда об Искателях",
+  description: "Система управления квест-франшизой",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 }
 
 export default function RootLayout({

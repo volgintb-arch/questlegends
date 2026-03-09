@@ -1,10 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await verifyRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { id } = await params
 
     const games = await sql`
@@ -36,13 +42,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true, game: games[0] })
   } catch (error) {
-    console.error("[v0] Game GET error:", error)
+    console.error("[v0] Game GET error:")
     return NextResponse.json({ success: false, error: "Failed to fetch game" }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await verifyRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { id } = await params
     const body = await request.json()
 
@@ -87,13 +98,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true, game: result[0] })
   } catch (error) {
-    console.error("[v0] Game PUT error:", error)
+    console.error("[v0] Game PUT error:")
     return NextResponse.json({ success: false, error: "Failed to update game" }, { status: 500 })
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await verifyRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { id } = await params
 
     await sql`DELETE FROM "GameStaff" WHERE "gameId" = ${id}`
@@ -101,7 +117,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Game DELETE error:", error)
+    console.error("[v0] Game DELETE error:")
     return NextResponse.json({ success: false, error: "Failed to delete game" }, { status: 500 })
   }
 }

@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
 
@@ -33,31 +33,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     return NextResponse.json({ data: task })
   } catch (error) {
-    console.error("Error updating task:", error)
+    console.error("Error updating task:")
     return NextResponse.json({ error: "Failed to update task" }, { status: 500 })
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string; taskId: string }> }) {
   try {
-    console.log("[v0] Delete task API called")
     const user = await verifyRequest(request)
     if (!user) {
-      console.log("[v0] Delete task - unauthorized")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { id, taskId } = await params
-    console.log("[v0] Deleting task:", taskId, "from deal:", id)
 
     // Get task info before delete
     const [task] = await sql`
-      SELECT title FROM "DealTask" WHERE id = ${taskId}::uuid
+      SELECT title FROM "DealTask" WHERE id = ${taskId}
     `
 
     await sql`
       DELETE FROM "DealTask"
-      WHERE id = ${taskId}::uuid AND "dealId" = ${id}
+      WHERE id = ${taskId} AND "dealId" = ${id}
     `
 
     // Create delete event
@@ -68,10 +65,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       `
     }
 
-    console.log("[v0] Task deleted successfully")
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error deleting task:", error)
+    console.error("[v0] Error deleting task:")
     return NextResponse.json({ error: "Failed to delete task" }, { status: 500 })
   }
 }

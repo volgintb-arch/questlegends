@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
@@ -7,6 +7,12 @@ const sql = neon(process.env.DATABASE_URL!)
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
+    const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const ukRoles = ["uk", "super_admin", "uk_employee"]
 
     const [transaction] = await sql`
       SELECT t.*, f.name as "franchiseeName"
@@ -19,9 +25,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
     }
 
+    if (!ukRoles.includes(user.role) && transaction.franchiseeId !== user.franchiseeId) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 })
+    }
+
     return NextResponse.json({ success: true, transaction })
   } catch (error) {
-    console.error("[v0] Error fetching transaction:", error)
+    console.error("[v0] Error fetching transaction:")
     return NextResponse.json({ error: "Failed to fetch transaction" }, { status: 500 })
   }
 }
@@ -30,28 +40,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params
     const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     const body = await req.json()
+
+    const ukRoles = ["uk", "super_admin", "uk_employee"]
 
     const [existing] = await sql`SELECT * FROM "Transaction" WHERE id = ${id}`
     if (!existing) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
     }
 
-    // Check permissions - user can only edit their franchisee's transactions
-    if (user?.role === "franchisee" && existing.franchiseeId !== user.franchiseeId) {
+    // Check permissions - non-UK users can only edit their franchisee's transactions
+    if (!ukRoles.includes(user.role) && existing.franchiseeId !== user.franchiseeId) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
-    const { type, amount, category, description, date } = body
+    const { amount, paymentMethod, notes, paymentDate, royaltyAmount } = body
 
     await sql`
       UPDATE "Transaction"
-      SET 
-        type = ${type || existing.type},
+      SET
         amount = ${amount !== undefined ? amount : existing.amount},
-        category = ${category || existing.category},
-        description = ${description !== undefined ? description : existing.description},
-        date = ${date || existing.date}
+        "paymentMethod" = ${paymentMethod || existing.paymentMethod},
+        notes = ${notes !== undefined ? notes : existing.notes},
+        "paymentDate" = ${paymentDate || existing.paymentDate},
+        "royaltyAmount" = ${royaltyAmount !== undefined ? royaltyAmount : existing.royaltyAmount}
       WHERE id = ${id}
     `
 
@@ -59,7 +74,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ success: true, transaction: updated })
   } catch (error) {
-    console.error("[v0] Error updating transaction:", error)
+    console.error("[v0] Error updating transaction:")
     return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 })
   }
 }
@@ -68,14 +83,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const { id } = await params
     const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const ukRoles = ["uk", "super_admin", "uk_employee"]
 
     const [existing] = await sql`SELECT * FROM "Transaction" WHERE id = ${id}`
     if (!existing) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
     }
 
-    // Check permissions - user can only delete their franchisee's transactions
-    if (user?.role === "franchisee" && existing.franchiseeId !== user.franchiseeId) {
+    // Check permissions - non-UK users can only delete their franchisee's transactions
+    if (!ukRoles.includes(user.role) && existing.franchiseeId !== user.franchiseeId) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
@@ -83,7 +103,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error deleting transaction:", error)
+    console.error("[v0] Error deleting transaction:")
     return NextResponse.json({ error: "Failed to delete transaction" }, { status: 500 })
   }
 }

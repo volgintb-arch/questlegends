@@ -108,7 +108,7 @@ export function IncidentModal({ incident, locationId, personnel, onClose }: Inci
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Серьезность *</Label>
               <Select
@@ -143,7 +143,7 @@ export function IncidentModal({ incident, locationId, personnel, onClose }: Inci
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Ответственный сотрудник</Label>
               <Select
@@ -184,7 +184,7 @@ export function IncidentModal({ incident, locationId, personnel, onClose }: Inci
             </div>
 
             {uploadedFiles.length > 0 && (
-              <div className="grid grid-cols-4 gap-2 mt-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
                 {uploadedFiles.map((file, index) => (
                   <div key={index} className="relative group">
                     <img

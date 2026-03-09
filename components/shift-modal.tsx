@@ -70,7 +70,7 @@ export function ShiftModal({ shift, personnel, locationId, onClose, defaultDate 
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-auto">
+      <div className="bg-background rounded-lg shadow-lg max-w-[95vw] sm:max-w-2xl w-full max-h-[90vh] overflow-auto">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold">{shift ? "Редактировать смену" : "Новая смена"}</h2>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -79,7 +79,7 @@ export function ShiftModal({ shift, personnel, locationId, onClose, defaultDate 
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Сотрудник *</Label>
               <Select
@@ -110,7 +110,7 @@ export function ShiftModal({ shift, personnel, locationId, onClose, defaultDate 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Начало *</Label>
               <Input
@@ -132,7 +132,7 @@ export function ShiftModal({ shift, personnel, locationId, onClose, defaultDate 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Роль *</Label>
               <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
@@ -166,7 +166,7 @@ export function ShiftModal({ shift, personnel, locationId, onClose, defaultDate 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Перерыв (минуты)</Label>
               <Input
@@ -179,6 +179,7 @@ export function ShiftModal({ shift, personnel, locationId, onClose, defaultDate 
                   })
                 }
                 min="0"
+                placeholder="30"
               />
             </div>
 
@@ -195,6 +196,7 @@ export function ShiftModal({ shift, personnel, locationId, onClose, defaultDate 
                   })
                 }
                 min="0"
+                placeholder="0"
               />
             </div>
           </div>
@@ -205,6 +207,7 @@ export function ShiftModal({ shift, personnel, locationId, onClose, defaultDate 
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
+              placeholder="Заметки о смене..."
             />
           </div>
 

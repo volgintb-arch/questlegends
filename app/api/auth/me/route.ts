@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     const users = await sql`
       SELECT 
         u.id, u.phone, u.name, u.role, u."isActive", u."franchiseeId", u.email,
+        u."avatarUrl", u."telegramId", u.telegram,
         f.name as "franchiseeName", f.city as "franchiseeCity"
       FROM "User" u
       LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
@@ -35,13 +36,15 @@ export async function GET(request: NextRequest) {
         name: user.name,
         role: user.role,
         email: user.email,
+        avatarUrl: user.avatarUrl || null,
+        telegram_id: user.telegramId || user.telegram || "",
         franchiseeId: user.franchiseeId,
         franchiseeName: user.franchiseeName,
         franchiseeCity: user.franchiseeCity,
       },
     })
   } catch (error: any) {
-    console.error("[v0] Auth me error:", error)
+    console.error("[v0] Auth me error:")
     return NextResponse.json({ error: "Invalid token" }, { status: 401 })
   }
 }

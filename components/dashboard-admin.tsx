@@ -1,6 +1,6 @@
 "use client"
 
-import { DollarSign, TrendingDown, Users, AlertTriangle, Plus } from "lucide-react"
+import { RussianRuble, TrendingDown, Users, AlertTriangle, Plus } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -159,7 +159,7 @@ export function DashboardAdmin() {
               <p className="text-sm text-muted-foreground mb-1">Общая Выручка</p>
               <p className="text-3xl font-bold text-foreground">{metrics.revenue.toLocaleString()} ₽</p>
             </div>
-            <DollarSign size={24} className="text-primary" />
+            <RussianRuble size={24} className="text-primary" />
           </div>
           <p className="text-xs text-muted-foreground">За текущий период</p>
         </div>

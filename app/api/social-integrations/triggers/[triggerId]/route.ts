@@ -3,7 +3,7 @@ import { verifyRequest } from "@/lib/simple-auth"
 import { sql } from "@/lib/db"
 
 // PUT /api/social-integrations/triggers/[triggerId] - update trigger
-export async function PUT(req: NextRequest, { params }: { params: { triggerId: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ triggerId: string }> }) {
   try {
     const user = await verifyRequest(req)
     if (!user) {
@@ -21,7 +21,7 @@ export async function PUT(req: NextRequest, { params }: { params: { triggerId: s
           keywords = COALESCE(${body.keyword ? [body.keyword] : null}::text[], keywords),
           is_active = COALESCE(${body.isActive ?? null}::boolean, is_active),
           priority = COALESCE(${body.priority ?? null}::integer, priority)
-        WHERE id = ${triggerId}::uuid
+        WHERE id = ${triggerId}
         RETURNING 
           id,
           integration_id as "configId",
@@ -63,13 +63,13 @@ export async function PUT(req: NextRequest, { params }: { params: { triggerId: s
 
     return NextResponse.json({ error: "Trigger not found" }, { status: 404 })
   } catch (error) {
-    console.error("[v0] Error updating trigger:", error)
+    console.error("[v0] Error updating trigger:")
     return NextResponse.json({ error: "Failed to update trigger" }, { status: 500 })
   }
 }
 
 // DELETE /api/social-integrations/triggers/[triggerId] - delete trigger
-export async function DELETE(req: NextRequest, { params }: { params: { triggerId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ triggerId: string }> }) {
   try {
     const user = await verifyRequest(req)
     if (!user) {
@@ -80,7 +80,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { triggerId
 
     // Try new table first
     try {
-      await sql`DELETE FROM triggerrule WHERE id = ${triggerId}::uuid`
+      await sql`DELETE FROM triggerrule WHERE id = ${triggerId}`
       return NextResponse.json({ success: true, message: "Trigger deleted" })
     } catch {
       // UUID cast might fail
@@ -96,7 +96,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { triggerId
 
     return NextResponse.json({ error: "Trigger not found" }, { status: 404 })
   } catch (error) {
-    console.error("[v0] Error deleting trigger:", error)
+    console.error("[v0] Error deleting trigger:")
     return NextResponse.json({ error: "Failed to delete trigger" }, { status: 500 })
   }
 }

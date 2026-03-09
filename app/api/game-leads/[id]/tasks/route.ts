@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ success: true, data: tasks })
   } catch (error) {
-    console.error("[v0] Error fetching tasks:", error)
+    console.error("[v0] Error fetching tasks:")
     return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 })
   }
 }
@@ -44,15 +44,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       recipientId = user.userId
     }
 
+    const gameLeadTaskId = globalThis.crypto.randomUUID()
     const [task] = await sql`
-      INSERT INTO "GameLeadTask" ("leadId", title, description, "assigneeId", "assigneeName", deadline, "createdById")
-      VALUES (${id}, ${title}, ${description || null}, ${recipientId}, ${assigneeName}, ${deadlineValue}, ${user?.userId || null})
+      INSERT INTO "GameLeadTask" (id, "leadId", title, description, "assigneeId", "assigneeName", deadline, "createdById")
+      VALUES (${gameLeadTaskId}, ${id}, ${title}, ${description || null}, ${recipientId}, ${assigneeName}, ${deadlineValue}, ${user?.userId || null})
       RETURNING *
     `
 
+    const gameLeadEventId = globalThis.crypto.randomUUID()
     await sql`
-      INSERT INTO "GameLeadEvent" ("leadId", type, content, "userId", "userName")
-      VALUES (${id}, 'task', ${"Создана задача: " + title + (assigneeName ? " (исполнитель: " + assigneeName + ")" : "")}, ${user?.userId || null}, ${user?.name || null})
+      INSERT INTO "GameLeadEvent" (id, "leadId", type, content, "userId", "userName")
+      VALUES (${gameLeadEventId}, ${id}, 'task', ${"Создана задача: " + title + (assigneeName ? " (исполнитель: " + assigneeName + ")" : "")}, ${user?.userId || null}, ${user?.name || null})
     `
 
     const [gameLead] = await sql`SELECT "clientName", "franchiseeId" FROM "GameLead" WHERE id = ${id}`
@@ -91,7 +93,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ success: true, data: task })
   } catch (error) {
-    console.error("[v0] Error creating task:", error)
+    console.error("[v0] Error creating task:")
     return NextResponse.json({ error: "Failed to create task" }, { status: 500 })
   }
 }

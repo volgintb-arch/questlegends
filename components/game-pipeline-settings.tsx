@@ -29,8 +29,8 @@ interface Pipeline {
 
 const COLORS = [
   "#6B7280",
-  "#3B82F6",
   "#8B5CF6",
+  "#3B82F6",
   "#EC4899",
   "#F59E0B",
   "#10B981",
@@ -41,11 +41,14 @@ const COLORS = [
 ]
 
 interface GamePipelineSettingsProps {
+  franchiseeId?: string
+  onUpdate?: () => void
   onPipelineCreated?: (pipelineId: string) => void
 }
 
-export function GamePipelineSettings({ onPipelineCreated }: GamePipelineSettingsProps) {
+export function GamePipelineSettings({ franchiseeId: propFranchiseeId, onUpdate, onPipelineCreated }: GamePipelineSettingsProps) {
   const { getAuthHeaders, user } = useAuth()
+  const activeFranchiseeId = propFranchiseeId || user?.franchiseeId
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPipeline, setSelectedPipeline] = useState<Pipeline | null>(null)
@@ -62,7 +65,7 @@ export function GamePipelineSettings({ onPipelineCreated }: GamePipelineSettings
   const fetchPipelines = async () => {
     try {
       const params = new URLSearchParams()
-      if (user?.franchiseeId) params.append("franchiseeId", user.franchiseeId)
+      if (activeFranchiseeId) params.append("franchiseeId", activeFranchiseeId)
       params.append("type", "games")
 
       const res = await fetch(`/api/game-pipelines?${params.toString()}`, { headers: getAuthHeaders() })
@@ -89,7 +92,7 @@ export function GamePipelineSettings({ onPipelineCreated }: GamePipelineSettings
         headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newPipelineName,
-          franchiseeId: user?.franchiseeId,
+          franchiseeId: activeFranchiseeId,
         }),
       })
       const data = await res.json()
@@ -100,6 +103,9 @@ export function GamePipelineSettings({ onPipelineCreated }: GamePipelineSettings
         setShowCreateModal(false)
         if (onPipelineCreated) {
           onPipelineCreated(data.data.id)
+        }
+        if (onUpdate) {
+          onUpdate()
         }
       }
     } catch (error) {

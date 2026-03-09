@@ -70,7 +70,7 @@ export async function GET(request: Request) {
 
     return successResponse(tasks)
   } catch (error) {
-    console.error("[B2B_TASKS_GET]", error)
+    console.error("[B2B_TASKS_GET]")
     return errorResponse("Failed to fetch B2B tasks", 500)
   }
 }
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
 
     return successResponse(task, 201)
   } catch (error) {
-    console.error("[B2B_TASKS_POST]", error)
+    console.error("[B2B_TASKS_POST]")
     return errorResponse("Failed to create B2B task", 500)
   }
 }
@@ -197,6 +197,6 @@ ${task.dueTime ? `⏳ *Дедлайн:* ${new Date(task.dueTime).toLocaleString(
       }),
     })
   } catch (error) {
-    console.error("[B2B_TELEGRAM_NOTIFICATION]", error)
+    console.error("[B2B_TELEGRAM_NOTIFICATION]")
   }
 }

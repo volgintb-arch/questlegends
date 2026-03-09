@@ -1,32 +1,31 @@
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     const stages = await sql`
       SELECT * FROM "PipelineStage"
-      WHERE "pipelineId" = ${id}::uuid
-      ORDER BY "order" ASC
+      WHERE "pipelineId" = ${id}      ORDER BY "order" ASC
     `
 
     return NextResponse.json({ data: stages })
   } catch (error) {
-    console.error("Error fetching stages:", error)
+    console.error("Error fetching stages:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await verifyRequest(request)
     if (!user) {
@@ -37,7 +36,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const { name, color, order } = body
 
@@ -51,25 +50,25 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const [maxOrder] = await sql`
         SELECT COALESCE(MAX("order"), -1) + 1 as next_order
         FROM "PipelineStage"
-        WHERE "pipelineId" = ${id}::uuid
-      `
+        WHERE "pipelineId" = ${id}      `
       stageOrder = maxOrder.next_order
     }
 
+    const stageId = globalThis.crypto.randomUUID()
     const [stage] = await sql`
-      INSERT INTO "PipelineStage" ("pipelineId", name, color, "order")
-      VALUES (${id}::uuid, ${name}, ${color || "#6B7280"}, ${stageOrder})
+      INSERT INTO "PipelineStage" (id, "pipelineId", name, color, "order")
+      VALUES (${stageId}, ${id}, ${name}, ${color || "#6B7280"}, ${stageOrder})
       RETURNING *
     `
 
     return NextResponse.json({ data: stage })
   } catch (error) {
-    console.error("Error creating stage:", error)
+    console.error("Error creating stage:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await verifyRequest(request)
     if (!user) {
@@ -80,7 +79,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const { stages } = body
 
@@ -93,19 +92,17 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       await sql`
         UPDATE "PipelineStage"
         SET "order" = ${stage.order}, name = ${stage.name}, color = ${stage.color}
-        WHERE id = ${stage.id}::uuid AND "pipelineId" = ${id}::uuid
-      `
+        WHERE id = ${stage.id} AND "pipelineId" = ${id}      `
     }
 
     const updatedStages = await sql`
       SELECT * FROM "PipelineStage"
-      WHERE "pipelineId" = ${id}::uuid
-      ORDER BY "order" ASC
+      WHERE "pipelineId" = ${id}      ORDER BY "order" ASC
     `
 
     return NextResponse.json({ data: updatedStages })
   } catch (error) {
-    console.error("Error updating stages:", error)
+    console.error("Error updating stages:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

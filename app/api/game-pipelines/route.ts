@@ -1,10 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
+import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(req.url)
     const franchiseeId = searchParams.get("franchiseeId")
 
@@ -34,13 +40,18 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: pipelines })
   } catch (error) {
-    console.error("[v0] Error fetching game pipelines:", error)
+    console.error("[v0] Error fetching game pipelines:")
     return NextResponse.json({ error: "Failed to fetch pipelines" }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await req.json()
     const { name, franchiseeId } = body
 
@@ -48,10 +59,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name and franchiseeId are required" }, { status: 400 })
     }
 
-    // Create pipeline
+    // Create pipeline (generate ID since Prisma cuid() doesn't work at DB level)
+    const pipelineId = globalThis.crypto.randomUUID()
     const [pipeline] = await sql`
-      INSERT INTO "GamePipeline" (name, "franchiseeId")
-      VALUES (${name}, ${franchiseeId})
+      INSERT INTO "GamePipeline" (id, name, "franchiseeId")
+      VALUES (${pipelineId}, ${name}, ${franchiseeId})
       RETURNING *
     `
 
@@ -65,9 +77,10 @@ export async function POST(req: NextRequest) {
 
     const stages = []
     for (const stage of defaultStages) {
+      const stageId = globalThis.crypto.randomUUID()
       const [created] = await sql`
-        INSERT INTO "GamePipelineStage" ("pipelineId", name, color, "order", "isFixed", "stageType")
-        VALUES (${pipeline.id}, ${stage.name}, ${stage.color}, ${stage.order}, ${stage.isFixed}, ${stage.stageType})
+        INSERT INTO "GamePipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType")
+        VALUES (${stageId}, ${pipeline.id}, ${stage.name}, ${stage.color}, ${stage.order}, ${stage.isFixed}, ${stage.stageType || null})
         RETURNING *
       `
       stages.push(created)
@@ -77,7 +90,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: pipeline })
   } catch (error) {
-    console.error("[v0] Error creating game pipeline:", error)
+    console.error("[v0] Error creating game pipeline:")
     return NextResponse.json({ error: "Failed to create pipeline" }, { status: 500 })
   }
 }

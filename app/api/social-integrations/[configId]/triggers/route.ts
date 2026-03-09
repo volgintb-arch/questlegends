@@ -3,7 +3,7 @@ import { verifyRequest } from "@/lib/simple-auth"
 import { sql } from "@/lib/db"
 
 // GET /api/social-integrations/[configId]/triggers - get triggers for integration
-export async function GET(req: NextRequest, { params }: { params: { configId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ configId: string }> }) {
   try {
     const user = await verifyRequest(req)
     if (!user) {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: { configId: st
         priority,
         created_at as "createdAt"
       FROM triggerrule
-      WHERE integration_id = ${configId}::uuid
+      WHERE integration_id = ${configId}
       ORDER BY priority DESC, created_at DESC
     `
 
@@ -47,13 +47,13 @@ export async function GET(req: NextRequest, { params }: { params: { configId: st
 
     return NextResponse.json({ success: true, data: allTriggers })
   } catch (error) {
-    console.error("[v0] Error fetching triggers:", error)
+    console.error("[v0] Error fetching triggers:")
     return NextResponse.json({ error: "Failed to fetch triggers" }, { status: 500 })
   }
 }
 
 // POST /api/social-integrations/[configId]/triggers - create trigger
-export async function POST(req: NextRequest, { params }: { params: { configId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ configId: string }> }) {
   try {
     const user = await verifyRequest(req)
     if (!user) {
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: { configId: s
         priority
       )
       VALUES (
-        ${configId}::uuid,
+        ${configId},
         'keywords',
         ${[keyword]}::text[],
         'any',
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest, { params }: { params: { configId: s
 
     return NextResponse.json({ success: true, data: trigger })
   } catch (error) {
-    console.error("[v0] Error creating trigger:", error)
+    console.error("[v0] Error creating trigger:")
     return NextResponse.json({ error: "Failed to create trigger" }, { status: 500 })
   }
 }

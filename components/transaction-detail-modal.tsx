@@ -1,6 +1,6 @@
 "use client"
 
-import { X, Calendar, MapPin, Users, DollarSign, TrendingUp, Briefcase } from "lucide-react"
+import { X, Calendar, MapPin, Users, RussianRuble, TrendingUp, Briefcase } from "lucide-react"
 
 interface TransactionDetail {
   id: string
@@ -89,7 +89,7 @@ export function TransactionDetailModal({ isOpen, onClose, transaction }: Transac
               </div>
 
               <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                <DollarSign size={18} className="text-primary mt-0.5" />
+                <RussianRuble size={18} className="text-primary mt-0.5" />
                 <div>
                   <p className="text-xs text-muted-foreground">Цена Пакета</p>
                   <p className="text-sm font-medium text-foreground">
@@ -112,9 +112,9 @@ export function TransactionDetailModal({ isOpen, onClose, transaction }: Transac
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground">Расчетные Данные</h3>
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                <p className="text-xs text-blue-400 mb-1">Требуется Аниматоров</p>
-                <p className="text-2xl font-bold text-blue-500">{transaction.required_animators}</p>
+              <div className="p-4 bg-primary/10 border border-primary/30 rounded-lg">
+                <p className="text-xs text-primary/70 mb-1">Требуется Аниматоров</p>
+                <p className="text-2xl font-bold text-primary">{transaction.required_animators}</p>
                 <p className="text-xs text-muted-foreground mt-1">⌈{transaction.participants_N} / 7⌉</p>
               </div>
 

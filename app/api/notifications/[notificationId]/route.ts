@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ notificationId: string }> }) {
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true, data: notifications[0] })
   } catch (error) {
-    console.error("[v0] NOTIFICATION_GET error:", error)
+    console.error("[v0] NOTIFICATION_GET error:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -73,7 +73,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     return NextResponse.json({ success: true, data: result[0] })
   } catch (error) {
-    console.error("[v0] NOTIFICATION_PATCH error:", error)
+    console.error("[v0] NOTIFICATION_PATCH error:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -95,7 +95,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     return NextResponse.json({ success: true, message: "Notification deleted" })
   } catch (error) {
-    console.error("[v0] NOTIFICATION_DELETE error:", error)
+    console.error("[v0] NOTIFICATION_DELETE error:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
