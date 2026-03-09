@@ -4,11 +4,6 @@ import type { Metadata } from "next"
 import { Analytics } from "@vercel/analytics/next"
 import { Providers } from "./providers"
 import "./globals.css"
-import { Geist_Mono, Ubuntu as V0_Font_Ubuntu, Geist_Mono as V0_Font_Geist_Mono } from 'next/font/google'
-
-// Initialize fonts
-const _ubuntu = V0_Font_Ubuntu({ subsets: ['latin'], weight: ["300","400","500","700"] })
-const _geistMono = V0_Font_Geist_Mono({ subsets: ['latin'], weight: ["100","200","300","400","500","600","700","800","900"] })
 
 export const metadata: Metadata = {
   title: "Легенда об Искателях",
@@ -26,6 +21,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet" />
+      </head>
       <body className={`font-sans antialiased`}>
         <Providers>{children}</Providers>
         <Analytics />
