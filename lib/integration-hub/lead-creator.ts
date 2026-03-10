@@ -138,9 +138,9 @@ export class LeadCreator {
     if (config.assignment_strategy === "first_admin") {
       const admin = await sql`
         SELECT id FROM "User"
-        WHERE role IN ('super_admin', 'uk', 'uk_employee')
-        ${ownerType === "franchisee" && config.owner_id ? sql`AND franchisee_id = ${config.owner_id}` : sql``}
-        ORDER BY created_at ASC
+        WHERE role IN ('uk', 'uk_employee')
+        ${ownerType === "franchisee" && config.owner_id ? sql`AND "franchiseeId" = ${config.owner_id}` : sql``}
+        ORDER BY "createdAt" ASC
         LIMIT 1
       `
 
@@ -151,8 +151,8 @@ export class LeadCreator {
       // Получить последнего назначенного и взять следующего
       const users = await sql`
         SELECT id FROM "User"
-        WHERE role IN ('super_admin', 'uk', 'uk_employee', 'franchisee')
-        ${ownerType === "franchisee" && config.owner_id ? sql`AND franchisee_id = ${config.owner_id}` : sql``}
+        WHERE role IN ('uk', 'uk_employee', 'franchisee')
+        ${ownerType === "franchisee" && config.owner_id ? sql`AND "franchiseeId" = ${config.owner_id}` : sql``}
         ORDER BY id
       `
 
@@ -171,17 +171,17 @@ export class LeadCreator {
     try {
       if (metric === "leads_created") {
         await sql`
-          INSERT INTO "IntegrationStats" (integration_id, date, leads_created)
+          INSERT INTO integrationstats (integration_id, date, leads_created)
           VALUES (${integrationId}, CURRENT_DATE, 1)
           ON CONFLICT (integration_id, date)
-          DO UPDATE SET leads_created = "IntegrationStats".leads_created + 1, updated_at = NOW()
+          DO UPDATE SET leads_created = integrationstats.leads_created + 1, updated_at = NOW()
         `
       } else if (metric === "duplicates_prevented") {
         await sql`
-          INSERT INTO "IntegrationStats" (integration_id, date, duplicates_prevented)
+          INSERT INTO integrationstats (integration_id, date, duplicates_prevented)
           VALUES (${integrationId}, CURRENT_DATE, 1)
           ON CONFLICT (integration_id, date)
-          DO UPDATE SET duplicates_prevented = "IntegrationStats".duplicates_prevented + 1, updated_at = NOW()
+          DO UPDATE SET duplicates_prevented = integrationstats.duplicates_prevented + 1, updated_at = NOW()
         `
       }
     } catch (error) {
@@ -192,14 +192,19 @@ export class LeadCreator {
   // Связать сообщение с созданным лидом
   private static async linkMessageToLead(message: NormalizedMessage, leadId: string, leadType: string) {
     await sql`
-      UPDATE InboundMessage
+      UPDATE inboundmessage
       SET lead_id = ${leadId},
           lead_type = ${leadType},
           status = 'processed',
           processed_at = NOW()
-      WHERE channel = ${message.channel}
-      AND external_user_id = ${message.external_user_id}
-      AND received_at = ${message.received_at.toISOString()}
+      WHERE id = (
+        SELECT id FROM inboundmessage
+        WHERE channel = ${message.channel}
+        AND external_user_id = ${message.external_user_id}
+        AND lead_id IS NULL
+        ORDER BY received_at DESC
+        LIMIT 1
+      )
     `
   }
 

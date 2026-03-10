@@ -8,21 +8,26 @@ export async function saveDeduplicationRecord(
   leadType: string,
   integrationId: string,
 ): Promise<void> {
+  const id = globalThis.crypto.randomUUID()
   await sql`
     INSERT INTO LeadDeduplication (
+      id,
       integration_id,
       channel,
       external_user_id,
       phone,
       lead_id,
-      lead_type
+      lead_type,
+      created_at
     ) VALUES (
+      ${id},
       ${integrationId},
       ${message.channel},
       ${message.external_user_id},
       ${message.phone || null},
       ${leadId},
-      ${leadType}
+      ${leadType},
+      NOW()
     )
     ON CONFLICT (channel, external_user_id) DO NOTHING
   `

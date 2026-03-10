@@ -132,11 +132,16 @@ export class RoutingEngine {
   private static checkKeywords(text: string, keywords: string[], matchType: string): boolean {
     const lowerText = text.toLowerCase()
 
+    // Keywords may be stored as ["word1, word2, word3"] — split by comma
+    const allKeywords = keywords.flatMap((kw) =>
+      kw.split(/[,;.]+/).map((k) => k.trim().toLowerCase()).filter(Boolean)
+    )
+
     if (matchType === "all") {
-      return keywords.every((keyword) => lowerText.includes(keyword.toLowerCase()))
+      return allKeywords.every((keyword) => lowerText.includes(keyword))
     }
 
     // По умолчанию "any"
-    return keywords.some((keyword) => lowerText.includes(keyword.toLowerCase()))
+    return allKeywords.some((keyword) => lowerText.includes(keyword))
   }
 }
