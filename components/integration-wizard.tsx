@@ -15,6 +15,7 @@ import {
   Instagram,
   MessageCircle,
   ShoppingBag,
+  Globe,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -26,7 +27,7 @@ import {
   Phone,
 } from "lucide-react"
 
-type Channel = "telegram" | "whatsapp" | "instagram" | "vk" | "avito"
+type Channel = "telegram" | "whatsapp" | "instagram" | "vk" | "avito" | "tilda"
 
 interface ChannelConfig {
   id: Channel
@@ -229,6 +230,28 @@ const CHANNELS: ChannelConfig[] = [
     webhookInstructions: [
       "Скопируйте Webhook URL в настройки приложения Авито",
       "Авито начнет пересылать сообщения автоматически",
+    ],
+  },
+  {
+    id: "tilda",
+    name: "Tilda",
+    icon: <Globe className="w-6 h-6" />,
+    color: "text-[#FF7B54]",
+    bgColor: "bg-[#FF7B54]/10 border-[#FF7B54]/20",
+    description: "Заявки с форм сайта на Tilda",
+    fields: [],
+    instructions: [
+      "Откройте страницу с формой в редакторе Tilda",
+      "Нажмите на форму → «Подключённые сервисы»",
+      "Нажмите «Добавить» → выберите «Webhook»",
+      "Вставьте Webhook URL (будет показан после подключения)",
+      "Нажмите «Сохранить» и опубликуйте страницу",
+    ],
+    webhookInstructions: [
+      "Скопируйте Webhook URL ниже",
+      "В Tilda: Форма → Подключённые сервисы → Webhook",
+      "Вставьте URL и нажмите «Сохранить»",
+      "Опубликуйте страницу — заявки начнут поступать автоматически",
     ],
   },
 ]

@@ -5,16 +5,62 @@ import { RoutingEngine } from "@/lib/integration-hub/routing-engine"
 import { LeadCreator } from "@/lib/integration-hub/lead-creator"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ channel: string; integrationId: string }> }) {
+  const { channel, integrationId } = await params
   try {
-    const { channel, integrationId } = await params
-
-    // Получить payload
-    const payload = await request.json()
 
     // Валидация канала
-    const supportedChannels = ["telegram", "instagram", "vk", "whatsapp", "avito"]
+    const supportedChannels = ["telegram", "instagram", "vk", "whatsapp", "avito", "tilda"]
     if (!supportedChannels.includes(channel)) {
       return NextResponse.json({ error: "Unsupported channel" }, { status: 400 })
+    }
+
+    // Получить payload — Tilda отправляет form-urlencoded, остальные JSON
+    let payload: any
+    const contentType = request.headers.get("content-type") || ""
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      const formData = await request.formData()
+      payload = Object.fromEntries(formData.entries())
+    } else {
+      payload = await request.json()
+    }
+
+    // Tilda отправляет тестовый запрос с полем test=test — отвечаем 200
+    if (channel === "tilda" && payload.test === "test") {
+      return NextResponse.json({ ok: true })
+    }
+
+    // VK Callback API: confirmation — вернуть строку подтверждения
+    if (channel === "vk" && payload.type === "confirmation") {
+      const { sql } = await import("@/lib/db")
+      const integration = await sql`
+        SELECT credentials FROM integration WHERE id = ${integrationId} LIMIT 1
+      `
+      if (integration.length > 0) {
+        const creds = typeof integration[0].credentials === "string"
+          ? JSON.parse(integration[0].credentials)
+          : integration[0].credentials
+        return new NextResponse(creds.confirmation_code || "ok", { status: 200 })
+      }
+      return new NextResponse("ok", { status: 200 })
+    }
+
+    // VK: для всех остальных событий отвечаем "ok" (VK требует), обрабатываем только message_new
+    if (channel === "vk" && payload.type !== "message_new") {
+      return new NextResponse("ok", { status: 200 })
+    }
+
+    // Instagram/WhatsApp: пропустить если нет сообщений (status updates, etc.)
+    if (channel === "instagram") {
+      const messaging = payload?.entry?.[0]?.messaging?.[0]
+      if (!messaging?.message) {
+        return NextResponse.json({ ok: true })
+      }
+    }
+    if (channel === "whatsapp") {
+      const messages = payload?.entry?.[0]?.changes?.[0]?.value?.messages
+      if (!messages || messages.length === 0) {
+        return NextResponse.json({ ok: true })
+      }
     }
 
     // 1. Process incoming message через Integration Hub
@@ -38,9 +84,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await LeadCreator.updateDuplicateStats(integrationId)
     }
 
+    // VK требует plain text "ok" в ответ на все callback-события
+    if (channel === "vk") {
+      return new NextResponse("ok", { status: 200 })
+    }
+
     return NextResponse.json({ success: true, routing })
   } catch (error) {
-    console.error("[v0] Webhook error")
+    console.error("[v0] Webhook error", error)
+    // VK требует "ok" даже при ошибках, иначе будет ретрай
+    if (channel === "vk") {
+      return new NextResponse("ok", { status: 200 })
+    }
     return NextResponse.json({ error: String(error) }, { status: 500 })
   }
 }

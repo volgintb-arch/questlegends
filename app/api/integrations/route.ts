@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     const { channel, credentials, assignment_strategy, default_assignee_id } = body
 
     // Validate channel
-    const validChannels = ["telegram", "instagram", "vk", "whatsapp", "avito"]
+    const validChannels = ["telegram", "instagram", "vk", "whatsapp", "avito", "tilda"]
     if (!channel || !validChannels.includes(channel)) {
       return NextResponse.json({ error: "Invalid channel" }, { status: 400 })
     }

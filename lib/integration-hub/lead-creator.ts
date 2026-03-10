@@ -45,6 +45,23 @@ export class LeadCreator {
     const text = message.message_text
     const raw = typeof message.raw_payload === "string" ? JSON.parse(message.raw_payload) : message.raw_payload
 
+    // Полное имя из профиля мессенджера
+    let fullName: string | null = null
+    if (message.channel === "telegram") {
+      const from = raw?.message?.from
+      const parts = [from?.first_name, from?.last_name].filter(Boolean)
+      if (parts.length > 0) fullName = parts.join(" ")
+    } else if (message.channel === "instagram") {
+      fullName = raw?.full_name || raw?.name || null
+    } else if (message.channel === "vk") {
+      const parts = [raw?.first_name, raw?.last_name].filter(Boolean)
+      if (parts.length > 0) fullName = parts.join(" ")
+    } else if (message.channel === "tilda") {
+      fullName = raw?.Name || raw?.name || null
+    } else if (message.channel === "avito") {
+      fullName = raw?.user_name || null
+    }
+
     // Ссылка на аккаунт
     let messengerLink: string | null = null
     if (message.channel === "telegram") {
@@ -54,6 +71,8 @@ export class LeadCreator {
       if (message.username) messengerLink = `https://instagram.com/${message.username}`
     } else if (message.channel === "vk") {
       messengerLink = `https://vk.com/id${message.external_user_id}`
+    } else if (message.channel === "tilda") {
+      messengerLink = raw?.pageurl || null
     }
 
     // Telegram username
@@ -112,7 +131,17 @@ export class LeadCreator {
       }
     }
 
-    return { messengerLink, clientTelegram, gameDate, city }
+    // Email (из Tilda формы или из текста)
+    let clientEmail: string | null = null
+    if (message.channel === "tilda") {
+      clientEmail = raw?.Email || raw?.email || null
+    }
+    if (!clientEmail) {
+      const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)
+      if (emailMatch) clientEmail = emailMatch[0]
+    }
+
+    return { fullName, messengerLink, clientTelegram, gameDate, city, clientEmail }
   }
 
   // Отправить уведомление о новом лиде
@@ -120,7 +149,7 @@ export class LeadCreator {
     try {
       const notifId = globalThis.crypto.randomUUID()
       const now = new Date().toISOString()
-      const channelName = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито" }[channel] || channel
+      const channelName = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито", tilda: "Tilda (сайт)" }[channel] || channel
       const title = "Новый лид из " + channelName
       const msg = `Новая заявка от ${clientName} через ${channelName}`
 
@@ -142,9 +171,9 @@ export class LeadCreator {
   private static async createB2BDeal(message: NormalizedMessage, integrationId: string): Promise<string> {
     const assignee = await this.getAssignee(integrationId, "uk")
     const dealId = globalThis.crypto.randomUUID()
-    const clientName = message.username || message.external_user_id
-    const comment = `Автосоздано из ${message.channel}: ${message.message_text}`
     const data = this.extractMessageData(message)
+    const clientName = data.fullName || message.username || message.external_user_id
+    const comment = `Автосоздано из ${message.channel}: ${message.message_text}`
 
     // Получить первый pipeline и его первую стадию
     const pipeline = await sql`
@@ -155,9 +184,20 @@ export class LeadCreator {
       LIMIT 1
     `
 
+    // Маппинг канала → leadSource для B2B CRM
+    const leadSourceMap: Record<string, string> = {
+      telegram: "Соцсети",
+      instagram: "Соцсети",
+      tilda: "Сайт",
+      vk: "Соцсети",
+      whatsapp: "Соцсети",
+      avito: "Другое",
+    }
+    const leadSource = leadSourceMap[message.channel] || "Другое"
+
     await sql`
       INSERT INTO "Deal" (
-        id, "clientName", "clientPhone", source, stage,
+        id, "clientName", "clientPhone", "clientEmail", source, "leadSource", stage,
         "pipelineId", "stageId",
         "clientTelegram", "messengerLink", "city", "gameDate",
         "additionalComment", "responsibleId",
@@ -166,7 +206,9 @@ export class LeadCreator {
         ${dealId},
         ${clientName},
         ${message.phone || null},
+        ${data.clientEmail},
         ${`${message.channel}_bot`},
+        ${leadSource},
         'NEW',
         ${pipeline.length > 0 ? pipeline[0].pipeline_id : null},
         ${pipeline.length > 0 ? pipeline[0].stage_id : null},
@@ -211,13 +253,13 @@ export class LeadCreator {
     }
 
     const leadId = globalThis.crypto.randomUUID()
-    const clientName = message.username || message.external_user_id
-    const notes = `Автосоздано из ${message.channel}: ${message.message_text}`
     const data = this.extractMessageData(message)
+    const clientName = data.fullName || message.username || message.external_user_id
+    const notes = `Автосоздано из ${message.channel}: ${message.message_text}`
 
     await sql`
       INSERT INTO "GameLead" (
-        id, "clientName", "clientPhone", source, notes,
+        id, "clientName", "clientPhone", "clientEmail", source, notes,
         "gameDate", "gameTime",
         "responsibleId", "pipelineId", "stageId", "franchiseeId",
         "createdAt", "updatedAt"
@@ -225,6 +267,7 @@ export class LeadCreator {
         ${leadId},
         ${clientName},
         ${message.phone || null},
+        ${data.clientEmail},
         ${`${message.channel}_bot`},
         ${notes},
         ${data.gameDate},

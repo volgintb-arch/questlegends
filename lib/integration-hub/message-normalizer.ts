@@ -1,6 +1,6 @@
 // Message Normalizer - приводит все сообщения к единому формату
 export interface NormalizedMessage {
-  channel: "telegram" | "instagram" | "vk" | "whatsapp" | "avito"
+  channel: "telegram" | "instagram" | "vk" | "whatsapp" | "avito" | "tilda" | "max"
   external_user_id: string
   username?: string
   phone?: string
@@ -102,6 +102,51 @@ export class MessageNormalizer {
       owner_id: integration.owner_id,
       received_at: new Date(message.created_at),
       raw_payload: message,
+    }
+  }
+
+  // Нормализация Tilda форм (application/x-www-form-urlencoded или JSON)
+  static normalizeTilda(payload: any, integration: any): NormalizedMessage {
+    // Tilda отправляет поля формы: Name, Phone, Email, + кастомные поля
+    // Также служебные поля: formid, pageid, pageurl, pagetitle, projectid, tranid
+    const name = payload.Name || payload.name || ""
+    const phone = payload.Phone || payload.phone || payload.tel || ""
+    const email = payload.Email || payload.email || ""
+
+    // Собрать все пользовательские поля в текст сообщения
+    const systemFields = ["formid", "pageid", "pageurl", "pagetitle", "projectid", "tranid", "test"]
+    const contactFields = ["Name", "name", "Phone", "phone", "tel", "Email", "email"]
+    const skipFields = new Set([...systemFields, ...contactFields])
+
+    const customParts: string[] = []
+    for (const [key, value] of Object.entries(payload)) {
+      if (!skipFields.has(key) && value && String(value).trim()) {
+        customParts.push(`${key}: ${value}`)
+      }
+    }
+
+    const messageText = [
+      name ? `Имя: ${name}` : "",
+      phone ? `Тел: ${phone}` : "",
+      email ? `Email: ${email}` : "",
+      ...customParts,
+    ].filter(Boolean).join("\n")
+
+    // Уникальный ID: tranid от Tilda или хэш из данных
+    const externalId = payload.tranid || payload.formid
+      ? `tilda_${payload.tranid || payload.formid}_${Date.now()}`
+      : `tilda_${Date.now()}`
+
+    return {
+      channel: "tilda",
+      external_user_id: externalId,
+      username: name || undefined,
+      phone: phone || undefined,
+      message_text: messageText,
+      owner_type: integration.owner_type,
+      owner_id: integration.owner_id,
+      received_at: new Date(),
+      raw_payload: payload,
     }
   }
 

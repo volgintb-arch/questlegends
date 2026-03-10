@@ -52,6 +52,7 @@ const channelNames: Record<string, string> = {
   instagram: "Instagram",
   vk: "ВКонтакте",
   avito: "Авито",
+  tilda: "Tilda",
 }
 
 const channelColors: Record<string, string> = {
@@ -60,6 +61,7 @@ const channelColors: Record<string, string> = {
   instagram: "text-[#E4405F]",
   vk: "text-[#4680C2]",
   avito: "text-[#00AAFF]",
+  tilda: "text-[#FF7B54]",
 }
 
 const channelBgColors: Record<string, string> = {
@@ -68,6 +70,7 @@ const channelBgColors: Record<string, string> = {
   instagram: "border-[#E4405F]/20 bg-[#E4405F]/5",
   vk: "border-[#4680C2]/20 bg-[#4680C2]/5",
   avito: "border-[#00AAFF]/20 bg-[#00AAFF]/5",
+  tilda: "border-[#FF7B54]/20 bg-[#FF7B54]/5",
 }
 
 export function SocialIntegrationsFranchisee() {

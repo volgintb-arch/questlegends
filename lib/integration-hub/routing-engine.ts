@@ -14,6 +14,32 @@ export class RoutingEngine {
   static async determineRouting(message: NormalizedMessage, integrationId: string): Promise<RoutingDecision> {
     console.log("[v0] RoutingEngine: Determining routing", { integrationId, owner_type: message.owner_type })
 
+    // Tilda: каждая заявка с формы = новый лид (дедупликация по телефону)
+    if (message.channel === "tilda") {
+      // Проверяем дубли только по телефону
+      if (message.phone) {
+        const byPhone = await sql`
+          SELECT ld.lead_id, ld.lead_type FROM leaddeduplication ld
+          WHERE ld.phone = ${message.phone}
+          LIMIT 1
+        `
+        if (byPhone.length > 0) {
+          const isStillNew = await this.isLeadInFirstStage(byPhone[0].lead_id, byPhone[0].lead_type)
+          if (isStillNew) {
+            return {
+              shouldCreateLead: false,
+              leadType: byPhone[0].lead_type,
+              reason: "duplicate",
+              existingLeadId: byPhone[0].lead_id,
+            }
+          }
+          await sql`DELETE FROM leaddeduplication WHERE phone = ${message.phone}`
+        }
+      }
+      const leadType = message.owner_type === "uk" ? "b2b" : "b2c"
+      return { shouldCreateLead: true, leadType, reason: "tilda_form" }
+    }
+
     // 1. Проверка на дубли
     const existingLead = await this.checkDuplicate(message)
     if (existingLead) {
