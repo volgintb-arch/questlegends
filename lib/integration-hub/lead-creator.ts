@@ -40,12 +40,111 @@ export class LeadCreator {
     }
   }
 
+  // Извлечь данные из текста сообщения и профиля
+  private static extractMessageData(message: NormalizedMessage) {
+    const text = message.message_text
+    const raw = typeof message.raw_payload === "string" ? JSON.parse(message.raw_payload) : message.raw_payload
+
+    // Ссылка на аккаунт
+    let messengerLink: string | null = null
+    if (message.channel === "telegram") {
+      const username = raw?.message?.from?.username
+      if (username) messengerLink = `https://t.me/${username}`
+    } else if (message.channel === "instagram") {
+      if (message.username) messengerLink = `https://instagram.com/${message.username}`
+    } else if (message.channel === "vk") {
+      messengerLink = `https://vk.com/id${message.external_user_id}`
+    }
+
+    // Telegram username
+    let clientTelegram: string | null = null
+    if (message.channel === "telegram") {
+      const from = raw?.message?.from
+      clientTelegram = from?.username ? `@${from.username}` : null
+    }
+
+    // Извлечь дату из текста
+    let gameDate: string | null = null
+    const months: Record<string, string> = {
+      января: "01", февраля: "02", марта: "03", апреля: "04",
+      мая: "05", июня: "06", июля: "07", августа: "08",
+      сентября: "09", октября: "10", ноября: "11", декабря: "12",
+    }
+    const dateMatch = text.match(/(\d{1,2})\s*-?\s*(?:е|го)?\s*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)/i)
+    if (dateMatch) {
+      const day = dateMatch[1].padStart(2, "0")
+      const month = months[dateMatch[2].toLowerCase()]
+      const year = new Date().getFullYear()
+      gameDate = `${year}-${month}-${day}T00:00:00.000Z`
+    } else {
+      const numDateMatch = text.match(/(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/)
+      if (numDateMatch) {
+        const day = numDateMatch[1].padStart(2, "0")
+        const month = numDateMatch[2].padStart(2, "0")
+        const year = numDateMatch[3] ? (numDateMatch[3].length === 2 ? `20${numDateMatch[3]}` : numDateMatch[3]) : String(new Date().getFullYear())
+        gameDate = `${year}-${month}-${day}T00:00:00.000Z`
+      }
+    }
+
+    // Извлечь город
+    let city: string | null = null
+    const cityPatterns = [
+      /(?:город|г\.)\s+([А-ЯЁа-яё-]+)/i,
+      /(?:из|в|во)\s+(Москв[еау]?|Петербург[еа]?|Санкт-Петербург[еа]?|Новосибирск[еа]?|Екатеринбург[еа]?|Казан[иь]|Нижн(?:ий|ем)\s+Новгород[еа]?|Челябинск[еа]?|Омск[еа]?|Самар[еау]?|Ростов[еа]?|Уф[еау]?|Красноярск[еа]?|Перми?ь?|Воронеж[еа]?|Волгоград[еа]?|Тюмен[иь]?|Краснодар[еа]?|Сочи|Тольятти|Ижевск[еа]?|Барнаул[еа]?|Ульяновск[еа]?|Хабаровск[еа]?|Владивосток[еа]?|Ярославл[ья]?|Махачкал[еау]?|Томск[еа]?|Оренбург[еа]?|Кемерово?|Рязан[иь]?|Астрахан[иь]?|Пенз[еау]?|Липецк[еа]?|Тул[еау]?|Курск[еа]?|Ставрополь|Сургут[еа]?|Тверь|Твери|Иркутск[еа]?|Брянск[еа]?)/i,
+    ]
+    for (const pattern of cityPatterns) {
+      const match = text.match(pattern)
+      if (match) {
+        // Нормализация падежных окончаний
+        city = match[1].trim()
+          .replace(/[еу]$/, "")        // Омске→Омск, Самару→Самар
+          .replace(/и$/, "ь")          // Перми→Пермь, Твери→Тверь, Казани→Казань
+          .replace(/ой$/, "ая")        // Москвой→Москвая — не нужно
+          .replace(/(Москв).*/, "Москва")
+          .replace(/(Самар).*/, "Самара")
+          .replace(/(Махачкал).*/, "Махачкала")
+          .replace(/(Уф).*/, "Уфа")
+          .replace(/(Тул).*/, "Тула")
+          .replace(/(Пенз).*/, "Пенза")
+          .replace(/(Рязан).*/, "Рязань")
+          .replace(/(Астрахан).*/, "Астрахань")
+        break
+      }
+    }
+
+    return { messengerLink, clientTelegram, gameDate, city }
+  }
+
+  // Отправить уведомление о новом лиде
+  private static async sendNotification(recipientId: string, dealId: string, clientName: string, channel: string, leadType: string) {
+    try {
+      const notifId = globalThis.crypto.randomUUID()
+      const now = new Date().toISOString()
+      const channelName = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито" }[channel] || channel
+      const title = "Новый лид из " + channelName
+      const msg = `Новая заявка от ${clientName} через ${channelName}`
+
+      await sql`
+        INSERT INTO "Notification" (
+          id, type, title, message, "recipientId", "relatedDealId",
+          "isRead", "isArchived", "createdAt", "updatedAt"
+        ) VALUES (
+          ${notifId}, 'deal', ${title}, ${msg}, ${recipientId}, ${dealId},
+          false, false, ${now}, ${now}
+        )
+      `
+    } catch (error) {
+      console.error("[v0] LeadCreator: Notification failed", error)
+    }
+  }
+
   // Создать B2B Deal (для УК - продажа франшиз)
   private static async createB2BDeal(message: NormalizedMessage, integrationId: string): Promise<string> {
     const assignee = await this.getAssignee(integrationId, "uk")
     const dealId = globalThis.crypto.randomUUID()
     const clientName = message.username || message.external_user_id
     const comment = `Автосоздано из ${message.channel}: ${message.message_text}`
+    const data = this.extractMessageData(message)
 
     // Получить первый pipeline и его первую стадию
     const pipeline = await sql`
@@ -60,6 +159,7 @@ export class LeadCreator {
       INSERT INTO "Deal" (
         id, "clientName", "clientPhone", source, stage,
         "pipelineId", "stageId",
+        "clientTelegram", "messengerLink", "city", "gameDate",
         "additionalComment", "responsibleId",
         "createdAt", "updatedAt"
       ) VALUES (
@@ -70,18 +170,25 @@ export class LeadCreator {
         'NEW',
         ${pipeline.length > 0 ? pipeline[0].pipeline_id : null},
         ${pipeline.length > 0 ? pipeline[0].stage_id : null},
+        ${data.clientTelegram},
+        ${data.messengerLink},
+        ${data.city},
+        ${data.gameDate},
         ${comment},
         ${assignee?.id || null},
         NOW(), NOW()
       )
     `
 
+    if (assignee?.id) {
+      await this.sendNotification(assignee.id, dealId, clientName, message.channel, "b2b")
+    }
+
     return dealId
   }
 
   // Создать B2C Lead (для франчайзи - продажа игр)
   private static async createB2CLead(message: NormalizedMessage, integrationId: string): Promise<string> {
-    // Получить ответственного и франчайзи
     const assignee = await this.getAssignee(integrationId, "franchisee")
     const franchiseeId = message.owner_id
 
@@ -106,10 +213,12 @@ export class LeadCreator {
     const leadId = globalThis.crypto.randomUUID()
     const clientName = message.username || message.external_user_id
     const notes = `Автосоздано из ${message.channel}: ${message.message_text}`
+    const data = this.extractMessageData(message)
 
     await sql`
       INSERT INTO "GameLead" (
         id, "clientName", "clientPhone", source, notes,
+        "gameDate", "gameTime",
         "responsibleId", "pipelineId", "stageId", "franchiseeId",
         "createdAt", "updatedAt"
       ) VALUES (
@@ -118,6 +227,8 @@ export class LeadCreator {
         ${message.phone || null},
         ${`${message.channel}_bot`},
         ${notes},
+        ${data.gameDate},
+        ${null},
         ${assignee?.id || null},
         ${pipeline[0].pipeline_id},
         ${pipeline[0].stage_id},
@@ -125,6 +236,10 @@ export class LeadCreator {
         NOW(), NOW()
       )
     `
+
+    if (assignee?.id) {
+      await this.sendNotification(assignee.id, leadId, clientName, message.channel, "b2c")
+    }
 
     return leadId
   }

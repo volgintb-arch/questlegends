@@ -50,33 +50,77 @@ export class RoutingEngine {
   }
 
   // Проверка на дубли по external_user_id или телефону
+  // Если лид уже перемещён из первой стадии — разрешить создание нового
   private static async checkDuplicate(message: NormalizedMessage) {
     // Проверка по external_user_id
     const byExternalId = await sql`
-      SELECT lead_id, lead_type FROM LeadDeduplication
-      WHERE channel = ${message.channel}
-      AND external_user_id = ${message.external_user_id}
+      SELECT ld.lead_id, ld.lead_type FROM leaddeduplication ld
+      WHERE ld.channel = ${message.channel}
+      AND ld.external_user_id = ${message.external_user_id}
       LIMIT 1
     `
 
     if (byExternalId.length > 0) {
-      return byExternalId[0]
+      // Проверить — если лид уже перемещён из первой стадии, разрешить новый
+      const isStillNew = await this.isLeadInFirstStage(byExternalId[0].lead_id, byExternalId[0].lead_type)
+      if (isStillNew) {
+        return byExternalId[0]
+      }
+      // Лид уже в работе — удалить старую запись дедупликации, разрешить новый
+      await sql`
+        DELETE FROM leaddeduplication
+        WHERE channel = ${message.channel}
+        AND external_user_id = ${message.external_user_id}
+      `
+      return null
     }
 
     // Проверка по телефону (если есть)
     if (message.phone) {
       const byPhone = await sql`
-        SELECT lead_id, lead_type FROM LeadDeduplication
-        WHERE phone = ${message.phone}
+        SELECT ld.lead_id, ld.lead_type FROM leaddeduplication ld
+        WHERE ld.phone = ${message.phone}
         LIMIT 1
       `
 
       if (byPhone.length > 0) {
-        return byPhone[0]
+        const isStillNew = await this.isLeadInFirstStage(byPhone[0].lead_id, byPhone[0].lead_type)
+        if (isStillNew) {
+          return byPhone[0]
+        }
+        await sql`
+          DELETE FROM leaddeduplication WHERE phone = ${message.phone}
+        `
+        return null
       }
     }
 
     return null
+  }
+
+  // Проверить находится ли лид ещё на первой стадии pipeline
+  private static async isLeadInFirstStage(leadId: string, leadType: string): Promise<boolean> {
+    if (leadType === "b2b") {
+      const result = await sql`
+        SELECT d."stageId", ps."order"
+        FROM "Deal" d
+        LEFT JOIN "PipelineStage" ps ON ps.id = d."stageId"
+        WHERE d.id = ${leadId}
+        LIMIT 1
+      `
+      if (result.length === 0) return false
+      return result[0].order === 0 || result[0].stageId === null
+    } else {
+      const result = await sql`
+        SELECT gl."stageId", gps."order"
+        FROM "GameLead" gl
+        LEFT JOIN "GamePipelineStage" gps ON gps.id = gl."stageId"
+        WHERE gl.id = ${leadId}
+        LIMIT 1
+      `
+      if (result.length === 0) return false
+      return result[0].order === 0 || result[0].stageId === null
+    }
   }
 
   // Получить правила триггеров для интеграции
