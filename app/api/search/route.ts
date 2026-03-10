@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
-import { sql } from "@/lib/db"
 
 async function getCurrentUser(request: Request) {
   try {
@@ -16,14 +16,7 @@ async function getCurrentUser(request: Request) {
     }
 
     if (!token) return null
-    const payload = await verifyToken(token)
-    if (!payload) return null
-
-    return {
-      id: payload.userId as string,
-      role: payload.role as string,
-      franchiseeId: payload.franchiseeId as string | null,
-    }
+    return await verifyToken(token)
   } catch {
     return null
   }
@@ -36,6 +29,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json([])
+    }
+
     const { searchParams } = new URL(request.url)
     const q = searchParams.get("q")?.trim()
 
@@ -43,15 +40,15 @@ export async function GET(request: Request) {
       return NextResponse.json([])
     }
 
+    const sql = neon(process.env.DATABASE_URL!)
     const searchPattern = `%${q}%`
     const results: any[] = []
 
-    // Role-based search scoping
     const isUK = user.role === "uk" || user.role === "uk_employee"
     const isFranchisee = user.role === "franchisee"
     const isAdmin = user.role === "admin"
 
-    // 1. Search B2B Deals (UK roles)
+    // 1. B2B Deals (UK)
     if (isUK) {
       const deals = await sql`
         SELECT id, "clientName", "clientPhone", source, stage, city
@@ -75,24 +72,32 @@ export async function GET(request: Request) {
       }
     }
 
-    // 2. Search Game Leads (Franchisee/Admin)
+    // 2. Game Leads (Franchisee/Admin)
     if (isFranchisee || isAdmin) {
-      const franchiseeFilter = user.franchiseeId
-        ? sql`AND gl."franchiseeId" = ${user.franchiseeId}`
-        : sql``
-
-      const gameLeads = await sql`
-        SELECT gl.id, gl."clientName", gl."clientPhone", gl.source, gl."gameDate",
-               gps.name as stage_name
-        FROM "GameLead" gl
-        LEFT JOIN "GamePipelineStage" gps ON gps.id = gl."stageId"
-        WHERE (gl."clientName" ILIKE ${searchPattern}
-           OR gl."clientPhone" ILIKE ${searchPattern}
-           OR gl."clientEmail" ILIKE ${searchPattern})
-        ${franchiseeFilter}
-        ORDER BY gl."createdAt" DESC
-        LIMIT 5
-      `
+      const gameLeads = user.franchiseeId
+        ? await sql`
+            SELECT gl.id, gl."clientName", gl."clientPhone", gl.source, gl."gameDate",
+                   gps.name as stage_name
+            FROM "GameLead" gl
+            LEFT JOIN "GamePipelineStage" gps ON gps.id = gl."stageId"
+            WHERE (gl."clientName" ILIKE ${searchPattern}
+               OR gl."clientPhone" ILIKE ${searchPattern}
+               OR gl."clientEmail" ILIKE ${searchPattern})
+            AND gl."franchiseeId" = ${user.franchiseeId}
+            ORDER BY gl."createdAt" DESC
+            LIMIT 5
+          `
+        : await sql`
+            SELECT gl.id, gl."clientName", gl."clientPhone", gl.source, gl."gameDate",
+                   gps.name as stage_name
+            FROM "GameLead" gl
+            LEFT JOIN "GamePipelineStage" gps ON gps.id = gl."stageId"
+            WHERE (gl."clientName" ILIKE ${searchPattern}
+               OR gl."clientPhone" ILIKE ${searchPattern}
+               OR gl."clientEmail" ILIKE ${searchPattern})
+            ORDER BY gl."createdAt" DESC
+            LIMIT 5
+          `
       for (const g of gameLeads) {
         results.push({
           id: g.id,
@@ -104,21 +109,22 @@ export async function GET(request: Request) {
       }
     }
 
-    // 3. Search Transactions
+    // 3. Transactions
     if (isUK || isFranchisee) {
-      const txFilter = !isUK && user.franchiseeId
-        ? sql`AND t."franchiseeId" = ${user.franchiseeId}`
-        : sql``
-
-      const transactions = await sql`
-        SELECT t.id, t.description, t.amount, t.type, t.category, t.date
-        FROM "Transaction" t
-        WHERE (t.description ILIKE ${searchPattern}
-           OR t.category ILIKE ${searchPattern})
-        ${txFilter}
-        ORDER BY t."createdAt" DESC
-        LIMIT 5
-      `
+      const transactions = (!isUK && user.franchiseeId)
+        ? await sql`
+            SELECT id, description, amount, type, category, date
+            FROM "Transaction"
+            WHERE (description ILIKE ${searchPattern} OR category ILIKE ${searchPattern})
+            AND "franchiseeId" = ${user.franchiseeId}
+            ORDER BY "createdAt" DESC LIMIT 5
+          `
+        : await sql`
+            SELECT id, description, amount, type, category, date
+            FROM "Transaction"
+            WHERE description ILIKE ${searchPattern} OR category ILIKE ${searchPattern}
+            ORDER BY "createdAt" DESC LIMIT 5
+          `
       for (const t of transactions) {
         const amountStr = t.amount ? `${Number(t.amount).toLocaleString("ru")} ₽` : ""
         results.push({
@@ -131,21 +137,22 @@ export async function GET(request: Request) {
       }
     }
 
-    // 4. Search Expenses
+    // 4. Expenses
     if (isUK || isFranchisee || isAdmin) {
-      const expFilter = !isUK && user.franchiseeId
-        ? sql`AND e."franchiseeId" = ${user.franchiseeId}`
-        : sql``
-
-      const expenses = await sql`
-        SELECT e.id, e.description, e.amount, e.category, e."expenseDate"
-        FROM "Expense" e
-        WHERE (e.description ILIKE ${searchPattern}
-           OR e.category ILIKE ${searchPattern})
-        ${expFilter}
-        ORDER BY e."createdAt" DESC
-        LIMIT 5
-      `
+      const expenses = (!isUK && user.franchiseeId)
+        ? await sql`
+            SELECT id, description, amount, category, "expenseDate"
+            FROM "Expense"
+            WHERE (description ILIKE ${searchPattern} OR category ILIKE ${searchPattern})
+            AND "franchiseeId" = ${user.franchiseeId}
+            ORDER BY "createdAt" DESC LIMIT 5
+          `
+        : await sql`
+            SELECT id, description, amount, category, "expenseDate"
+            FROM "Expense"
+            WHERE description ILIKE ${searchPattern} OR category ILIKE ${searchPattern}
+            ORDER BY "createdAt" DESC LIMIT 5
+          `
       for (const e of expenses) {
         const amountStr = e.amount ? `${Number(e.amount).toLocaleString("ru")} ₽` : ""
         results.push({
@@ -158,22 +165,22 @@ export async function GET(request: Request) {
       }
     }
 
-    // 5. Search Users/Personnel
+    // 5. Users
     if (isUK || isFranchisee || isAdmin) {
-      const userFilter = !isUK && user.franchiseeId
-        ? sql`AND u."franchiseeId" = ${user.franchiseeId}`
-        : sql``
-
-      const users = await sql`
-        SELECT u.id, u.name, u.phone, u.email, u.role
-        FROM "User" u
-        WHERE (u.name ILIKE ${searchPattern}
-           OR u.phone ILIKE ${searchPattern}
-           OR u.email ILIKE ${searchPattern})
-        ${userFilter}
-        ORDER BY u."createdAt" DESC
-        LIMIT 5
-      `
+      const users = (!isUK && user.franchiseeId)
+        ? await sql`
+            SELECT id, name, phone, email, role
+            FROM "User"
+            WHERE (name ILIKE ${searchPattern} OR phone ILIKE ${searchPattern} OR email ILIKE ${searchPattern})
+            AND "franchiseeId" = ${user.franchiseeId}
+            ORDER BY "createdAt" DESC LIMIT 5
+          `
+        : await sql`
+            SELECT id, name, phone, email, role
+            FROM "User"
+            WHERE name ILIKE ${searchPattern} OR phone ILIKE ${searchPattern} OR email ILIKE ${searchPattern}
+            ORDER BY "createdAt" DESC LIMIT 5
+          `
       for (const u of users) {
         results.push({
           id: u.id,
@@ -185,29 +192,27 @@ export async function GET(request: Request) {
       }
     }
 
-    // 6. Search Knowledge Articles
-    {
-      const articles = await sql`
-        SELECT id, title, category, author
-        FROM "KnowledgeArticle"
-        WHERE title ILIKE ${searchPattern}
-           OR category ILIKE ${searchPattern}
-           OR content ILIKE ${searchPattern}
-        ORDER BY "createdAt" DESC
-        LIMIT 5
-      `
-      for (const a of articles) {
-        results.push({
-          id: a.id,
-          type: "article",
-          title: a.title,
-          subtitle: [a.category, a.author].filter(Boolean).join(" · "),
-          url: `/knowledge?articleId=${a.id}`,
-        })
-      }
+    // 6. Knowledge Articles
+    const articles = await sql`
+      SELECT id, title, category, author
+      FROM "KnowledgeArticle"
+      WHERE title ILIKE ${searchPattern}
+         OR category ILIKE ${searchPattern}
+         OR content ILIKE ${searchPattern}
+      ORDER BY "createdAt" DESC
+      LIMIT 5
+    `
+    for (const a of articles) {
+      results.push({
+        id: a.id,
+        type: "article",
+        title: a.title,
+        subtitle: [a.category, a.author].filter(Boolean).join(" · "),
+        url: `/knowledge?articleId=${a.id}`,
+      })
     }
 
-    // 7. Search Franchisees (UK only)
+    // 7. Franchisees (UK only)
     if (isUK) {
       const franchisees = await sql`
         SELECT id, name, city, phone, email
