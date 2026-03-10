@@ -47,9 +47,19 @@ export class LeadCreator {
     const clientName = message.username || message.external_user_id
     const comment = `Автосоздано из ${message.channel}: ${message.message_text}`
 
+    // Получить первый pipeline и его первую стадию
+    const pipeline = await sql`
+      SELECT p.id as pipeline_id, ps.id as stage_id
+      FROM "Pipeline" p
+      JOIN "PipelineStage" ps ON ps."pipelineId" = p.id
+      ORDER BY p."createdAt" ASC, ps."order" ASC
+      LIMIT 1
+    `
+
     await sql`
       INSERT INTO "Deal" (
         id, "clientName", "clientPhone", source, stage,
+        "pipelineId", "stageId",
         "additionalComment", "responsibleId",
         "createdAt", "updatedAt"
       ) VALUES (
@@ -58,6 +68,8 @@ export class LeadCreator {
         ${message.phone || null},
         ${`${message.channel}_bot`},
         'NEW',
+        ${pipeline.length > 0 ? pipeline[0].pipeline_id : null},
+        ${pipeline.length > 0 ? pipeline[0].stage_id : null},
         ${comment},
         ${assignee?.id || null},
         NOW(), NOW()
