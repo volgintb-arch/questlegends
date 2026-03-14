@@ -405,20 +405,18 @@ export function IntegrationWizard({ open, onClose, onSuccess, isAdmin }: Integra
 
         {/* Step 1: Channel selection */}
         {step === 1 && (
-          <div className="px-4 pb-4 space-y-2">
+          <div className="px-4 pb-4 space-y-1.5 overflow-y-auto max-h-[60vh]">
             {CHANNELS.map((channel) => (
               <Card
                 key={channel.id}
-                className={`p-3 cursor-pointer transition-all hover:scale-[1.01] border ${channel.bgColor}`}
+                className={`p-2.5 cursor-pointer transition-all hover:scale-[1.01] border ${channel.bgColor}`}
                 onClick={() => handleSelectChannel(channel.id)}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
                   <div className={`${channel.color} shrink-0`}>{channel.icon}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-foreground">{channel.name}</h3>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{channel.description}</p>
+                    <h3 className="text-sm font-semibold text-foreground leading-tight">{channel.name}</h3>
+                    <p className="text-[11px] text-muted-foreground">{channel.description}</p>
                   </div>
                   <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
                 </div>
