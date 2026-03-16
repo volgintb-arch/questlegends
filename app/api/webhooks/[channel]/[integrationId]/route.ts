@@ -90,8 +90,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // 4. Создать лид если нужно
     if (routing.shouldCreateLead) {
       console.log(`[v0] Webhook ${channel}: Step 4 — creating lead, type=${routing.leadType}`)
-      await LeadCreator.createLead(message, routing, integrationId)
-      console.log(`[v0] Webhook ${channel}: Step 4 OK — lead created`)
+      const leadResult = await LeadCreator.createLead(message, routing, integrationId)
+      if (leadResult.success) {
+        console.log(`[v0] Webhook ${channel}: Step 4 OK — lead created, id=${leadResult.leadId}`)
+      } else {
+        console.error(`[v0] Webhook ${channel}: Step 4 FAILED — ${leadResult.error}`)
+      }
     } else if (routing.existingLeadId) {
       console.log(`[v0] Webhook ${channel}: Step 4 — duplicate, existingLeadId=${routing.existingLeadId}`)
       await LeadCreator.updateDuplicateStats(integrationId)

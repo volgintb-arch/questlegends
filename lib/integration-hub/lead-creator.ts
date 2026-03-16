@@ -141,7 +141,14 @@ export class LeadCreator {
       if (emailMatch) clientEmail = emailMatch[0]
     }
 
-    return { fullName, messengerLink, clientTelegram, gameDate, city, clientEmail }
+    // Конвертировать gameDate строку в Date объект для postgres
+    let gameDateObj: Date | null = null
+    if (gameDate) {
+      const d = new Date(gameDate)
+      if (!isNaN(d.getTime())) gameDateObj = d
+    }
+
+    return { fullName, messengerLink, clientTelegram, gameDate: gameDateObj, city, clientEmail }
   }
 
   // Отправить уведомление о новом лиде
