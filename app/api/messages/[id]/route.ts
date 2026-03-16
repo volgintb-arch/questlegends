@@ -12,7 +12,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { id } = await params
     const sql = neon(process.env.DATABASE_URL!)
 
-    // Only allow deleting own messages
+    // Only allow deleting own messages — soft delete (hide for sender only)
     const message = await sql`
       SELECT * FROM "Message" WHERE id = ${id} AND "senderId" = ${user.userId}
     `
@@ -21,7 +21,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: "Message not found or not authorized" }, { status: 404 })
     }
 
-    await sql`DELETE FROM "Message" WHERE id = ${id}`
+    // Soft delete: mark as deleted by sender (message stays visible for receiver)
+    await sql`
+      UPDATE "Message" SET "deletedBySenderId" = ${user.userId} WHERE id = ${id}
+    `
 
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -56,7 +59,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     await sql`
-      UPDATE "Message" 
+      UPDATE "Message"
       SET content = ${content}, "isEdited" = true, "updatedAt" = NOW()
       WHERE id = ${id}
     `

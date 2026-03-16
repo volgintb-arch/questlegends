@@ -49,7 +49,7 @@ export function KanbanBoard({ stages, boardData, onDragEnd, onViewDeal }: Kanban
             const validDeals = deals.filter((d) => d && d.id)
 
             return (
-              <div key={stage.id} className="w-64 flex-shrink-0 flex flex-col bg-muted/30 rounded-lg">
+              <div key={stage.id} className="w-52 sm:w-60 md:w-64 flex-shrink-0 flex flex-col bg-muted/30 rounded-lg">
                 <div className="p-2 border-b flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.color || "#6B7280" }} />

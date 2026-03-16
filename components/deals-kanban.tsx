@@ -662,39 +662,43 @@ export function DealsKanban({ role }: DealsKanbanProps) {
             </div>
           </div>
 
-          <div className="flex gap-2 items-center">
-            <Input
-              type="date"
-              placeholder="От"
-              value={filterDateFrom}
-              onChange={(e) => setFilterDateFrom(e.target.value)}
-              className="h-8 text-xs w-32"
-            />
-            <span className="text-xs text-muted-foreground">—</span>
-            <Input
-              type="date"
-              placeholder="До"
-              value={filterDateTo}
-              onChange={(e) => setFilterDateTo(e.target.value)}
-              className="h-8 text-xs w-32"
-            />
-            <span className="text-xs text-muted-foreground ml-4">Бюджет:</span>
-            <Input
-              type="number"
-              placeholder="От"
-              value={filterBudgetFrom}
-              onChange={(e) => setFilterBudgetFrom(e.target.value)}
-              className="h-8 text-xs w-24"
-            />
-            <span className="text-xs text-muted-foreground">—</span>
-            <Input
-              type="number"
-              placeholder="До"
-              value={filterBudgetTo}
-              onChange={(e) => setFilterBudgetTo(e.target.value)}
-              className="h-8 text-xs w-24"
-            />
-            <span className="text-xs text-muted-foreground ml-4">
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex gap-1.5 items-center">
+              <Input
+                type="date"
+                placeholder="От"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="h-8 text-xs w-28 sm:w-32"
+              />
+              <span className="text-xs text-muted-foreground">—</span>
+              <Input
+                type="date"
+                placeholder="До"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="h-8 text-xs w-28 sm:w-32"
+              />
+            </div>
+            <div className="flex gap-1.5 items-center">
+              <span className="text-xs text-muted-foreground">Бюджет:</span>
+              <Input
+                type="number"
+                placeholder="От"
+                value={filterBudgetFrom}
+                onChange={(e) => setFilterBudgetFrom(e.target.value)}
+                className="h-8 text-xs w-20 sm:w-24"
+              />
+              <span className="text-xs text-muted-foreground">—</span>
+              <Input
+                type="number"
+                placeholder="До"
+                value={filterBudgetTo}
+                onChange={(e) => setFilterBudgetTo(e.target.value)}
+                className="h-8 text-xs w-20 sm:w-24"
+              />
+            </div>
+            <span className="text-xs text-muted-foreground">
               Найдено: {totalFilteredDeals} из {totalDeals} сделок
             </span>
           </div>

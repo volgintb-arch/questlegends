@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,7 @@ import {
   Image as ImageIcon,
   FileText,
   X,
+  Smile,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
@@ -83,6 +84,27 @@ export function MessagingSection() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState("")
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const emojiPickerRef = useRef<HTMLDivElement>(null)
+
+  // Популярные эмодзи
+  const EMOJI_LIST = [
+    "😀", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤔", "😏",
+    "😢", "😭", "😡", "🤯", "😱", "🥳", "🤗", "🫡", "🙏", "🤝",
+    "👍", "👎", "❤️", "🔥", "⭐", "✅", "🎉", "💪", "👏", "🙌",
+    "💯", "🚀", "💡", "📌", "📎", "📊", "🎯", "⚡", "🏆", "🎁",
+  ]
+
+  // Закрыть emoji picker при клике снаружи
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
+        setShowEmojiPicker(false)
+      }
+    }
+    if (showEmojiPicker) document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [showEmojiPicker])
 
   useEffect(() => {
     fetchConversations()
@@ -698,6 +720,30 @@ export function MessagingSection() {
                 >
                   <Paperclip className="h-4 w-4" />
                 </Button>
+                <div className="relative" ref={emojiPickerRef}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 rounded-full flex-shrink-0"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  >
+                    <Smile className="h-4 w-4" />
+                  </Button>
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-12 left-0 z-50 bg-popover border rounded-xl shadow-lg p-2 w-[280px] grid grid-cols-8 gap-1">
+                      {EMOJI_LIST.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className="h-8 w-8 flex items-center justify-center rounded hover:bg-muted/80 text-lg transition-colors"
+                          onClick={() => { setNewMessage((prev) => prev + emoji); setShowEmojiPicker(false) }}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="flex-1 relative">
                   <Input
                     placeholder="Сообщение..."

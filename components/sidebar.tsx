@@ -49,7 +49,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       },
       {
         id: "social-integrations",
-        label: "Соцсети",
+        label: "Интеграции",
         icon: Share2,
         path: "/social-integrations",
         module: "canViewDashboard" as const,
@@ -86,7 +86,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       },
       {
         id: "social-integrations",
-        label: "Соцсети",
+        label: "Интеграции",
         icon: Share2,
         path: "/social-integrations",
         module: "canViewDashboard" as const,
@@ -122,7 +122,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       },
       {
         id: "social-integrations",
-        label: "Соцсети",
+        label: "Интеграции",
         icon: Share2,
         path: "/social-integrations",
         module: "canViewDashboard" as const,

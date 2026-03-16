@@ -38,15 +38,16 @@ export async function GET(request: NextRequest) {
     if (partnerId) {
       // Get conversation with specific user
       const messages = await sql`
-        SELECT 
+        SELECT
           m.*,
           s.name as "senderName",
           r.name as "receiverName"
         FROM "Message" m
         LEFT JOIN "User" s ON m."senderId" = s.id
         LEFT JOIN "User" r ON m."receiverId" = r.id
-        WHERE (m."senderId" = ${user.id} AND m."receiverId" = ${partnerId})
-           OR (m."senderId" = ${partnerId} AND m."receiverId" = ${user.id})
+        WHERE ((m."senderId" = ${user.id} AND m."receiverId" = ${partnerId})
+           OR (m."senderId" = ${partnerId} AND m."receiverId" = ${user.id}))
+          AND (m."deletedBySenderId" IS NULL OR m."deletedBySenderId" != ${user.id})
         ORDER BY m."createdAt" ASC
       `
 

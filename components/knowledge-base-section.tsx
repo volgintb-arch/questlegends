@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import { RichTextEditor } from "@/components/rich-text-editor"
 import {
   Search,
   FileText,
@@ -688,23 +689,24 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
   }
 
   const renderArticleContent = (article: KnowledgeArticle) => {
-    const paragraphs = article.content ? article.content.split(/\n\n+/) : []
+    const isHtml = article.content?.includes("<") && article.content?.includes(">")
 
     return (
       <div className="space-y-6">
         {/* Article text content */}
-        <div className="prose prose-sm max-w-none">
-          {paragraphs.map((paragraph, i) => {
-            const lines = paragraph.split("\n")
-            return (
+        {isHtml ? (
+          <div className="article-content text-sm leading-relaxed text-foreground" dangerouslySetInnerHTML={{ __html: article.content }} />
+        ) : (
+          <div className="prose prose-sm max-w-none">
+            {(article.content || "").split(/\n\n+/).map((paragraph, i) => (
               <div key={i} className="mb-4">
-                {lines.map((line, j) => (
+                {paragraph.split("\n").map((line, j) => (
                   <p key={j} className="leading-relaxed text-foreground mb-1">{line}</p>
                 ))}
               </div>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Video section */}
         {article.videoUrl && (
@@ -1408,7 +1410,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                       )}
                     </div>
 
-                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{article.content}</p>
+                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{article.content?.replace(/<[^>]*>/g, "") || ""}</p>
 
                     {article.tags.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-4">
@@ -1540,11 +1542,10 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
               <div>
                 <Label>Содержание</Label>
-                <Textarea
-                  value={editingArticle.content || ""}
-                  onChange={(e) => setEditingArticle({ ...editingArticle, content: e.target.value })}
-                  placeholder="Содержание статьи (поддерживается HTML)"
-                  rows={10}
+                <RichTextEditor
+                  content={editingArticle.content || ""}
+                  onChange={(html) => setEditingArticle({ ...editingArticle, content: html })}
+                  placeholder="Содержание статьи"
                 />
               </div>
 

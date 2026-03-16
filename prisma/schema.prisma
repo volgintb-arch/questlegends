@@ -830,16 +830,19 @@ model GameScheduleStaff {
 // ============================================================
 
 model Message {
-  id         String   @id @default(cuid())
-  senderId   String
-  sender     User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiverId String
-  receiver   User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
-  content    String
-  fileUrl    String?
-  fileName   String?
-  isRead     Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id                String   @id @default(cuid())
+  senderId          String
+  sender            User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId        String
+  receiver          User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  content           String
+  fileUrl           String?
+  fileName          String?
+  isRead            Boolean  @default(false)
+  isEdited          Boolean  @default(false)
+  deletedBySenderId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
 
   @@index([senderId])
   @@index([receiverId])
