@@ -47,7 +47,10 @@ export function GlobalSearch() {
       if (search.trim()) {
         setLoading(true)
         try {
-          const response = await fetch(`/api/search?q=${encodeURIComponent(search)}`)
+          const token = typeof window !== "undefined" ? localStorage.getItem("auth-token") : null
+          const response = await fetch(`/api/search?q=${encodeURIComponent(search)}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
           if (response.ok) {
             const data = await response.json()
             setResults(data)

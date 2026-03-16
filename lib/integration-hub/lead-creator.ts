@@ -232,6 +232,11 @@ export class LeadCreator {
       )
     `
 
+    // Записать в DealLog
+    const channelLabels: Record<string, string> = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито", tilda: "Tilda (сайт)", max: "MAX" }
+    const channelLabel = channelLabels[message.channel] || message.channel
+    await this.logDealCreation(dealId, `Автосоздано из ${channelLabel}`, pipeline.length > 0 ? pipeline[0].stage_id : null, pipeline.length > 0 ? pipeline[0].pipeline_id : null)
+
     if (assignee?.id) {
       await this.sendNotification(assignee.id, dealId, clientName, message.channel, "b2b")
     }
@@ -344,6 +349,33 @@ export class LeadCreator {
     }
 
     return null
+  }
+
+  // Записать лог создания сделки
+  private static async logDealCreation(dealId: string, details: string, stageId: string | null, pipelineId: string | null) {
+    try {
+      const logId = globalThis.crypto.randomUUID()
+      let stageName: string | null = null
+      let pipelineName: string | null = null
+      if (stageId) {
+        const stage = await sql`SELECT name FROM "PipelineStage" WHERE id = ${stageId} LIMIT 1`
+        if (stage.length > 0) stageName = stage[0].name
+      }
+      if (pipelineId) {
+        const pipeline = await sql`SELECT name FROM "Pipeline" WHERE id = ${pipelineId} LIMIT 1`
+        if (pipeline.length > 0) pipelineName = pipeline[0].name
+      }
+      await sql`
+        INSERT INTO "DealLog" (id, "dealId", action, "toStageId", "toStageName", "pipelineId", "pipelineName", details, "userId", "userName")
+        VALUES (
+          ${logId}, ${dealId}, 'create',
+          ${stageId}, ${stageName}, ${pipelineId}, ${pipelineName},
+          ${details}, ${'system'}, ${'Интеграция'}
+        )
+      `
+    } catch (error) {
+      console.error("[v0] LeadCreator: DealLog creation failed", error)
+    }
   }
 
   // Обновить статистику
