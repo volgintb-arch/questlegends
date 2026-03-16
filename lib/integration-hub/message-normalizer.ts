@@ -114,7 +114,7 @@ export class MessageNormalizer {
     const email = payload.Email || payload.email || ""
 
     // Собрать все пользовательские поля в текст сообщения
-    const systemFields = ["formid", "pageid", "pageurl", "pagetitle", "projectid", "tranid", "test"]
+    const systemFields = ["formid", "pageid", "pageurl", "pagetitle", "projectid", "tranid", "test", "COOKIES", "cookies"]
     const contactFields = ["Name", "name", "Phone", "phone", "tel", "Email", "email"]
     const skipFields = new Set([...systemFields, ...contactFields])
 

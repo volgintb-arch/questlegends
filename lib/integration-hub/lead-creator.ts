@@ -204,7 +204,8 @@ export class LeadCreator {
 
     await sql`
       INSERT INTO "Deal" (
-        id, "clientName", "clientPhone", "clientEmail", source, "leadSource", stage,
+        id, "clientName", "contactName", "clientPhone", "contactPhone", "clientEmail",
+        source, "leadSource", stage,
         "pipelineId", "stageId",
         "clientTelegram", "messengerLink", "city", "gameDate",
         "additionalComment", "responsibleId",
@@ -212,6 +213,8 @@ export class LeadCreator {
       ) VALUES (
         ${dealId},
         ${clientName},
+        ${clientName},
+        ${message.phone || null},
         ${message.phone || null},
         ${data.clientEmail},
         ${`${message.channel}_bot`},
