@@ -14,15 +14,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Unsupported channel" }, { status: 400 })
     }
 
-    // Получить payload — Tilda отправляет form-urlencoded, остальные JSON
+    // Получить payload — Tilda может отправлять form-urlencoded, multipart или JSON
     let payload: any
     const contentType = request.headers.get("content-type") || ""
-    if (contentType.includes("application/x-www-form-urlencoded")) {
+    console.log(`[v0] Webhook ${channel}: content-type=${contentType}`)
+    if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
       const formData = await request.formData()
       payload = Object.fromEntries(formData.entries())
+    } else if (contentType.includes("text/plain")) {
+      // Некоторые сервисы шлют plain text
+      const text = await request.text()
+      try { payload = JSON.parse(text) } catch { payload = { text } }
     } else {
       payload = await request.json()
     }
+    console.log(`[v0] Webhook ${channel}: payload keys=${Object.keys(payload).join(",")}`, channel === "tilda" ? payload : "")
 
     // Tilda отправляет тестовый запрос с полем test=test — отвечаем 200
     if (channel === "tilda" && payload.test === "test") {
@@ -64,23 +70,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // 1. Process incoming message через Integration Hub
+    console.log(`[v0] Webhook ${channel}: Step 1 — processIncomingMessage`)
     const messageResult = await IntegrationHub.processIncomingMessage(channel, payload, integrationId)
 
     if (!messageResult.success) {
+      console.error(`[v0] Webhook ${channel}: processIncomingMessage FAILED:`, messageResult.error)
       return NextResponse.json({ error: messageResult.error }, { status: 500 })
     }
+    console.log(`[v0] Webhook ${channel}: Step 1 OK, messageId=${messageResult.messageId}`)
 
     // 2. Получить нормализованное сообщение из БД
     const message = await getMessageById(messageResult.messageId!)
+    console.log(`[v0] Webhook ${channel}: Step 2 OK, message fetched`)
 
     // 3. Routing decision
     const routing = await RoutingEngine.determineRouting(message, integrationId)
+    console.log(`[v0] Webhook ${channel}: Step 3 routing:`, JSON.stringify(routing))
 
     // 4. Создать лид если нужно
     if (routing.shouldCreateLead) {
+      console.log(`[v0] Webhook ${channel}: Step 4 — creating lead, type=${routing.leadType}`)
       await LeadCreator.createLead(message, routing, integrationId)
+      console.log(`[v0] Webhook ${channel}: Step 4 OK — lead created`)
     } else if (routing.existingLeadId) {
-      // Обновить статистику дублей
+      console.log(`[v0] Webhook ${channel}: Step 4 — duplicate, existingLeadId=${routing.existingLeadId}`)
       await LeadCreator.updateDuplicateStats(integrationId)
     }
 
