@@ -272,23 +272,52 @@
   50% { box-shadow: 0 0 0 10px rgba(196, 90, 45, 0); }
 }
 
-/* Glass scrollbar */
+/* Modern scrollbar — global */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, 0.25) transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.2);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.4);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+:root *::-webkit-scrollbar-thumb {
+  background: rgba(124, 58, 237, 0.15);
+}
+:root *::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 58, 237, 0.35);
+}
+:root * {
+  scrollbar-color: rgba(124, 58, 237, 0.15) transparent;
+}
+
+/* Glass scrollbar — sidebar & cards (thinner) */
 .glass-sidebar::-webkit-scrollbar,
 .glass-card::-webkit-scrollbar {
   width: 4px;
 }
-.glass-sidebar::-webkit-scrollbar-track,
-.glass-card::-webkit-scrollbar-track {
-  background: transparent;
-}
 .glass-sidebar::-webkit-scrollbar-thumb,
 .glass-card::-webkit-scrollbar-thumb {
-  background: rgba(212, 149, 43, 0.25);
+  background: rgba(139, 92, 246, 0.25);
   border-radius: 2px;
 }
 .glass-sidebar::-webkit-scrollbar-thumb:hover,
 .glass-card::-webkit-scrollbar-thumb:hover {
-  background: rgba(212, 149, 43, 0.45);
+  background: rgba(139, 92, 246, 0.45);
 }
 
 /* Compact utilities */

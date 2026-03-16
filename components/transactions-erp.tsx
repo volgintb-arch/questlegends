@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Download, Search, ArrowDownCircle, ArrowUpCircle, Pencil, Trash2, MoreHorizontal } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { Download, Search, ArrowDownCircle, ArrowUpCircle, Pencil, Trash2, MoreHorizontal, X } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -22,6 +22,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Transaction {
   id: string
@@ -61,17 +62,24 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
   const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([])
   const [franchiseeData, setFranchiseeData] = useState<FranchiseeData | null>(null)
 
+  const [filterType, setFilterType] = useState<"all" | "income" | "expense">("all")
+  const [filterCategory, setFilterCategory] = useState("all")
+  const [amountMin, setAmountMin] = useState("")
+  const [amountMax, setAmountMax] = useState("")
+
   const filteredTransactions = transactions.filter((t) => {
     const franchiseeMatch = !filters.franchiseSearch || t.franchiseeName?.includes(filters.franchiseSearch)
-    const dateMatch =
-      !filters.dateFrom ||
-      !filters.dateTo ||
-      (new Date(t.date) >= new Date(filters.dateFrom) && new Date(t.date) <= new Date(filters.dateTo))
+    const dateFromMatch = !filters.dateFrom || new Date(t.date) >= new Date(filters.dateFrom)
+    const dateToMatch = !filters.dateTo || new Date(t.date) <= new Date(filters.dateTo)
     const searchMatch =
       !searchTerm ||
       t.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.category?.toLowerCase().includes(searchTerm.toLowerCase())
-    return franchiseeMatch && dateMatch && searchMatch
+    const typeMatch = filterType === "all" || t.type === filterType
+    const categoryMatch = filterCategory === "all" || t.category === filterCategory
+    const amountMinMatch = !amountMin || t.amount >= Number(amountMin)
+    const amountMaxMatch = !amountMax || t.amount <= Number(amountMax)
+    return franchiseeMatch && dateFromMatch && dateToMatch && searchMatch && typeMatch && categoryMatch && amountMinMatch && amountMaxMatch
   })
 
   useEffect(() => {
@@ -532,6 +540,45 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
   const profit = totalRevenue - totalExpenses
 
+  // Progress dynamics — compare filtered period vs previous period of same length
+  const prevPeriodTotals = useMemo(() => {
+    if (!filters.dateFrom || !filters.dateTo) return null
+    const from = new Date(filters.dateFrom)
+    const to = new Date(filters.dateTo)
+    const periodDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    const prevTo = new Date(from)
+    prevTo.setDate(prevTo.getDate() - 1)
+    const prevFrom = new Date(prevTo)
+    prevFrom.setDate(prevFrom.getDate() - periodDays + 1)
+
+    const prevTx = transactions.filter((t) => {
+      const d = new Date(t.date)
+      return d >= prevFrom && d <= prevTo
+    })
+
+    const prevRevenue = prevTx.filter((t) => t.type === "income").reduce((s, t) => s + (Number(t.amount) || 0), 0)
+    const prevExpenses = prevTx.filter((t) => t.type === "expense").reduce((s, t) => s + (Number(t.amount) || 0), 0)
+    const prevFOT = prevTx.filter((t) => t.type === "expense" && (t.category?.startsWith("fot") || t.category === "fot")).reduce((s, t) => s + (Number(t.amount) || 0), 0)
+    const prevProfit = prevRevenue - prevExpenses
+    return { revenue: prevRevenue, expenses: prevExpenses, fot: prevFOT, profit: prevProfit }
+  }, [transactions, filters.dateFrom, filters.dateTo])
+
+  const getDynamicPct = (current: number, prev: number | undefined) => {
+    if (prev === undefined || prev === 0) return null
+    return ((current - prev) / Math.abs(prev)) * 100
+  }
+
+  const DynamicBadge = ({ current, prev }: { current: number; prev: number | undefined }) => {
+    const pct = getDynamicPct(current, prev)
+    if (pct === null) return null
+    const isUp = pct >= 0
+    return (
+      <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${isUp ? "text-green-500" : "text-red-500"}`}>
+        {isUp ? "+" : ""}{pct.toFixed(1)}% vs пред.
+      </span>
+    )
+  }
+
   const isOwnPoint = role === "own_point" || user?.role === "own_point" || franchiseeData?.isOwnPoint
   const royaltyPercent = isOwnPoint ? 0 : Number(franchiseeData?.royaltyPercent) || 0
   const royaltyAmount = isOwnPoint ? 0 : Math.round(totalRevenue * (royaltyPercent / 100))
@@ -546,10 +593,6 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
             <h1 className="text-2xl font-bold text-foreground">Финансы / ERP</h1>
             <p className="text-sm text-muted-foreground mt-1">Полный контроль финансовых показателей всей сети</p>
           </div>
-          <Button onClick={exportToExcel} variant="outline" className="gap-2 bg-transparent">
-            <Download size={16} />
-            Экспорт в Excel
-          </Button>
         </div>
 
         <div className="relative">
@@ -592,37 +635,106 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
         </div>
       </div>
 
-      {/* Date filter row */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-card border border-border rounded-lg p-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">От</label>
-            <input
-              type="date"
-              value={filters.dateFrom || ""}
-              onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-              max={filters.dateTo || ""}
-              className="bg-background border border-border rounded px-2 py-1 text-sm outline-none focus:border-primary"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">До</label>
-            <input
-              type="date"
-              value={filters.dateTo || ""}
-              onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-              min={filters.dateFrom || ""}
-              className="bg-background border border-border rounded px-2 py-1 text-sm outline-none focus:border-primary"
-            />
-          </div>
+      {/* Filters row */}
+      <div className="flex flex-wrap items-end gap-3 bg-card border border-border rounded-lg p-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground">Период от</label>
+          <input
+            type="date"
+            value={filters.dateFrom || ""}
+            onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+            max={filters.dateTo || ""}
+            className="bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-primary h-9"
+          />
         </div>
-        <button
-          onClick={exportToExcel}
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <Download size={16} />
-          Экспорт Excel
-        </button>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground">Период до</label>
+          <input
+            type="date"
+            value={filters.dateTo || ""}
+            onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+            min={filters.dateFrom || ""}
+            className="bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-primary h-9"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground">Тип</label>
+          <Select value={filterType} onValueChange={(v) => setFilterType(v as any)}>
+            <SelectTrigger className="bg-background w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все</SelectItem>
+              <SelectItem value="income">Доходы</SelectItem>
+              <SelectItem value="expense">Расходы</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground">Категория</label>
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger className="bg-background w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все категории</SelectItem>
+              <SelectItem value="prepayment">Предоплата</SelectItem>
+              <SelectItem value="postpayment">Постоплата</SelectItem>
+              <SelectItem value="fot_animators">ФОТ Аниматоры</SelectItem>
+              <SelectItem value="fot_hosts">ФОТ Ведущие</SelectItem>
+              <SelectItem value="fot_djs">ФОТ Диджеи</SelectItem>
+              <SelectItem value="fot_admin">ФОТ Админ</SelectItem>
+              <SelectItem value="fot">ФОТ</SelectItem>
+              <SelectItem value="rent">Аренда</SelectItem>
+              <SelectItem value="marketing">Маркетинг</SelectItem>
+              <SelectItem value="equipment">Оборудование</SelectItem>
+              <SelectItem value="other_income">Прочий доход</SelectItem>
+              <SelectItem value="other_expense">Прочий расход</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground">Сумма от</label>
+          <input
+            type="number"
+            value={amountMin}
+            onChange={(e) => setAmountMin(e.target.value)}
+            placeholder="0"
+            className="bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-primary h-9 w-[100px]"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground">Сумма до</label>
+          <input
+            type="number"
+            value={amountMax}
+            onChange={(e) => setAmountMax(e.target.value)}
+            placeholder="999999"
+            className="bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-primary h-9 w-[100px]"
+          />
+        </div>
+        {(filters.dateFrom || filters.dateTo || filterType !== "all" || filterCategory !== "all" || amountMin || amountMax) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setFilters({ ...filters, dateFrom: "", dateTo: "" })
+              setFilterType("all")
+              setFilterCategory("all")
+              setAmountMin("")
+              setAmountMax("")
+            }}
+            className="text-muted-foreground h-9"
+          >
+            <X size={14} className="mr-1" /> Сбросить
+          </Button>
+        )}
+        <div className="sm:ml-auto">
+          <Button onClick={exportToExcel} variant="outline" size="sm" className="gap-2 bg-transparent h-9">
+            <Download size={16} />
+            Экспорт Excel
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -630,19 +742,19 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <p className="text-sm font-medium text-muted-foreground mb-2">Общий Доход</p>
           <p className="text-3xl font-bold text-green-500">{totalRevenue.toLocaleString()} ₽</p>
-          <p className="text-xs text-muted-foreground mt-2">Выручка за период</p>
+          {prevPeriodTotals ? <DynamicBadge current={totalRevenue} prev={prevPeriodTotals.revenue} /> : <p className="text-xs text-muted-foreground mt-2">Выручка за период</p>}
         </div>
 
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <p className="text-sm font-medium text-muted-foreground mb-2">Общие Расходы</p>
           <p className="text-3xl font-bold text-orange-500">{totalExpenses.toLocaleString()} ₽</p>
-          <p className="text-xs text-muted-foreground mt-2">Все расходы</p>
+          {prevPeriodTotals ? <DynamicBadge current={totalExpenses} prev={prevPeriodTotals.expenses} /> : <p className="text-xs text-muted-foreground mt-2">Все расходы</p>}
         </div>
 
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <p className="text-sm font-medium text-muted-foreground mb-2">ФОТ</p>
           <p className="text-3xl font-bold text-purple-500">{totalFOT.toLocaleString()} ₽</p>
-          <p className="text-xs text-muted-foreground mt-2">Аниматоры, ведущие, DJ</p>
+          {prevPeriodTotals ? <DynamicBadge current={totalFOT} prev={prevPeriodTotals.fot} /> : <p className="text-xs text-muted-foreground mt-2">Аниматоры, ведущие, DJ</p>}
         </div>
 
         {!isOwnPoint && isFranchiseeOrAdmin && (
@@ -658,7 +770,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
           <p className={`text-3xl font-bold ${profit >= 0 ? "text-emerald-500" : "text-red-500"}`}>
             {profit.toLocaleString()} ₽
           </p>
-          <p className="text-xs text-muted-foreground mt-2">Доход - Расходы</p>
+          {prevPeriodTotals ? <DynamicBadge current={profit} prev={prevPeriodTotals.profit} /> : <p className="text-xs text-muted-foreground mt-2">Доход - Расходы</p>}
         </div>
       </div>
 

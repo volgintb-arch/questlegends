@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { X, Search, MoveRight, Trash2, Edit, Plus } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/contexts/auth-context"
 
 interface DealLog {
@@ -114,17 +115,18 @@ export function CrmLogsModal({ isOpen, onClose }: CrmLogsModalProps) {
               className="w-full pl-10 pr-4 py-2 bg-muted/50 border border-border rounded-lg text-sm"
             />
           </div>
-          <select
-            value={filterAction}
-            onChange={(e) => setFilterAction(e.target.value)}
-            className="px-4 py-2 bg-muted/50 border border-border rounded-lg text-sm"
-          >
-            <option value="all">Все действия</option>
-            <option value="create">Создание</option>
-            <option value="move">Перемещение</option>
-            <option value="update">Изменение</option>
-            <option value="delete">Удаление</option>
-          </select>
+          <Select value={filterAction} onValueChange={setFilterAction}>
+            <SelectTrigger className="w-[180px] bg-muted/50">
+              <SelectValue placeholder="Все действия" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все действия</SelectItem>
+              <SelectItem value="create">Создание</SelectItem>
+              <SelectItem value="move">Перемещение</SelectItem>
+              <SelectItem value="update">Изменение</SelectItem>
+              <SelectItem value="delete">Удаление</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="overflow-y-auto max-h-[calc(80vh-140px)]">
