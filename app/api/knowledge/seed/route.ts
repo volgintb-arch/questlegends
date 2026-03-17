@@ -1,19 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyToken } from "@/lib/simple-auth"
+import { verifyRequest } from "@/lib/simple-auth"
 import { neon } from "@/lib/neon-compat"
-
-async function getCurrentUser(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) return null
-    const token = authHeader.substring(7)
-    const payload = await verifyToken(token)
-    if (!payload) return null
-    return { id: payload.userId as string, name: payload.name as string, role: payload.role as string }
-  } catch {
-    return null
-  }
-}
 
 interface ArticleSeed {
   title: string
@@ -608,10 +595,12 @@ function getTrainingArticles(): ArticleSeed[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request)
-    if (!user) {
+    const payload = await verifyRequest(request)
+    if (!payload) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    const user = { id: payload.userId, name: payload.name, role: payload.role }
 
     if (!["uk", "super_admin"].includes(user.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
