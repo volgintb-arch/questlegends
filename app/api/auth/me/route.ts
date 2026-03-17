@@ -13,9 +13,9 @@ export async function GET(request: NextRequest) {
     const sql = neon(process.env.DATABASE_URL!)
 
     const users = await sql`
-      SELECT 
+      SELECT
         u.id, u.phone, u.name, u.role, u."isActive", u."franchiseeId", u.email,
-        u."avatarUrl", u."telegramId", u.telegram,
+        u."avatarUrl", u."telegramId", u.telegram, u."onboardingCompleted",
         f.name as "franchiseeName", f.city as "franchiseeCity"
       FROM "User" u
       LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
         franchiseeId: user.franchiseeId,
         franchiseeName: user.franchiseeName,
         franchiseeCity: user.franchiseeCity,
+        onboardingCompleted: user.onboardingCompleted ?? false,
       },
     })
   } catch (error: any) {

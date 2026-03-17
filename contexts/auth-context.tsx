@@ -166,6 +166,7 @@ export interface User {
   telegram_id?: string
   whatsapp?: string
   avatarUrl?: string
+  onboardingCompleted?: boolean
   permissions?: UserPermissions
 }
 
@@ -185,6 +186,7 @@ interface AuthContextType {
   getAuthHeaders: () => HeadersInit
   canViewModule: (module: keyof UserPermissions) => boolean
   refreshPermissions: () => Promise<void>
+  completeOnboarding: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -410,6 +412,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false
   }
 
+  const completeOnboarding = async () => {
+    const currentToken = token || getStoredToken()
+    if (!currentToken || !user) return
+    try {
+      await fetch("/api/auth/onboarding", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${currentToken}` },
+      })
+      setUser({ ...user, onboardingCompleted: true })
+    } catch (error) {
+      console.error("[v0] Failed to complete onboarding:", error)
+    }
+  }
+
   const canViewModule = (module: keyof UserPermissions): boolean => {
     if (!user) return false
 
@@ -475,6 +491,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     getAuthHeaders,
     canViewModule,
     refreshPermissions,
+    completeOnboarding,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

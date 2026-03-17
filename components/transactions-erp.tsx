@@ -250,18 +250,19 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
       ws["!cols"] = widths.map((w) => ({ wch: w }))
     }
 
+    const exportTx = filteredTransactions
     // === Лист 1: Сводная ===
     if (isUK) {
-      const totalRevenue = transactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
-      const totalExpenses = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
-      const totalTransactions = transactions.length
+      const totalRevenue = exportTx.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
+      const totalExpenses = exportTx.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
+      const totalTransactions = exportTx.length
       const avgTransaction = totalTransactions > 0 ? Math.round((totalRevenue + totalExpenses) / totalTransactions) : 0
 
       // === Рассчёт по франчайзи (используем для агрегации роялти) ===
       const defaultRoyaltyRate = 0.07
       const franchiseeBreakdown: Record<string, { revenue: number; expenses: number; royalties: number; profit: number; txCount: number }> = {}
 
-      transactions.forEach((t) => {
+      exportTx.forEach((t) => {
         const name = t.franchiseeName || t.franchiseeCity || "Без франчайзи"
         if (!franchiseeBreakdown[name]) {
           franchiseeBreakdown[name] = { revenue: 0, expenses: 0, royalties: 0, profit: 0, txCount: 0 }
@@ -310,8 +311,8 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
       setColWidths(franchiseeSheet, [30, 15, 15, 15, 15, 12, 12])
       XLSX.utils.book_append_sheet(workbook, franchiseeSheet, "По франчайзи")
     } else {
-      const totalRevenue = transactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
-      const totalExpenses = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
+      const totalRevenue = exportTx.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
+      const totalExpenses = exportTx.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
       const royaltyPercent = Number(franchiseeData?.royaltyPercent) || 0
       const totalRoyalty = Math.round(totalRevenue * (royaltyPercent / 100))
       const totalProfit = totalRevenue - totalExpenses - totalRoyalty
@@ -326,7 +327,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
       summary.push(
         { Показатель: "Прибыль", Значение: totalProfit, Единица: "₽" },
         { Показатель: "Маржа прибыли", Значение: totalRevenue > 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}%` : "0%", Единица: "" },
-        { Показатель: "Всего транзакций", Значение: transactions.length, Единица: "шт" },
+        { Показатель: "Всего транзакций", Значение: exportTx.length, Единица: "шт" },
       )
 
       const summarySheet = XLSX.utils.json_to_sheet(summary)
@@ -335,7 +336,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
     }
 
     // === Лист: Все транзакции ===
-    const exportData = transactions.map((t) => ({
+    const exportData = exportTx.map((t) => ({
       Дата: new Date(t.date).toLocaleDateString("ru-RU"),
       Тип: t.type === "income" ? "Доход" : "Расход",
       Сумма: t.amount,
@@ -530,19 +531,17 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
   const chartData = generateChartData()
 
-  const totalRevenue = transactions
+  const totalRevenue = filteredTransactions
     .filter((t) => t.type === "income")
     .reduce((sum, t) => sum + (Number.parseFloat(String(t.amount)) || 0), 0)
 
-  const totalExpenses = transactions
+  const totalExpenses = filteredTransactions
     .filter((t) => t.type === "expense")
     .reduce((sum, t) => sum + (Number.parseFloat(String(t.amount)) || 0), 0)
 
-  const totalFOT = transactions
+  const totalFOT = filteredTransactions
     .filter((t) => t.type === "expense" && (t.category?.startsWith("fot") || t.category === "fot"))
     .reduce((sum, t) => sum + (Number.parseFloat(String(t.amount)) || 0), 0)
-
-  const profit = totalRevenue - totalExpenses
 
   // Progress dynamics — compare filtered period vs previous period of same length
   const prevPeriodTotals = useMemo(() => {
@@ -586,6 +585,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
   const isOwnPoint = role === "own_point" || user?.role === "own_point" || franchiseeData?.isOwnPoint
   const royaltyPercent = isOwnPoint ? 0 : Number(franchiseeData?.royaltyPercent) || 0
   const royaltyAmount = isOwnPoint ? 0 : Math.round(totalRevenue * (royaltyPercent / 100))
+  const profit = totalRevenue - totalExpenses - royaltyAmount
 
   const isFranchiseeOrAdmin = role === "franchisee" || role === "admin"
 

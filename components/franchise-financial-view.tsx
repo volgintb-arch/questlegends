@@ -81,8 +81,13 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
 
       const prevRevenue = prevTx.filter((t) => t.type === "income").reduce((s, t) => s + (Number(t.amount) || 0), 0)
       const prevExpenses = prevTx.filter((t) => t.type === "expense").reduce((s, t) => s + (Number(t.amount) || 0), 0)
-      const prevRoyalty = Math.round(prevRevenue * 0.07)
-      setPrevPeriodData({ revenue: prevRevenue, royalty: prevRoyalty, expenses: prevExpenses, profit: prevRevenue - prevExpenses })
+      // Calculate royalty based on actual franchise royalty percentages
+      let prevRoyalty = 0
+      franchiseData.forEach((f) => {
+        const fRevenue = prevTx.filter((t) => t.type === "income" && t.franchiseeId === f.id).reduce((s, t) => s + (Number(t.amount) || 0), 0)
+        prevRoyalty += Math.round(fRevenue * (f.royaltyPercent / 100))
+      })
+      setPrevPeriodData({ revenue: prevRevenue, royalty: prevRoyalty, expenses: prevExpenses, profit: prevRevenue - prevExpenses - prevRoyalty })
     } else {
       setPrevPeriodData(null)
     }
