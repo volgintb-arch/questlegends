@@ -213,14 +213,12 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
   useEffect(() => {
     loadArticles()
-  }, [selectedCategory, searchQuery])
+  }, [])
 
   const loadArticles = async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
-      if (selectedCategory !== "all") params.set("category", selectedCategory)
-      if (searchQuery) params.set("search", searchQuery)
 
       const response = await fetch(`/api/knowledge?${params}`, {
         headers: getAuthHeaders(),
