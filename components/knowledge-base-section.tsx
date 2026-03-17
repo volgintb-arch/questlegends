@@ -256,8 +256,9 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
   const handleEditArticle = (article: KnowledgeArticle) => {
     setEditingArticle(article)
+    setSelectedArticle(null)
     setShowEditModal(true)
-    setShowCreateDialog(true) // Use the new dialog
+    setShowCreateDialog(true)
   }
 
   const handleAddNewArticle = () => {
