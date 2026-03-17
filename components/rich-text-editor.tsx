@@ -86,7 +86,10 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
       formData.append("file", file)
 
       try {
-        const response = await fetch("/api/upload", { method: "POST", body: formData })
+        const token = typeof window !== "undefined" ? localStorage.getItem("auth-token") : null
+        const headers: Record<string, string> = {}
+        if (token) headers["Authorization"] = `Bearer ${token}`
+        const response = await fetch("/api/upload", { method: "POST", body: formData, headers })
         if (response.ok) {
           const data = await response.json()
           const url = data.url || data.fileUrl

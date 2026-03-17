@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { X, Search, MoveRight, Trash2, Edit, Plus } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/auth-context"
 
 interface DealLog {
@@ -106,13 +107,12 @@ export function CrmLogsModal({ isOpen, onClose }: CrmLogsModalProps) {
 
         <div className="p-4 border-b flex gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+            <Input
               placeholder="Поиск по логам..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-muted/50 border border-border rounded-lg text-sm"
+              className="pl-10"
             />
           </div>
           <Select value={filterAction} onValueChange={setFilterAction}>

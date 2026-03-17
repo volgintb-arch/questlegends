@@ -8,9 +8,10 @@ import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { OnboardingSlider } from "@/components/onboarding-slider"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, completeOnboarding } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
@@ -28,7 +29,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (sessionStorage.getItem(key)) return
     sessionStorage.setItem(key, "1")
 
-    const token = localStorage.getItem("token")
+    const token = localStorage.getItem("auth-token")
     if (!token) return
     fetch("/api/notifications/check-royalty", {
       method: "POST",
@@ -73,8 +74,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return roleLabels[role] || role
   }
 
+  const showOnboarding = user && !user.onboardingCompleted
+
   return (
     <ErrorBoundary>
+      {showOnboarding && (
+        <OnboardingSlider
+          role={user.role}
+          userName={user.name}
+          onComplete={completeOnboarding}
+        />
+      )}
       <div className="flex h-screen bg-mesh overflow-hidden">
         <Sidebar
           role={user.role}

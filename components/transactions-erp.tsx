@@ -254,26 +254,11 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
     if (isUK) {
       const totalRevenue = transactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
       const totalExpenses = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
-      const totalRoyalties = Math.round(totalRevenue * 0.07)
-      const totalProfit = totalRevenue - totalExpenses
       const totalTransactions = transactions.length
       const avgTransaction = totalTransactions > 0 ? Math.round((totalRevenue + totalExpenses) / totalTransactions) : 0
 
-      const networkSummary = [
-        { Показатель: "Выручка (вся сеть)", Значение: totalRevenue, Единица: "₽" },
-        { Показатель: "Роялти (7%)", Значение: totalRoyalties, Единица: "₽" },
-        { Показатель: "Расходы", Значение: totalExpenses, Единица: "₽" },
-        { Показатель: "Прибыль", Значение: totalProfit, Единица: "₽" },
-        { Показатель: "Всего транзакций", Значение: totalTransactions, Единица: "шт" },
-        { Показатель: "Средняя транзакция", Значение: avgTransaction, Единица: "₽" },
-        { Показатель: "Маржа прибыли", Значение: totalRevenue > 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}%` : "0%", Единица: "" },
-      ]
-
-      const networkSheet = XLSX.utils.json_to_sheet(networkSummary)
-      setColWidths(networkSheet, [30, 18, 8])
-      XLSX.utils.book_append_sheet(workbook, networkSheet, "Сводная по сети")
-
-      // === Лист 2: По франчайзи ===
+      // === Рассчёт по франчайзи (используем для агрегации роялти) ===
+      const defaultRoyaltyRate = 0.07
       const franchiseeBreakdown: Record<string, { revenue: number; expenses: number; royalties: number; profit: number; txCount: number }> = {}
 
       transactions.forEach((t) => {
@@ -288,14 +273,33 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
       Object.keys(franchiseeBreakdown).forEach((name) => {
         const d = franchiseeBreakdown[name]
-        d.royalties = Math.round(d.revenue * 0.07)
+        d.royalties = Math.round(d.revenue * defaultRoyaltyRate)
         d.profit = d.revenue - d.expenses
       })
 
+      const totalRoyalties = Object.values(franchiseeBreakdown).reduce((sum, d) => sum + d.royalties, 0)
+      const totalProfit = totalRevenue - totalExpenses
+
+      // === Лист 1: Сводная ===
+      const networkSummary = [
+        { Показатель: "Выручка (вся сеть)", Значение: totalRevenue, Единица: "₽" },
+        { Показатель: "Роялти", Значение: totalRoyalties, Единица: "₽" },
+        { Показатель: "Расходы", Значение: totalExpenses, Единица: "₽" },
+        { Показатель: "Прибыль", Значение: totalProfit, Единица: "₽" },
+        { Показатель: "Всего транзакций", Значение: totalTransactions, Единица: "шт" },
+        { Показатель: "Средняя транзакция", Значение: avgTransaction, Единица: "₽" },
+        { Показатель: "Маржа прибыли", Значение: totalRevenue > 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}%` : "0%", Единица: "" },
+      ]
+
+      const networkSheet = XLSX.utils.json_to_sheet(networkSummary)
+      setColWidths(networkSheet, [30, 18, 8])
+      XLSX.utils.book_append_sheet(workbook, networkSheet, "Сводная по сети")
+
+      // === Лист 2: По франчайзи ===
       const fbData = Object.entries(franchiseeBreakdown).map(([name, d]) => ({
         Франчайзи: name,
         Выручка: d.revenue,
-        "Роялти (7%)": d.royalties,
+        Роялти: d.royalties,
         Расходы: d.expenses,
         Прибыль: d.profit,
         "Маржа %": d.revenue > 0 ? `${((d.profit / d.revenue) * 100).toFixed(1)}%` : "0%",

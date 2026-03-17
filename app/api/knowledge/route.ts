@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ articles: articlesWithExtras })
   } catch (error: any) {
     console.error("Knowledge articles fetch error:")
-    return NextResponse.json({ articles: [], error: "Internal server error" }, { status: 200 })
+    return NextResponse.json({ articles: [], error: "Internal server error" }, { status: 500 })
   }
 }
 
