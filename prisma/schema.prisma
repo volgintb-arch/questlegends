@@ -8,11 +8,16 @@ datasource db {
 }
 
 enum Role {
+  super_admin
   uk
   uk_employee
   franchisee
+  own_point
   admin
   employee
+  animator
+  host
+  dj
 }
 
 enum PersonnelRole {
@@ -53,6 +58,7 @@ model User {
   description   String?
   avatarUrl     String?
   isActive      Boolean   @default(true)
+  onboardingCompleted Boolean @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
