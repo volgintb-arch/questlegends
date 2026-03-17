@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       integrations = await sql`
         SELECT * FROM integration
         WHERE owner_type = 'franchisee'
-        AND owner_id = ${user.franchiseeId || ""}
+        AND owner_id = ${user.franchiseeId || null}
         ORDER BY created_at DESC
       `
     } else {
