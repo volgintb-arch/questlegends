@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { ProfileSettingsModal } from "./profile-settings-modal"
 import { GlobalSearch } from "./global-search"
+import { PWAInstallButton } from "./pwa-install-button"
 
 interface HeaderProps {
   userName: string
@@ -86,6 +87,8 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-3">
+            <PWAInstallButton />
+
             <div className="relative">
               <button
                 onClick={() => {
