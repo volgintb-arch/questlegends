@@ -5,6 +5,7 @@ import { RussianRuble, TrendingUp, TrendingDown, Download, Users, Plus, X, Build
 import { useAuth } from "@/contexts/auth-context"
 import { useExpenses, useCreateExpense } from "@/hooks/use-expenses"
 import { useTransactions, useCreateTransaction } from "@/hooks/use-transactions"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const EXPENSE_CATEGORIES = [
   "Аренда",
@@ -490,15 +491,16 @@ export function FinancesFranchisee() {
         <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
           <h2 className="text-lg font-semibold text-foreground">Общие Расходы</h2>
           <div className="flex items-center gap-3">
-            <select
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="bg-muted border border-border rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="current-month">Текущий месяц</option>
-              <option value="last-month">Прошлый месяц</option>
-              <option value="quarter">Квартал</option>
-            </select>
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-[180px] bg-muted/50">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="current-month">Текущий месяц</SelectItem>
+                <SelectItem value="last-month">Прошлый месяц</SelectItem>
+                <SelectItem value="quarter">Квартал</SelectItem>
+              </SelectContent>
+            </Select>
             <button
               onClick={() => setShowExpenseForm(true)}
               className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors text-sm"
@@ -526,17 +528,16 @@ export function FinancesFranchisee() {
                 <label className="block text-sm font-medium text-foreground mb-2">
                   Категория <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={newExpense.category}
-                  onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  {EXPENSE_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
+                <Select value={newExpense.category} onValueChange={(v) => setNewExpense({ ...newExpense, category: v })}>
+                  <SelectTrigger className="w-full bg-background">
+                    <SelectValue placeholder="Выберите категорию" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXPENSE_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
