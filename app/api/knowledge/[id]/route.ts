@@ -102,7 +102,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const sql = neon(process.env.DATABASE_URL)
 
     const body = await request.json()
-    const { title, content, category, type, tags, videoUrl, files, targetRole } = body
+    const { title, content, category, type, tags, videoUrl, files, targetRoles } = body
 
     // Check if article exists
     const articles = await sql`
@@ -113,6 +113,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Article not found" }, { status: 404 })
     }
 
+    const rolesArray = targetRoles || []
+
     await sql`
       UPDATE "KnowledgeArticle"
       SET
@@ -122,7 +124,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         type = ${type || "article"},
         tags = ${tags || []},
         "videoUrl" = ${videoUrl || null},
-        "targetRole" = ${targetRole || null},
+        "targetRoles" = ${rolesArray},
         "updatedAt" = NOW()
       WHERE id = ${id}
     `

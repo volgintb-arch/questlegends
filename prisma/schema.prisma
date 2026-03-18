@@ -394,7 +394,8 @@ model KnowledgeArticle {
   type        String   @default("article")
   tags        String[]
   videoUrl    String?
-  targetRole  String?  // franchisee, admin, animator, dj, host
+  targetRole  String?  // deprecated — use targetRoles
+  targetRoles String[] @default([]) // uk, franchisee, admin, employee, animator, host, dj
   views       Int      @default(0)
   helpful     Int      @default(0)
   createdAt   DateTime @default(now())

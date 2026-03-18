@@ -1,88 +1,106 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@/lib/neon-compat"
-import { verifyToken } from "@/lib/simple-auth"
+import { sql } from "@/lib/db"
+import { verifyRequest } from "@/lib/simple-auth"
 
-async function getCurrentUser(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return null
-    }
-
-    const token = authHeader.substring(7)
-    const payload = await verifyToken(token)
-    if (!payload) return null
-
-    return {
-      id: payload.userId as string,
-      name: payload.name as string,
-      role: payload.role as string,
-    }
-  } catch (error) {
-    return null
+// Map user role to targetRoles keys that they should see
+function getRoleKeys(userRole: string): string[] {
+  switch (userRole) {
+    case "super_admin":
+    case "uk":
+    case "uk_employee":
+      return ["uk"]
+    case "franchisee":
+    case "own_point":
+      return ["franchisee"]
+    case "admin":
+      return ["admin"]
+    case "employee":
+      return ["employee"]
+    case "animator":
+      return ["animator"]
+    case "host":
+      return ["host"]
+    case "dj":
+      return ["dj"]
+    default:
+      return []
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ articles: [] })
+    const user = await verifyRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
-    const sql = neon(process.env.DATABASE_URL)
-    const user = await getCurrentUser(request)
 
     const { searchParams } = new URL(request.url)
     const category = searchParams.get("category")
     const search = searchParams.get("search")
 
+    // Get all articles first
     let articles
-
     if (category && category !== "all" && search) {
       articles = await sql`
-        SELECT * FROM "KnowledgeArticle" 
-        WHERE category = ${category} 
+        SELECT * FROM "KnowledgeArticle"
+        WHERE category = ${category}
         AND (title ILIKE ${"%" + search + "%"} OR content ILIKE ${"%" + search + "%"})
         ORDER BY "createdAt" DESC
       `
     } else if (category && category !== "all") {
       articles = await sql`
-        SELECT * FROM "KnowledgeArticle" 
+        SELECT * FROM "KnowledgeArticle"
         WHERE category = ${category}
         ORDER BY "createdAt" DESC
       `
     } else if (search) {
       articles = await sql`
-        SELECT * FROM "KnowledgeArticle" 
+        SELECT * FROM "KnowledgeArticle"
         WHERE title ILIKE ${"%" + search + "%"} OR content ILIKE ${"%" + search + "%"}
         ORDER BY "createdAt" DESC
       `
     } else {
       articles = await sql`
-        SELECT * FROM "KnowledgeArticle" 
+        SELECT * FROM "KnowledgeArticle"
         ORDER BY "createdAt" DESC
       `
     }
 
+    // UK roles see everything, other roles see filtered articles
+    const isUK = ["super_admin", "uk", "uk_employee"].includes(user.role)
+    const userRoleKeys = getRoleKeys(user.role)
+
+    const filteredArticles = isUK
+      ? articles
+      : articles.filter((a: any) => {
+          const roles: string[] = a.targetRoles || []
+          // If targetRoles is empty — check old targetRole field for backward compat
+          if (roles.length === 0) {
+            const oldRole = a.targetRole
+            if (!oldRole) return true // No target = visible to all
+            return userRoleKeys.includes(oldRole)
+          }
+          // Article is visible if ANY of its targetRoles matches the user
+          return roles.some((r: string) => userRoleKeys.includes(r))
+        })
+
     const articlesWithExtras = await Promise.all(
-      articles.map(async (article: any) => {
+      filteredArticles.map(async (article: any) => {
         const files = await sql`
-          SELECT id, "articleId", name, url, size, "mimeType", type, "uploadedAt" 
+          SELECT id, "articleId", name, url, size, "mimeType", type, "uploadedAt"
           FROM "KnowledgeFile" WHERE "articleId" = ${article.id}
         `
 
         let isCompleted = false
         let completedAt = null
 
-        if (user) {
-          const readStatus = await sql`
-            SELECT "isCompleted", "completedAt" FROM "ArticleReadStatus" 
-            WHERE "articleId" = ${article.id} AND "userId" = ${user.id}
-          `
-          if (readStatus.length > 0) {
-            isCompleted = readStatus[0].isCompleted
-            completedAt = readStatus[0].completedAt
-          }
+        const readStatus = await sql`
+          SELECT "isCompleted", "completedAt" FROM "ArticleReadStatus"
+          WHERE "articleId" = ${article.id} AND "userId" = ${user.userId}
+        `
+        if (readStatus.length > 0) {
+          isCompleted = readStatus[0].isCompleted
+          completedAt = readStatus[0].completedAt
         }
 
         const mappedFiles = (files || []).map((f: any) => ({
@@ -100,6 +118,12 @@ export async function GET(request: NextRequest) {
 
         return {
           ...article,
+          // Normalize: always return targetRoles array
+          targetRoles: article.targetRoles?.length > 0
+            ? article.targetRoles
+            : article.targetRole
+              ? [article.targetRole]
+              : [],
           files: mappedFiles,
           isCompleted,
           completedAt,
@@ -117,7 +141,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request)
+    const user = await verifyRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -126,13 +150,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden - only UK can create articles" }, { status: 403 })
     }
 
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
-    }
-
-    const sql = neon(process.env.DATABASE_URL)
     const body = await request.json()
-    const { title, category, content, type, tags, videoUrl, files, targetRole } = body
+    const { title, category, content, type, tags, videoUrl, files, targetRoles } = body
 
     if (!title || !category || !content) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -140,10 +159,11 @@ export async function POST(request: NextRequest) {
 
     const id = `KB-${Date.now()}`
     const tagsArray = tags || []
+    const rolesArray = targetRoles || []
 
     const result = await sql`
-      INSERT INTO "KnowledgeArticle" (id, title, category, content, author, "authorId", type, tags, views, helpful, "videoUrl", "targetRole", "createdAt", "updatedAt")
-      VALUES (${id}, ${title}, ${category}, ${content}, ${user.name}, ${user.id}, ${type || "article"}, ${tagsArray}, 0, 0, ${videoUrl || null}, ${targetRole || null}, NOW(), NOW())
+      INSERT INTO "KnowledgeArticle" (id, title, category, content, author, "authorId", type, tags, views, helpful, "videoUrl", "targetRoles", "createdAt", "updatedAt")
+      VALUES (${id}, ${title}, ${category}, ${content}, ${user.name}, ${user.userId}, ${type || "article"}, ${tagsArray}, 0, 0, ${videoUrl || null}, ${rolesArray}, NOW(), NOW())
       RETURNING *
     `
 

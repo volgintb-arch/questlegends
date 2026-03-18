@@ -72,7 +72,8 @@ interface KnowledgeArticle {
   isCompleted?: boolean
   completedAt?: string
   hasQuiz?: boolean
-  targetRole?: string // franchisee, admin, animator, dj, host
+  targetRole?: string // deprecated
+  targetRoles?: string[] // uk, franchisee, admin, employee, animator, host, dj
 }
 
 interface QuizQuestionData {
@@ -199,8 +200,10 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
   }
 
   const targetRoleLabels: Record<string, string> = {
+    uk: "УК",
     franchisee: "Франчайзи",
     admin: "Администратор",
+    employee: "Сотрудник",
     animator: "Аниматор",
     dj: "Диджей",
     host: "Ведущий",
@@ -240,7 +243,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
             isCompleted: a.isCompleted || false,
             completedAt: a.completedAt,
             hasQuiz: a.hasQuiz || false,
-            targetRole: a.targetRole || null,
+            targetRoles: a.targetRoles || [],
           })),
         )
       }
@@ -273,7 +276,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
       type: "article",
       files: [],
       videoUrl: "",
-      targetRole: undefined,
+      targetRoles: [],
     })
     setShowAddModal(true)
     setShowCreateDialog(true)
@@ -308,7 +311,7 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
         tags: editingArticle.tags || [],
         videoUrl: editingArticle.videoUrl || null,
         files: preparedFiles,
-        targetRole: editingArticle.targetRole || null,
+        targetRoles: editingArticle.targetRoles || [],
       }
 
       const response = await fetch(endpoint, {
@@ -815,9 +818,9 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                 <h1 className="text-2xl font-bold text-foreground">{selectedArticle.title}</h1>
                 <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <Badge variant="secondary">{selectedArticle.category}</Badge>
-                  {selectedArticle.targetRole && (
+                  {(selectedArticle.targetRoles?.length ?? 0) > 0 && (
                     <Badge variant="outline" className="border-primary/30 text-primary">
-                      Для: {targetRoleLabels[selectedArticle.targetRole] || selectedArticle.targetRole}
+                      Для: {selectedArticle.targetRoles!.map(r => targetRoleLabels[r] || r).join(", ")}
                     </Badge>
                   )}
                   <span className="text-sm text-muted-foreground">{selectedArticle.date}</span>
@@ -942,12 +945,12 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
           </div>
         )}
 
-        {!quiz && canManageArticles && selectedArticle && selectedArticle.targetRole !== "franchisee" && (
-          <div className={`bg-card border border-dashed rounded-lg p-6 text-center ${selectedArticle.targetRole ? "border-orange-400" : "border-border"}`}>
-            <GraduationCap size={32} className={`mx-auto mb-2 ${selectedArticle.targetRole ? "text-orange-500" : "text-muted-foreground"}`} />
-            <p className={`mb-3 ${selectedArticle.targetRole ? "text-orange-600 font-medium" : "text-muted-foreground"}`}>
-              {selectedArticle.targetRole
-                ? `Тест обязателен для роли "${targetRoleLabels[selectedArticle.targetRole]}". Создайте тест.`
+        {!quiz && canManageArticles && selectedArticle && !(selectedArticle.targetRoles?.length === 1 && selectedArticle.targetRoles[0] === "franchisee") && (
+          <div className={`bg-card border border-dashed rounded-lg p-6 text-center ${(selectedArticle.targetRoles?.length ?? 0) > 0 ? "border-orange-400" : "border-border"}`}>
+            <GraduationCap size={32} className={`mx-auto mb-2 ${(selectedArticle.targetRoles?.length ?? 0) > 0 ? "text-orange-500" : "text-muted-foreground"}`} />
+            <p className={`mb-3 ${(selectedArticle.targetRoles?.length ?? 0) > 0 ? "text-orange-600 font-medium" : "text-muted-foreground"}`}>
+              {(selectedArticle.targetRoles?.length ?? 0) > 0
+                ? `Тест обязателен для: ${selectedArticle.targetRoles!.map(r => targetRoleLabels[r] || r).join(", ")}. Создайте тест.`
                 : "К этой статье ещё не создан тест"}
             </p>
             <Button onClick={handleOpenQuizEditor} variant="outline">
@@ -1368,9 +1371,9 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
                               {article.files.length} файл(ов)
                             </Badge>
                           )}
-                          {article.targetRole && (
+                          {(article.targetRoles?.length ?? 0) > 0 && (
                             <Badge variant="outline" className="text-xs border-primary/30 text-primary">
-                              {targetRoleLabels[article.targetRole] || article.targetRole}
+                              {article.targetRoles!.map(r => targetRoleLabels[r] || r).join(", ")}
                             </Badge>
                           )}
                           {article.hasQuiz && (
@@ -1504,26 +1507,37 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
 
               <div>
                 <Label>Для кого статья</Label>
-                <Select
-                  value={editingArticle.targetRole || "none"}
-                  onValueChange={(value) =>
-                    setEditingArticle({ ...editingArticle, targetRole: value === "none" ? undefined : value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Выберите целевую роль" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Для всех</SelectItem>
-                    <SelectItem value="franchisee">Франчайзи</SelectItem>
-                    <SelectItem value="admin">Администратор</SelectItem>
-                    <SelectItem value="animator">Аниматор</SelectItem>
-                    <SelectItem value="dj">Диджей</SelectItem>
-                    <SelectItem value="host">Ведущий</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Для франчайзи тестирование не требуется. Для остальных ролей — тест обязателен.
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {[
+                    { value: "uk", label: "УК" },
+                    { value: "franchisee", label: "Франчайзи" },
+                    { value: "admin", label: "Администратор" },
+                    { value: "employee", label: "Сотрудник" },
+                    { value: "animator", label: "Аниматор" },
+                    { value: "host", label: "Ведущий" },
+                    { value: "dj", label: "Диджей" },
+                  ].map((opt) => {
+                    const roles = editingArticle.targetRoles || []
+                    const checked = roles.includes(opt.value)
+                    return (
+                      <label key={opt.value} className="flex items-center gap-2 cursor-pointer text-sm py-1">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            const newRoles = checked
+                              ? roles.filter((r) => r !== opt.value)
+                              : [...roles, opt.value]
+                            setEditingArticle({ ...editingArticle, targetRoles: newRoles })
+                          }}
+                        />
+                        <span>{opt.label}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Если ничего не выбрано — статья видна всем. Выберите роли, которым статья предназначена.
                 </p>
               </div>
 
