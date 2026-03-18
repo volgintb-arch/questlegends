@@ -288,7 +288,8 @@ export function IntegrationWizard({ open, onClose, onSuccess, isAdmin }: Integra
       const res = await fetch("/api/franchisees", { headers: getAuthHeaders() })
       if (res.ok) {
         const data = await res.json()
-        setFranchisees(data.franchisees || [])
+        // API returns array directly, not { franchisees: [...] }
+        setFranchisees(Array.isArray(data) ? data : data.franchisees || [])
       }
     } catch {}
   }, [isUK]) // eslint-disable-line react-hooks/exhaustive-deps
