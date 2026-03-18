@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { channel, credentials, assignment_strategy, default_assignee_id } = body
+    const { channel, credentials, assignment_strategy, default_assignee_id, franchiseeId: targetFranchiseeId } = body
 
     // Validate channel
     const validChannels = ["telegram", "instagram", "vk", "whatsapp", "avito", "tilda"]
@@ -93,7 +93,13 @@ export async function POST(request: NextRequest) {
     let owner_id: string | null = null
 
     if (role === "super_admin" || role === "uk") {
-      owner_type = "uk"
+      if (targetFranchiseeId) {
+        // UK creating integration FOR a specific franchisee
+        owner_type = "franchisee"
+        owner_id = targetFranchiseeId
+      } else {
+        owner_type = "uk"
+      }
     } else {
       owner_type = "franchisee"
       owner_id = user.franchiseeId || null

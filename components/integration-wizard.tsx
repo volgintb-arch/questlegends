@@ -1,13 +1,14 @@
 "use client"
 
 import type React from "react"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/contexts/auth-context"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -264,7 +265,7 @@ interface IntegrationWizardProps {
 }
 
 export function IntegrationWizard({ open, onClose, onSuccess, isAdmin }: IntegrationWizardProps) {
-  const { getAuthHeaders } = useAuth()
+  const { getAuthHeaders, user } = useAuth()
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null)
   const [credentials, setCredentials] = useState<Record<string, string>>({})
@@ -275,6 +276,22 @@ export function IntegrationWizard({ open, onClose, onSuccess, isAdmin }: Integra
     channel: string
   } | null>(null)
   const [webhookCopied, setWebhookCopied] = useState(false)
+  const [franchisees, setFranchisees] = useState<{ id: string; name: string; city: string }[]>([])
+  const [selectedFranchiseeId, setSelectedFranchiseeId] = useState<string>("")
+
+  const isUK = user?.role === "super_admin" || user?.role === "uk"
+
+  // Load franchisees list for UK users
+  const loadFranchisees = useCallback(async () => {
+    if (!isUK) return
+    try {
+      const res = await fetch("/api/franchisees", { headers: getAuthHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setFranchisees(data.franchisees || [])
+      }
+    } catch {}
+  }, [isUK]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetWizard = useCallback(() => {
     setStep(1)
@@ -283,7 +300,12 @@ export function IntegrationWizard({ open, onClose, onSuccess, isAdmin }: Integra
     setIsSubmitting(false)
     setCreatedIntegration(null)
     setWebhookCopied(false)
+    setSelectedFranchiseeId("")
   }, [])
+
+  useEffect(() => {
+    if (open && isUK) loadFranchisees()
+  }, [open, isUK, loadFranchisees])
 
   const handleClose = () => {
     resetWizard()
@@ -319,6 +341,7 @@ export function IntegrationWizard({ open, onClose, onSuccess, isAdmin }: Integra
           channel: selectedChannel,
           credentials,
           assignment_strategy: "first_admin",
+          ...(isUK && selectedFranchiseeId && selectedFranchiseeId !== "uk" ? { franchiseeId: selectedFranchiseeId } : {}),
         }),
       })
 
@@ -405,7 +428,30 @@ export function IntegrationWizard({ open, onClose, onSuccess, isAdmin }: Integra
 
         {/* Step 1: Channel selection */}
         {step === 1 && (
-          <div className="px-4 pb-4 space-y-1.5 overflow-y-auto max-h-[60vh]">
+          <div className="px-4 pb-4 space-y-3 overflow-y-auto max-h-[60vh]">
+            {/* Franchisee selector for UK users */}
+            {isUK && franchisees.length > 0 && (
+              <div className="rounded-lg border border-border p-3 space-y-2">
+                <Label className="text-xs font-medium">Для кого создаём интеграцию?</Label>
+                <Select value={selectedFranchiseeId} onValueChange={setSelectedFranchiseeId}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="УК (глобальная)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="uk">УК (глобальная)</SelectItem>
+                    {franchisees.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name} {f.city ? `(${f.city})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Выберите франчайзи, для которого создаётся интеграция, или оставьте «УК» для глобальной.
+                </p>
+              </div>
+            )}
+
             {CHANNELS.map((channel) => (
               <Card
                 key={channel.id}
