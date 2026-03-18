@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
-import { neon } from "@/lib/neon-compat"
+import { sql } from "@/lib/db"
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,8 +8,6 @@ export async function POST(request: NextRequest) {
     if (!payload) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
-
-    const sql = neon(process.env.DATABASE_URL!)
 
     await sql`
       UPDATE "User" SET "onboardingCompleted" = true, "updatedAt" = NOW()

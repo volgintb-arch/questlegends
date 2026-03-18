@@ -416,13 +416,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentToken = token || getStoredToken()
     if (!currentToken || !user) return
     try {
-      await fetch("/api/auth/onboarding", {
+      const res = await fetch("/api/auth/onboarding", {
         method: "POST",
         headers: { Authorization: `Bearer ${currentToken}` },
       })
+      if (!res.ok) {
+        console.error("[v0] Onboarding API error:", res.status)
+      }
+      // Update local state regardless so user isn't stuck
       setUser({ ...user, onboardingCompleted: true })
     } catch (error) {
       console.error("[v0] Failed to complete onboarding:", error)
+      // Still update local state so slider closes
+      setUser({ ...user, onboardingCompleted: true })
     }
   }
 

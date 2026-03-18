@@ -26,7 +26,7 @@ import type { UserRole } from "@/contexts/auth-context"
 interface OnboardingSliderProps {
   role: UserRole
   userName: string
-  onComplete: () => void
+  onComplete: () => void | Promise<void>
 }
 
 interface Slide {
