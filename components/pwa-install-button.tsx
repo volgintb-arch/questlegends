@@ -1,35 +1,53 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Download, Monitor } from "lucide-react"
-import { canInstallPWA, installPWA, onInstallAvailable, isStandalone } from "@/lib/pwa"
+import { Download } from "lucide-react"
+import { canInstallPWA, installPWA, isStandalone } from "@/lib/pwa"
 
 export function PWAInstallButton() {
   const [canInstall, setCanInstall] = useState(false)
-  const [standalone, setStandalone] = useState(false)
+  const [installing, setInstalling] = useState(false)
 
   useEffect(() => {
     setCanInstall(canInstallPWA())
-    setStandalone(isStandalone())
-    const unsubscribe = onInstallAvailable(setCanInstall)
-    return unsubscribe
+
+    const onAvailable = () => setCanInstall(true)
+    const onInstalled = () => setCanInstall(false)
+
+    window.addEventListener("pwa-install-available", onAvailable)
+    window.addEventListener("pwa-installed", onInstalled)
+
+    return () => {
+      window.removeEventListener("pwa-install-available", onAvailable)
+      window.removeEventListener("pwa-installed", onInstalled)
+    }
   }, [])
 
-  if (standalone || !canInstall) return null
+  if (isStandalone() || !canInstall) return null
 
   const handleInstall = async () => {
-    await installPWA()
-    setCanInstall(false)
+    setInstalling(true)
+    try {
+      const accepted = await installPWA()
+      if (accepted) {
+        setCanInstall(false)
+      }
+    } catch (e) {
+      console.error("[PWA] Install error:", e)
+    } finally {
+      setInstalling(false)
+    }
   }
 
   return (
     <button
       onClick={handleInstall}
-      className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg glass hover:bg-primary/10 transition-colors text-primary"
-      title="Установить приложение"
+      disabled={installing}
+      className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg cursor-pointer gradient-primary text-white hover:opacity-90 transition-all shadow-md disabled:opacity-50 relative z-10"
+      title="Установить приложение на компьютер"
     >
       <Download className="h-4 w-4" />
-      <span className="hidden lg:inline">Установить</span>
+      <span className="hidden lg:inline">{installing ? "Установка..." : "Установить"}</span>
     </button>
   )
 }

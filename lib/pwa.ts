@@ -1,13 +1,12 @@
 /**
  * PWA utilities: Service Worker registration, install prompt, update detection.
+ * Uses window.__pwaPrompt to persist the deferred prompt across module reloads.
  */
 
-let deferredPrompt: BeforeInstallPromptEvent | null = null
-let installListeners: Array<(canInstall: boolean) => void> = []
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
+declare global {
+  interface Window {
+    __pwaPrompt: any | null
+  }
 }
 
 // ── Register Service Worker ──
@@ -32,8 +31,7 @@ export function registerServiceWorker() {
 
         newWorker.onstatechange = () => {
           if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
-            // New version available — notify user
-            if (confirm("Доступно обновление. Обновить сейчас?")) {
+            if (confirm("Доступно обновление приложения. Обновить сейчас?")) {
               newWorker.postMessage({ type: "SKIP_WAITING" })
               window.location.reload()
             }
@@ -45,41 +43,39 @@ export function registerServiceWorker() {
     }
   })
 
-  // Capture install prompt
+  // Capture install prompt — store on window to survive module reloads
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault()
-    deferredPrompt = e as BeforeInstallPromptEvent
-    installListeners.forEach((l) => l(true))
+    window.__pwaPrompt = e
+    window.dispatchEvent(new Event("pwa-install-available"))
   })
 
   // Track successful install
   window.addEventListener("appinstalled", () => {
-    deferredPrompt = null
-    installListeners.forEach((l) => l(false))
+    window.__pwaPrompt = null
+    window.dispatchEvent(new Event("pwa-installed"))
   })
 }
 
 // ── Install prompt ──
 export function canInstallPWA(): boolean {
-  return deferredPrompt !== null
+  if (typeof window === "undefined") return false
+  return window.__pwaPrompt != null
 }
 
 export async function installPWA(): Promise<boolean> {
-  if (!deferredPrompt) return false
+  if (typeof window === "undefined" || !window.__pwaPrompt) return false
 
-  deferredPrompt.prompt()
-  const { outcome } = await deferredPrompt.userChoice
-  deferredPrompt = null
-  installListeners.forEach((l) => l(false))
-  return outcome === "accepted"
-}
-
-export function onInstallAvailable(listener: (canInstall: boolean) => void) {
-  installListeners.push(listener)
-  // Immediately notify if already available
-  if (deferredPrompt) listener(true)
-  return () => {
-    installListeners = installListeners.filter((l) => l !== listener)
+  try {
+    const prompt = window.__pwaPrompt
+    prompt.prompt()
+    const { outcome } = await prompt.userChoice
+    window.__pwaPrompt = null
+    window.dispatchEvent(new Event("pwa-installed"))
+    return outcome === "accepted"
+  } catch (e) {
+    console.error("[PWA] Install prompt failed:", e)
+    return false
   }
 }
 
