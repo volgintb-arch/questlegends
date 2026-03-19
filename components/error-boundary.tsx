@@ -28,6 +28,21 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("[ErrorBoundary] Caught error:", error, errorInfo)
+    // Отправляем ошибку в серверный лог
+    try {
+      fetch("/api/app-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          level: "error",
+          source: "client",
+          message: `${error.name}: ${error.message}`,
+          stack: error.stack || null,
+          url: typeof window !== "undefined" ? window.location.pathname : null,
+          metadata: { componentStack: errorInfo.componentStack?.substring(0, 1000) },
+        }),
+      }).catch(() => {})
+    } catch {}
   }
 
   handleReset = () => {

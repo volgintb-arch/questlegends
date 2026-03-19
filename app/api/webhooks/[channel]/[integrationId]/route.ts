@@ -3,9 +3,11 @@ import { type NextRequest, NextResponse } from "next/server"
 import { IntegrationHub } from "@/lib/integration-hub/integration-hub"
 import { RoutingEngine } from "@/lib/integration-hub/routing-engine"
 import { LeadCreator } from "@/lib/integration-hub/lead-creator"
+import { logWebhookError } from "@/lib/app-logger"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ channel: string; integrationId: string }> }) {
   const { channel, integrationId } = await params
+  let payload: any
   try {
 
     // Валидация канала
@@ -15,7 +17,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Получить payload — Tilda может отправлять form-urlencoded, multipart или JSON
-    let payload: any
     const contentType = request.headers.get("content-type") || ""
     console.log(`[v0] Webhook ${channel}: content-type=${contentType}`)
     if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ success: true, routing })
   } catch (error) {
     console.error("[v0] Webhook error", error)
+    logWebhookError(channel, integrationId, error, payload).catch(() => {})
     // VK требует "ok" даже при ошибках, иначе будет ретрай
     if (channel === "vk") {
       return new NextResponse("ok", { status: 200 })

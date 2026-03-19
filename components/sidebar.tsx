@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Share2,
   Building2,
+  ScrollText,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -69,6 +70,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       icon: Bell,
       path: "/notifications",
       module: "canViewNotifications" as const,
+    },
+    {
+      id: "logs",
+      label: "Логи",
+      icon: ScrollText,
+      path: "/logs",
+      module: "canViewDashboard" as const,
     },
   ]
 
