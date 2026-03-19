@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Moon, Sun, Bell, User, LogOut, SettingsIcon, ChevronDown, Menu } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
 import { ProfileSettingsModal } from "./profile-settings-modal"
 import { GlobalSearch } from "./global-search"
 import { PWAInstallButton } from "./pwa-install-button"
@@ -16,12 +17,8 @@ interface HeaderProps {
 }
 
 export function Header({ userName, role, onViewChange, onMobileMenuToggle }: HeaderProps) {
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== "undefined") {
-      return document.documentElement.classList.contains("dark")
-    }
-    return true
-  })
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [showProfileSettings, setShowProfileSettings] = useState(false)
@@ -56,10 +53,13 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
     return () => window.removeEventListener("refreshNotificationCount", handleRefresh)
   }, [fetchNotificationCount])
 
+  useEffect(() => { setMounted(true) }, [])
+
   const toggleTheme = () => {
-    setIsDark(!isDark)
-    document.documentElement.classList.toggle("dark")
+    setTheme(theme === "dark" ? "light" : "dark")
   }
+
+  const isDark = theme === "dark"
 
   const handleLogout = async () => {
     try {
@@ -108,7 +108,9 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
             </div>
 
             <button onClick={toggleTheme} className="p-2 hover:bg-muted/50 rounded-lg transition-colors">
-              {isDark ? (
+              {!mounted ? (
+                <Sun className="w-[18px] h-[18px] sm:w-5 sm:h-5 text-foreground" />
+              ) : isDark ? (
                 <Sun className="w-[18px] h-[18px] sm:w-5 sm:h-5 text-foreground" />
               ) : (
                 <Moon className="w-[18px] h-[18px] sm:w-5 sm:h-5 text-foreground" />
@@ -153,7 +155,7 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
                     </button>
                     <button
                       onClick={() => {
-                        if (onViewChange) onViewChange("access")
+                        router.push("/access")
                         setShowAccountMenu(false)
                       }}
                       className="w-full px-3 sm:px-4 py-2 text-left text-xs sm:text-sm hover:bg-muted/50 transition-colors flex items-center gap-2 sm:gap-3 text-foreground"
