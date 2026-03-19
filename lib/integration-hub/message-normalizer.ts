@@ -56,12 +56,35 @@ export class MessageNormalizer {
   }
 
   // Нормализация VK сообщения
-  static normalizeVK(update: any, integration: any): NormalizedMessage {
+  static async normalizeVK(update: any, integration: any): Promise<NormalizedMessage> {
     const message = update.object.message
+    const fromId = message.from_id
+
+    // Запросить имя пользователя через VK API users.get
+    let username: string | undefined
+    try {
+      const creds = typeof integration.credentials === "string"
+        ? JSON.parse(integration.credentials)
+        : integration.credentials
+      const accessToken = creds.access_token
+      if (accessToken && fromId > 0) {
+        const res = await fetch(
+          `https://api.vk.com/method/users.get?user_ids=${fromId}&fields=screen_name&access_token=${accessToken}&v=5.199`
+        )
+        const data = await res.json()
+        if (data.response?.[0]) {
+          const user = data.response[0]
+          username = `${user.first_name} ${user.last_name}`.trim()
+        }
+      }
+    } catch (e) {
+      console.error("[VK] Failed to fetch user name:", e)
+    }
 
     return {
       channel: "vk",
-      external_user_id: message.from_id.toString(),
+      external_user_id: fromId.toString(),
+      username,
       message_text: message.text || "",
       attachments: this.extractVKAttachments(message),
       owner_type: integration.owner_type,
