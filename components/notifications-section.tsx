@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { AlertTriangle, AlertCircle, CheckCircle, Info, Bell, Trash2, MessageSquare, ExternalLink, Banknote, Archive } from "lucide-react"
+import { AlertTriangle, AlertCircle, CheckCircle, Info, Bell, BellRing, Trash2, MessageSquare, ExternalLink, Banknote, Archive } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { NotificationDetailModal } from "./notification-detail-modal"
 import { useAuth } from "@/contexts/auth-context"
+import { usePushNotifications } from "@/hooks/use-push-notifications"
 
 interface Notification {
   id: string
@@ -39,6 +40,7 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
   const { getAuthHeaders, user } = useAuth()
   const router = useRouter()
   const isUkRole = user?.role === "uk" || user?.role === "uk_employee" || user?.role === "super_admin"
+  const push = usePushNotifications(getAuthHeaders)
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -547,22 +549,68 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
       </div>
 
       {/* Notification Settings */}
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h3 className="font-semibold text-foreground mb-4">Настройки уведомлений</h3>
-        <div className="space-y-3">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
-            <span className="text-sm text-foreground">Получать критические оповещения</span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
-            <span className="text-sm text-foreground">Получать предупреждения о платежах</span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
-            <span className="text-sm text-foreground">Email уведомления</span>
-          </label>
+      <div className="bg-card border border-border rounded-lg p-6 space-y-6">
+        <div>
+          <h3 className="font-semibold text-foreground mb-4">Настройки уведомлений</h3>
+          <div className="space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div className="w-4 h-4 rounded border-2 border-primary bg-primary flex items-center justify-center">
+                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              </div>
+              <span className="text-sm text-foreground">Получать критические оповещения</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div className="w-4 h-4 rounded border-2 border-primary bg-primary flex items-center justify-center">
+                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              </div>
+              <span className="text-sm text-foreground">Получать предупреждения о платежах</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div className="w-4 h-4 rounded border-2 border-primary bg-primary flex items-center justify-center">
+                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              </div>
+              <span className="text-sm text-foreground">Email уведомления</span>
+            </label>
+          </div>
         </div>
+
+        {/* Push Notifications */}
+        {push.supported && (
+          <div className="border-t border-border pt-5">
+            <div className="flex items-start gap-4">
+              <div className={`p-2.5 rounded-xl ${push.isSubscribed ? "gradient-primary" : "bg-muted"}`}>
+                {push.isSubscribed ? (
+                  <BellRing className="h-5 w-5 text-white" />
+                ) : (
+                  <Bell className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">Пуш-уведомления</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {push.isSubscribed
+                    ? "Уведомления включены — вы будете получать их даже когда приложение закрыто"
+                    : push.permission === "denied"
+                    ? "Уведомления заблокированы в браузере. Разрешите их в настройках браузера."
+                    : "Получайте уведомления о новых сообщениях, задачах и платежах"}
+                </p>
+              </div>
+              {push.permission !== "denied" && (
+                <button
+                  onClick={push.isSubscribed ? push.unsubscribe : push.subscribe}
+                  disabled={push.isLoading}
+                  className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer disabled:opacity-50 ${
+                    push.isSubscribed
+                      ? "bg-muted hover:bg-muted/80 text-muted-foreground"
+                      : "gradient-primary text-white hover:opacity-90"
+                  }`}
+                >
+                  {push.isLoading ? "..." : push.isSubscribed ? "Отключить" : "Включить"}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Notification Detail Modal */}

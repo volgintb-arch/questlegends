@@ -523,15 +523,15 @@ export function DealsKanban({ role }: DealsKanbanProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between p-3 border-b shrink-0">
-        <div className="flex items-center gap-2">
-          <h1 className="text-sm font-semibold">CRM</h1>
+      <div className="flex items-center justify-between p-3 border-b shrink-0 overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+        <div className="flex items-center gap-2 shrink-0">
+          <h1 className="text-sm font-semibold whitespace-nowrap">CRM</h1>
           <div className="flex gap-1">
             {pipelines.map((pipeline) => (
               <button
                 key={pipeline.id}
                 onClick={() => setSelectedPipeline(pipeline)}
-                className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                className={`px-2 py-0.5 text-xs rounded transition-colors whitespace-nowrap ${
                   selectedPipeline?.id === pipeline.id
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted hover:bg-muted/80"
@@ -542,7 +542,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
             size="sm"

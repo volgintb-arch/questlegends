@@ -84,6 +84,7 @@ model User {
   receivedMessages      Message[]               @relation("MessageReceiver")
 
   franchiseeAssignments UserFranchiseeAssignment[]
+  pushSubscriptions     PushSubscription[]
 
   createdPipelines      Pipeline[]              @relation("PipelineCreator")
 
@@ -854,6 +855,23 @@ model Message {
   @@index([senderId])
   @@index([receiverId])
   @@index([createdAt])
+}
+
+// ============================================================
+// Push Notifications
+// ============================================================
+
+model PushSubscription {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint     String   @unique
+  p256dh       String
+  auth         String
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
 }
 
 // ============================================================

@@ -37,11 +37,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-mesh p-4">
+    <div className="min-h-[100dvh] min-h-screen flex items-center justify-center bg-mesh p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex justify-center mb-2">
-            <img src="/logo.png" alt="Легенда об Искателях" className="w-20 h-20 object-contain" />
+            <img src="/icon-192.png" alt="Легенда об Искателях" className="w-20 h-20 object-contain" width={192} height={192} loading="eager" />
           </div>
           <CardDescription className="text-center">Войдите в систему управления</CardDescription>
         </CardHeader>

@@ -55,7 +55,7 @@ export function GameKanbanBoard({ stages, boardData, onLeadClick, onLeadMove }: 
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex-1 overflow-x-auto p-3">
+      <div className="flex-1 overflow-x-auto p-3" style={{ WebkitOverflowScrolling: "touch" }}>
         <div className="flex gap-3 h-full min-w-max">
           {sortedStages.map((stage) => {
             const games = safeBoard[stage.id] || []

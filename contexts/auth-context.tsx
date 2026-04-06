@@ -466,7 +466,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           canViewCrm: true,
           canViewErp: false,
           canViewKpi: true, // schedule access
-          canViewMessages: false,
+          canViewMessages: true,
           canViewKnowledgeBase: true,
           canViewUsers: false,
           canViewAccess: false,

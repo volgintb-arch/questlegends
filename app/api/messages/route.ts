@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
+import { sendPushToUsers } from "@/lib/push"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -139,6 +140,13 @@ export async function POST(request: NextRequest) {
         ${now}
       )
     `
+
+    // Send push notification to receiver (non-blocking)
+    sendPushToUsers([receiverId], {
+      title: `Новое сообщение от ${user.name}`,
+      body: content.length > 80 ? content.slice(0, 80) + "..." : content,
+      url: "/messages",
+    }).catch(() => {})
 
     return NextResponse.json({
       data: {

@@ -190,6 +190,45 @@ function getAllFromStore(store) {
   })
 }
 
+// ── Push notifications ──
+self.addEventListener("push", (event) => {
+  if (!event.data) return
+
+  let data = {}
+  try { data = event.data.json() } catch { data = { title: "Уведомление", body: event.data.text() } }
+
+  const { title, body, icon, badge, url } = data
+
+  event.waitUntil(
+    self.registration.showNotification(title || "Легенда об Искателях", {
+      body: body || "",
+      icon: icon || "/icon-192.png",
+      badge: badge || "/icon-192.png",
+      data: { url: url || "/" },
+      vibrate: [200, 100, 200],
+      requireInteraction: false,
+    })
+  )
+})
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url || "/"
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      // Focus existing window if open
+      for (const client of windowClients) {
+        if (client.url.includes(self.location.origin) && "focus" in client) {
+          client.navigate(url)
+          return client.focus()
+        }
+      }
+      // Open new window
+      if (clients.openWindow) return clients.openWindow(url)
+    })
+  )
+})
+
 // ── Listen for messages from the app ──
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
