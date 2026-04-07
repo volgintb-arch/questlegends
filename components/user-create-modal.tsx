@@ -94,7 +94,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
     }
 
     if (
-      ["admin", "animator", "host", "dj"].includes(formData.role) &&
+      ["admin", "employee", "animator", "host", "dj"].includes(formData.role) &&
       !formData.franchisee_id &&
       !currentUser?.franchiseeId
     ) {
@@ -129,7 +129,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
           password: password,
           franchiseeId:
             formData.franchisee_id ||
-            (["admin", "animator", "host", "dj"].includes(formData.role) ? currentUser?.franchiseeId : undefined),
+            (["admin", "employee", "animator", "host", "dj"].includes(formData.role) ? currentUser?.franchiseeId : undefined),
           city: formData.city || undefined,
         }),
       })
@@ -283,7 +283,7 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
             )}
 
           {(currentUser.role === "franchisee" || currentUser.role === "own_point") &&
-            ["admin", "animator", "host", "dj"].includes(formData.role) &&
+            ["admin", "employee", "animator", "host", "dj"].includes(formData.role) &&
             franchisees.length > 1 && (
               <div className="space-y-1">
                 <Label htmlFor="franchisee" className="text-xs">

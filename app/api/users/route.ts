@@ -182,7 +182,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "City is required for franchisee/own_point role" }, { status: 400 })
     }
 
-    if (["animator", "host", "dj", "admin"].includes(role) && !franchiseeId && !user.franchiseeId) {
+    if (["animator", "host", "dj", "admin", "employee"].includes(role) && !franchiseeId && !user.franchiseeId) {
       return NextResponse.json({ error: "Franchisee is required for admin and personnel roles" }, { status: 400 })
     }
 
@@ -196,7 +196,7 @@ export async function POST(request: Request) {
     }
 
     if (user.role === "franchisee" || user.role === "own_point") {
-      if (!["admin", "animator", "host", "dj"].includes(role)) {
+      if (!["admin", "employee", "animator", "host", "dj"].includes(role)) {
         return NextResponse.json(
           { error: "Franchisee/Own point can only create admin and personnel roles" },
           { status: 403 },
@@ -275,7 +275,7 @@ export async function POST(request: Request) {
       userFranchiseeId = null
     }
 
-    const finalRole = ["animator", "host", "dj"].includes(role) ? "employee" : role === "own_point" ? "franchisee" : role
+    const finalRole = ["animator", "host", "dj"].includes(role) ? "employee" : role
 
     const userUUID = uuidv4()
     const newUser = await sql`
