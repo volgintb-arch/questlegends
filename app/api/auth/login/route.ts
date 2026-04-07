@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const users = await sql`
       SELECT
         u.id, u.phone, u.name, u.role, u."passwordHash", u."isActive", u."franchiseeId",
-        u.email, u."avatarUrl", u."telegramId", u.telegram,
+        u.email, u."avatarUrl", u."telegramId", u.telegram, u."onboardingCompleted",
         f.name as "franchiseeName", f.city as "franchiseeCity"
       FROM "User" u
       LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
         franchiseeId: user.franchiseeId,
         franchiseeName: user.franchiseeName,
         franchiseeCity: user.franchiseeCity,
+        onboardingCompleted: user.onboardingCompleted ?? false,
       },
     })
   } catch (error: any) {

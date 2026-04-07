@@ -175,11 +175,60 @@ export class MessageNormalizer {
 
   // Нормализация Marquiz квиз-ответов (webhook)
   static normalizeMarquiz(payload: any, integration: any): NormalizedMessage {
-    // Marquiz отправляет: name, phone, email, quiz (название квиза),
-    // answers (массив ответов), extra (доп. поля), contactFields, etc.
-    const name = payload.name || payload.contactName || ""
-    const phone = payload.phone || payload.contactPhone || ""
-    const email = payload.email || payload.contactEmail || ""
+    // Marquiz может отправлять данные в разных форматах:
+    // 1. contacts: { name, phone, email } или contacts: [{ type, value }]
+    // 2. Плоская структура: name, phone, email
+    // 3. body: "текстовое представление"
+    // 4. Поля формы напрямую (form-urlencoded)
+
+    let name = ""
+    let phone = ""
+    let email = ""
+
+    // Извлечь контакты из вложенной структуры contacts
+    if (payload.contacts) {
+      if (Array.isArray(payload.contacts)) {
+        // contacts: [{ type: "name", value: "..." }, { type: "phone", value: "..." }]
+        for (const c of payload.contacts) {
+          if (c.type === "name" || c.key === "name") name = c.value || ""
+          if (c.type === "phone" || c.key === "phone") phone = c.value || ""
+          if (c.type === "email" || c.key === "email") email = c.value || ""
+        }
+      } else if (typeof payload.contacts === "object") {
+        // contacts: { name: "...", phone: "...", email: "..." }
+        name = payload.contacts.name || ""
+        phone = payload.contacts.phone || ""
+        email = payload.contacts.email || ""
+      }
+    }
+
+    // Попробовать плоские поля (fallback)
+    if (!name) name = payload.name || payload.contactName || ""
+    if (!phone) phone = payload.phone || payload.contactPhone || ""
+    if (!email) email = payload.email || payload.contactEmail || ""
+
+    // Marquiz иногда кладёт контакты в поля вида "Имя", "Телефон"
+    if (!name) name = payload["Имя"] || payload["имя"] || ""
+    if (!phone) phone = payload["Телефон"] || payload["телефон"] || ""
+    if (!email) email = payload["Email"] || payload["email"] || ""
+
+    // Извлечь из body текста (Marquiz иногда шлёт text body)
+    const bodyText = payload.body || payload.text || payload.message || ""
+    if (bodyText && typeof bodyText === "string") {
+      if (!name) {
+        const nameMatch = bodyText.match(/Имя:\s*(.+)/i)
+        if (nameMatch) name = nameMatch[1].trim()
+      }
+      if (!phone) {
+        const phoneMatch = bodyText.match(/Телефон:\s*(\+?\d[\d\s()-]+)/i)
+        if (phoneMatch) phone = phoneMatch[1].trim()
+      }
+      if (!email) {
+        const emailMatch = bodyText.match(/Email:\s*([\w.+-]+@[\w-]+\.[\w.-]+)/i)
+        if (emailMatch) email = emailMatch[1].trim()
+      }
+    }
+
     const quizName = payload.quiz?.name || payload.quizName || payload.quiz_name || ""
 
     // Собрать ответы квиза в текст
@@ -199,11 +248,18 @@ export class MessageNormalizer {
       }
     }
 
-    // Доп. поля
+    // Доп. поля (extra, location, page)
     if (payload.extra && typeof payload.extra === "object") {
       for (const [key, value] of Object.entries(payload.extra)) {
         if (value && String(value).trim()) parts.push(`${key}: ${value}`)
       }
+    }
+    if (payload.location) parts.push(`Местоположение: ${payload.location}`)
+    if (payload.page) parts.push(`Страница: ${payload.page}`)
+
+    // Если ничего не распарсили — положить весь body
+    if (parts.length === 0 && bodyText) {
+      parts.push(bodyText)
     }
 
     const messageText = parts.join("\n") || "Ответ на квиз Marquiz"
@@ -212,13 +268,13 @@ export class MessageNormalizer {
 
     return {
       channel: "marquiz",
-      external_user_id: externalId,
+      external_user_id: String(externalId),
       username: name || undefined,
       phone: phone || undefined,
       message_text: messageText,
       owner_type: integration.owner_type,
       owner_id: integration.owner_id,
-      received_at: new Date(),
+      received_at: payload.created ? new Date(payload.created) : new Date(),
       raw_payload: payload,
     }
   }
