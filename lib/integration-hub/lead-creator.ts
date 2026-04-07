@@ -59,7 +59,16 @@ export class LeadCreator {
     } else if (message.channel === "tilda") {
       fullName = raw?.Name || raw?.name || null
     } else if (message.channel === "marquiz") {
-      fullName = raw?.name || raw?.contactName || null
+      // Marquiz: contacts может быть объектом или массивом
+      if (raw?.contacts) {
+        if (Array.isArray(raw.contacts)) {
+          const nameC = raw.contacts.find((c: any) => c.type === "name" || c.key === "name")
+          if (nameC) fullName = nameC.value || null
+        } else if (typeof raw.contacts === "object") {
+          fullName = raw.contacts.name || null
+        }
+      }
+      if (!fullName) fullName = raw?.name || raw?.contactName || null
     } else if (message.channel === "avito") {
       fullName = raw?.user_name || null
     }
@@ -143,6 +152,78 @@ export class LeadCreator {
       if (emailMatch) clientEmail = emailMatch[0]
     }
 
+    // Извлечь количество участников из текста
+    let playersCount: number | null = null
+    // Поиск по ключевым словам: "участников", "человек", "гостей", "детей", "количество"
+    const playersPatterns = [
+      /(?:участник|человек|гост|дет|ребён|игрок)[а-яё]*[:\s]*(\d+)\s*[-–]\s*(\d+)/i,
+      /(\d+)\s*[-–]\s*(\d+)\s*(?:участник|человек|гост|дет|ребён|игрок)/i,
+      /(?:количеств|сколько)[а-яё]*[^:]*?[:\s]*(\d+)\s*[-–]\s*(\d+)/i,
+      /(?:участник|человек|гост|дет|ребён|игрок)[а-яё]*[:\s]*(\d+)/i,
+      /(\d+)\s*(?:участник|человек|гост|дет|ребён|игрок)/i,
+    ]
+    for (const pattern of playersPatterns) {
+      const match = text.match(pattern)
+      if (match) {
+        if (match[2]) {
+          // Диапазон: берём нижнюю границу
+          playersCount = parseInt(match[1])
+        } else {
+          playersCount = parseInt(match[1])
+        }
+        break
+      }
+    }
+    // Fallback: ищем в ответах Marquiz конкретно
+    if (!playersCount && message.channel === "marquiz") {
+      const answers = raw?.answers || []
+      if (Array.isArray(answers)) {
+        for (const ans of answers) {
+          const q = (ans.question || ans.q || ans.title || "").toLowerCase()
+          const a = ans.answer || ans.a || ans.value || ""
+          if (q.includes("количеств") || q.includes("участник") || q.includes("сколько")) {
+            const numMatch = String(a).match(/(\d+)/)
+            if (numMatch) {
+              playersCount = parseInt(numMatch[1])
+              break
+            }
+          }
+        }
+      }
+    }
+
+    // Marquiz: извлечь дату из ответов на вопросы (более точно чем из всего текста)
+    if (!gameDate && message.channel === "marquiz") {
+      const answers = raw?.answers || []
+      if (Array.isArray(answers)) {
+        for (const ans of answers) {
+          const q = (ans.question || ans.q || ans.title || "").toLowerCase()
+          const a = ans.answer || ans.a || ans.value || ""
+          if (q.includes("дат") || q.includes("когда") || q.includes("число")) {
+            const dMatch = String(a).match(/(\d{1,2})[./](\d{1,2})[./](\d{2,4})/)
+            if (dMatch) {
+              const day = dMatch[1].padStart(2, "0")
+              const month = dMatch[2].padStart(2, "0")
+              const year = dMatch[3].length === 2 ? `20${dMatch[3]}` : dMatch[3]
+              gameDate = `${year}-${month}-${day}T00:00:00.000Z`
+              break
+            }
+          }
+        }
+      }
+    }
+
+    // Marquiz: извлечь телефон из contacts если не в message.phone
+    let clientPhone: string | null = message.phone || null
+    if (!clientPhone && message.channel === "marquiz" && raw?.contacts) {
+      if (Array.isArray(raw.contacts)) {
+        const phoneC = raw.contacts.find((c: any) => c.type === "phone" || c.key === "phone")
+        if (phoneC) clientPhone = phoneC.value || null
+      } else if (typeof raw.contacts === "object") {
+        clientPhone = raw.contacts.phone || null
+      }
+    }
+
     // Конвертировать gameDate строку в Date объект для postgres
     let gameDateObj: Date | null = null
     if (gameDate) {
@@ -150,7 +231,7 @@ export class LeadCreator {
       if (!isNaN(d.getTime())) gameDateObj = d
     }
 
-    return { fullName, messengerLink, clientTelegram, gameDate: gameDateObj, city, clientEmail }
+    return { fullName, messengerLink, clientTelegram, gameDate: gameDateObj, city, clientEmail, playersCount, clientPhone }
   }
 
   // Отправить уведомление о новом лиде
@@ -332,6 +413,7 @@ export class LeadCreator {
       avito: "Другое",
     }
     const leadSource = leadSourceMap[message.channel] || "Другое"
+    const phone = data.clientPhone || message.phone || null
 
     await sql`
       INSERT INTO "Deal" (
@@ -345,8 +427,8 @@ export class LeadCreator {
         ${dealId},
         ${clientName},
         ${clientName},
-        ${message.phone || null},
-        ${message.phone || null},
+        ${phone},
+        ${phone},
         ${data.clientEmail},
         ${`${message.channel}_bot`},
         ${leadSource},
@@ -392,21 +474,25 @@ export class LeadCreator {
     const clientName = data.fullName || message.username || message.external_user_id
     const notes = `Автосоздано из ${message.channel}: ${message.message_text}`
 
+    const phone = data.clientPhone || message.phone || null
+    const playersCount = data.playersCount || 1
+
     await sql`
       INSERT INTO "GameLead" (
         id, "clientName", "clientPhone", "clientEmail", source, notes,
-        "gameDate", "gameTime",
+        "gameDate", "gameTime", "playersCount",
         "responsibleId", "pipelineId", "stageId", "franchiseeId",
         "createdAt", "updatedAt"
       ) VALUES (
         ${leadId},
         ${clientName},
-        ${message.phone || null},
+        ${phone},
         ${data.clientEmail},
         ${`${message.channel}_bot`},
         ${notes},
         ${data.gameDate},
         ${null},
+        ${playersCount},
         ${assignee?.id || null},
         ${pipeline.pipeline_id},
         ${pipeline.stage_id},
