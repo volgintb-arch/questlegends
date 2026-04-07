@@ -28,7 +28,7 @@ import {
   Phone,
 } from "lucide-react"
 
-type Channel = "telegram" | "whatsapp" | "instagram" | "vk" | "avito" | "tilda"
+type Channel = "telegram" | "whatsapp" | "instagram" | "vk" | "avito" | "tilda" | "marquiz"
 
 interface ChannelConfig {
   id: Channel
@@ -253,6 +253,27 @@ const CHANNELS: ChannelConfig[] = [
       "В Tilda: Форма → Подключённые сервисы → Webhook",
       "Вставьте URL и нажмите «Сохранить»",
       "Опубликуйте страницу — заявки начнут поступать автоматически",
+    ],
+  },
+  {
+    id: "marquiz",
+    name: "Marquiz",
+    icon: <Zap className="w-6 h-6" />,
+    color: "text-[#FFD100]",
+    bgColor: "bg-[#FFD100]/10 border-[#FFD100]/20",
+    description: "Заявки из квизов Marquiz.ru",
+    fields: [],
+    instructions: [
+      "Откройте ваш квиз в панели Marquiz",
+      "Перейдите в «Интеграции» → «Webhook»",
+      "Вставьте Webhook URL (будет показан после подключения)",
+      "Нажмите «Сохранить»",
+    ],
+    webhookInstructions: [
+      "Скопируйте Webhook URL ниже",
+      "В Marquiz: Квиз → Интеграции → Webhook",
+      "Вставьте URL и сохраните",
+      "Ответы из квиза начнут поступать как лиды автоматически",
     ],
   },
 ]

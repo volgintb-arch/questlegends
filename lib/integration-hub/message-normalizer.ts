@@ -1,6 +1,6 @@
 // Message Normalizer - приводит все сообщения к единому формату
 export interface NormalizedMessage {
-  channel: "telegram" | "instagram" | "vk" | "whatsapp" | "avito" | "tilda" | "max"
+  channel: "telegram" | "instagram" | "vk" | "whatsapp" | "avito" | "tilda" | "marquiz" | "max"
   external_user_id: string
   username?: string
   phone?: string
@@ -162,6 +162,56 @@ export class MessageNormalizer {
 
     return {
       channel: "tilda",
+      external_user_id: externalId,
+      username: name || undefined,
+      phone: phone || undefined,
+      message_text: messageText,
+      owner_type: integration.owner_type,
+      owner_id: integration.owner_id,
+      received_at: new Date(),
+      raw_payload: payload,
+    }
+  }
+
+  // Нормализация Marquiz квиз-ответов (webhook)
+  static normalizeMarquiz(payload: any, integration: any): NormalizedMessage {
+    // Marquiz отправляет: name, phone, email, quiz (название квиза),
+    // answers (массив ответов), extra (доп. поля), contactFields, etc.
+    const name = payload.name || payload.contactName || ""
+    const phone = payload.phone || payload.contactPhone || ""
+    const email = payload.email || payload.contactEmail || ""
+    const quizName = payload.quiz?.name || payload.quizName || payload.quiz_name || ""
+
+    // Собрать ответы квиза в текст
+    const parts: string[] = []
+    if (quizName) parts.push(`Квиз: ${quizName}`)
+    if (name) parts.push(`Имя: ${name}`)
+    if (phone) parts.push(`Тел: ${phone}`)
+    if (email) parts.push(`Email: ${email}`)
+
+    // Ответы на вопросы
+    const answers = payload.answers || payload.questions || []
+    if (Array.isArray(answers)) {
+      for (const answer of answers) {
+        const q = answer.question || answer.q || answer.title || ""
+        const a = answer.answer || answer.a || answer.value || ""
+        if (q || a) parts.push(`${q}: ${a}`)
+      }
+    }
+
+    // Доп. поля
+    if (payload.extra && typeof payload.extra === "object") {
+      for (const [key, value] of Object.entries(payload.extra)) {
+        if (value && String(value).trim()) parts.push(`${key}: ${value}`)
+      }
+    }
+
+    const messageText = parts.join("\n") || "Ответ на квиз Marquiz"
+
+    const externalId = payload.id || payload.leadId || `marquiz_${Date.now()}`
+
+    return {
+      channel: "marquiz",
       external_user_id: externalId,
       username: name || undefined,
       phone: phone || undefined,

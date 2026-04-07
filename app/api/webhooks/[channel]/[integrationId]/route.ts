@@ -11,7 +11,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
 
     // Валидация канала
-    const supportedChannels = ["telegram", "instagram", "vk", "whatsapp", "avito", "tilda"]
+    const supportedChannels = ["telegram", "instagram", "vk", "whatsapp", "avito", "tilda", "marquiz"]
     if (!supportedChannels.includes(channel)) {
       return NextResponse.json({ error: "Unsupported channel" }, { status: 400 })
     }
@@ -29,10 +29,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } else {
       payload = await request.json()
     }
-    console.log(`[v0] Webhook ${channel}: payload keys=${Object.keys(payload).join(",")}`, channel === "tilda" ? payload : "")
+    console.log(`[v0] Webhook ${channel}: payload keys=${Object.keys(payload).join(",")}`, (channel === "tilda" || channel === "marquiz") ? payload : "")
 
     // Tilda отправляет тестовый запрос с полем test=test — отвечаем 200
     if (channel === "tilda" && payload.test === "test") {
+      return NextResponse.json({ ok: true })
+    }
+
+    // Marquiz тестовый запрос
+    if (channel === "marquiz" && (payload.test === true || payload.test === "test")) {
       return NextResponse.json({ ok: true })
     }
 

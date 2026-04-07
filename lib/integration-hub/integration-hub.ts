@@ -51,6 +51,8 @@ export class IntegrationHub {
         return MessageNormalizer.normalizeAvito(payload, integration)
       case "tilda":
         return MessageNormalizer.normalizeTilda(payload, integration)
+      case "marquiz":
+        return MessageNormalizer.normalizeMarquiz(payload, integration)
       default:
         throw new Error(`Unsupported channel: ${channel}`)
     }

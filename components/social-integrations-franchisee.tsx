@@ -44,6 +44,7 @@ const channelIcons: Record<string, React.ReactNode> = {
   instagram: <Instagram className="w-5 h-5" />,
   vk: <MessageCircle className="w-5 h-5" />,
   avito: <ShoppingBag className="w-5 h-5" />,
+  marquiz: <Zap className="w-5 h-5" />,
 }
 
 const channelNames: Record<string, string> = {
@@ -53,6 +54,7 @@ const channelNames: Record<string, string> = {
   vk: "ВКонтакте",
   avito: "Авито",
   tilda: "Tilda",
+  marquiz: "Marquiz",
 }
 
 const channelColors: Record<string, string> = {
@@ -62,6 +64,7 @@ const channelColors: Record<string, string> = {
   vk: "text-[#4680C2]",
   avito: "text-[#00AAFF]",
   tilda: "text-[#FF7B54]",
+  marquiz: "text-[#FFD100]",
 }
 
 const channelBgColors: Record<string, string> = {
@@ -71,6 +74,7 @@ const channelBgColors: Record<string, string> = {
   vk: "border-[#4680C2]/20 bg-[#4680C2]/5",
   avito: "border-[#00AAFF]/20 bg-[#00AAFF]/5",
   tilda: "border-[#FF7B54]/20 bg-[#FF7B54]/5",
+  marquiz: "border-[#FFD100]/20 bg-[#FFD100]/5",
 }
 
 export function SocialIntegrationsFranchisee() {
