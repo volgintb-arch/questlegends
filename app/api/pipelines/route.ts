@@ -4,6 +4,52 @@ import { verifyRequest } from "@/lib/simple-auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
+// Ensure system pipelines ("Интеграции" and "Архив") exist for B2B
+async function ensureB2BSystemPipelines() {
+  try {
+    const existing = await sql`
+      SELECT name FROM "Pipeline" WHERE name IN ('Интеграции', 'Архив')
+    `
+    const existingNames = existing.map((p: any) => p.name)
+
+    if (!existingNames.includes('Интеграции')) {
+      const pipelineId = globalThis.crypto.randomUUID()
+      await sql`
+        INSERT INTO "Pipeline" (id, name, description, color, "isDefault", "createdAt")
+        VALUES (${pipelineId}, 'Интеграции', 'Лиды из интеграций', '#8B5CF6', false, NOW())
+      `
+      const stages = [
+        { name: "Новый", color: "#3B82F6", order: 0, stageType: "new" },
+        { name: "В работе", color: "#F59E0B", order: 1, stageType: "in_progress" },
+        { name: "Успешно", color: "#10B981", order: 2, stageType: "won" },
+        { name: "Отказ", color: "#EF4444", order: 3, stageType: "lost" },
+      ]
+      for (const stage of stages) {
+        const stageId = globalThis.crypto.randomUUID()
+        await sql`
+          INSERT INTO "PipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType", "createdAt")
+          VALUES (${stageId}, ${pipelineId}, ${stage.name}, ${stage.color}, ${stage.order}, true, ${stage.stageType}, NOW())
+        `
+      }
+    }
+
+    if (!existingNames.includes('Архив')) {
+      const pipelineId = globalThis.crypto.randomUUID()
+      await sql`
+        INSERT INTO "Pipeline" (id, name, description, color, "isDefault", "createdAt")
+        VALUES (${pipelineId}, 'Архив', 'Архивированные лиды', '#6B7280', false, NOW())
+      `
+      const stageId = globalThis.crypto.randomUUID()
+      await sql`
+        INSERT INTO "PipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType", "createdAt")
+        VALUES (${stageId}, ${pipelineId}, 'Архив', '#6B7280', 0, true, 'archive', NOW())
+      `
+    }
+  } catch (e) {
+    console.error("[v0] ensureB2BSystemPipelines error:", e)
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await verifyRequest(request)
@@ -11,10 +57,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    // Ensure system pipelines exist
+    await ensureB2BSystemPipelines()
+
     const pipelines = await sql`
-      SELECT p.*, 
-        (SELECT json_agg(s ORDER BY s."order") 
-         FROM "PipelineStage" s 
+      SELECT p.*,
+        (SELECT json_agg(s ORDER BY s."order")
+         FROM "PipelineStage" s
          WHERE s."pipelineId" = p.id) as stages
       FROM "Pipeline" p
       ORDER BY p."isDefault" DESC, p."createdAt" ASC

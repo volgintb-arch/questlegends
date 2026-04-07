@@ -1,8 +1,55 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
+import { LeadCreator } from "@/lib/integration-hub/lead-creator"
 
 const sql = neon(process.env.DATABASE_URL!)
+
+// Ensure system pipelines ("Интеграции" and "Архив") exist for a franchisee
+async function ensureSystemPipelines(franchiseeId: string) {
+  try {
+    const existing = await sql`
+      SELECT name FROM "GamePipeline" WHERE "franchiseeId" = ${franchiseeId} AND name IN ('Интеграции', 'Архив')
+    `
+    const existingNames = existing.map((p: any) => p.name)
+
+    if (!existingNames.includes('Интеграции')) {
+      const pipelineId = globalThis.crypto.randomUUID()
+      await sql`
+        INSERT INTO "GamePipeline" (id, name, "franchiseeId", "createdAt")
+        VALUES (${pipelineId}, 'Интеграции', ${franchiseeId}, NOW())
+      `
+      const stages = [
+        { name: "Новый", color: "#3B82F6", order: 0, stageType: "new" },
+        { name: "В работе", color: "#F59E0B", order: 1, stageType: "in_progress" },
+        { name: "Успешно", color: "#10B981", order: 2, stageType: "won" },
+        { name: "Отказ", color: "#EF4444", order: 3, stageType: "lost" },
+      ]
+      for (const stage of stages) {
+        const stageId = globalThis.crypto.randomUUID()
+        await sql`
+          INSERT INTO "GamePipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType", "createdAt")
+          VALUES (${stageId}, ${pipelineId}, ${stage.name}, ${stage.color}, ${stage.order}, true, ${stage.stageType}, NOW())
+        `
+      }
+    }
+
+    if (!existingNames.includes('Архив')) {
+      const pipelineId = globalThis.crypto.randomUUID()
+      await sql`
+        INSERT INTO "GamePipeline" (id, name, "franchiseeId", "createdAt")
+        VALUES (${pipelineId}, 'Архив', ${franchiseeId}, NOW())
+      `
+      const stageId = globalThis.crypto.randomUUID()
+      await sql`
+        INSERT INTO "GamePipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType", "createdAt")
+        VALUES (${stageId}, ${pipelineId}, 'Архив', '#6B7280', 0, true, 'archive', NOW())
+      `
+    }
+  } catch (e) {
+    console.error("[v0] ensureSystemPipelines error:", e)
+  }
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,16 +61,21 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const franchiseeId = searchParams.get("franchiseeId")
 
+    // Ensure system pipelines exist for the franchisee
+    if (franchiseeId) {
+      await ensureSystemPipelines(franchiseeId)
+    }
+
     let pipelines
     if (franchiseeId) {
       pipelines = await sql`
-        SELECT * FROM "GamePipeline" 
+        SELECT * FROM "GamePipeline"
         WHERE "franchiseeId" = ${franchiseeId}
         ORDER BY "createdAt" ASC
       `
     } else {
       pipelines = await sql`
-        SELECT * FROM "GamePipeline" 
+        SELECT * FROM "GamePipeline"
         ORDER BY "createdAt" ASC
       `
     }
@@ -31,7 +83,7 @@ export async function GET(req: NextRequest) {
     // Get stages for each pipeline
     for (const pipeline of pipelines) {
       const stages = await sql`
-        SELECT * FROM "GamePipelineStage" 
+        SELECT * FROM "GamePipelineStage"
         WHERE "pipelineId" = ${pipeline.id}
         ORDER BY "order" ASC
       `

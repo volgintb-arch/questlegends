@@ -544,6 +544,7 @@ export function GamesCRMFranchisee() {
                   <SelectItem value="whatsapp_bot">WhatsApp</SelectItem>
                   <SelectItem value="avito_bot">Авито</SelectItem>
                   <SelectItem value="tilda_bot">Tilda (сайт)</SelectItem>
+                  <SelectItem value="marquiz_bot">Marquiz (квиз)</SelectItem>
                   <SelectItem value="referral">Рекомендация</SelectItem>
                   <SelectItem value="walk_in">Самоприход</SelectItem>
                   {leadSources.filter(s => !["website","phone","instagram","telegram_bot","vk_bot","whatsapp_bot","avito_bot","tilda_bot","referral","walk_in"].includes(s)).map(s => (

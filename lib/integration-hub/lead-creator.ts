@@ -58,6 +58,8 @@ export class LeadCreator {
       if (parts.length > 0) fullName = parts.join(" ")
     } else if (message.channel === "tilda") {
       fullName = raw?.Name || raw?.name || null
+    } else if (message.channel === "marquiz") {
+      fullName = raw?.name || raw?.contactName || null
     } else if (message.channel === "avito") {
       fullName = raw?.user_name || null
     }
@@ -131,10 +133,10 @@ export class LeadCreator {
       }
     }
 
-    // Email (из Tilda формы или из текста)
+    // Email (из Tilda/Marquiz формы или из текста)
     let clientEmail: string | null = null
-    if (message.channel === "tilda") {
-      clientEmail = raw?.Email || raw?.email || null
+    if (message.channel === "tilda" || message.channel === "marquiz") {
+      clientEmail = raw?.Email || raw?.email || raw?.contactEmail || null
     }
     if (!clientEmail) {
       const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)
@@ -156,7 +158,7 @@ export class LeadCreator {
     try {
       const notifId = globalThis.crypto.randomUUID()
       const now = new Date().toISOString()
-      const channelName = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито", tilda: "Tilda (сайт)" }[channel] || channel
+      const channelName = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито", tilda: "Tilda (сайт)", marquiz: "Marquiz" }[channel] || channel
       const title = "Новый лид из " + channelName
       const msg = `Новая заявка от ${clientName} через ${channelName}`
 
@@ -174,6 +176,138 @@ export class LeadCreator {
     }
   }
 
+  // Найти или создать фиксированную воронку "Интеграции" для B2B
+  private static async getOrCreateB2BIntegrationPipeline(): Promise<{ pipeline_id: string; stage_id: string } | null> {
+    // Ищем существующую воронку "Интеграции"
+    const existing = await sql`
+      SELECT p.id as pipeline_id, ps.id as stage_id
+      FROM "Pipeline" p
+      JOIN "PipelineStage" ps ON ps."pipelineId" = p.id
+      WHERE p.name = 'Интеграции'
+      ORDER BY ps."order" ASC
+      LIMIT 1
+    `
+    if (existing.length > 0) return existing[0]
+
+    // Создать воронку "Интеграции" с базовыми стадиями
+    const pipelineId = globalThis.crypto.randomUUID()
+    await sql`
+      INSERT INTO "Pipeline" (id, name, description, color, "isDefault", "createdAt")
+      VALUES (${pipelineId}, 'Интеграции', 'Лиды из интеграций (Telegram, VK, Tilda и др.)', '#8B5CF6', false, NOW())
+    `
+
+    const stages = [
+      { name: "Новый", color: "#3B82F6", order: 0, stageType: "new" },
+      { name: "В работе", color: "#F59E0B", order: 1, stageType: "in_progress" },
+      { name: "Успешно", color: "#10B981", order: 2, stageType: "won" },
+      { name: "Отказ", color: "#EF4444", order: 3, stageType: "lost" },
+    ]
+
+    let firstStageId = ""
+    for (const stage of stages) {
+      const stageId = globalThis.crypto.randomUUID()
+      if (stage.order === 0) firstStageId = stageId
+      await sql`
+        INSERT INTO "PipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType", "createdAt")
+        VALUES (${stageId}, ${pipelineId}, ${stage.name}, ${stage.color}, ${stage.order}, true, ${stage.stageType}, NOW())
+      `
+    }
+
+    return { pipeline_id: pipelineId, stage_id: firstStageId }
+  }
+
+  // Найти или создать фиксированную воронку "Интеграции" для B2C (франчайзи)
+  private static async getOrCreateB2CIntegrationPipeline(franchiseeId: string): Promise<{ pipeline_id: string; stage_id: string }> {
+    const existing = await sql`
+      SELECT gp.id as pipeline_id, gps.id as stage_id
+      FROM "GamePipeline" gp
+      JOIN "GamePipelineStage" gps ON gps."pipelineId" = gp.id
+      WHERE gp."franchiseeId" = ${franchiseeId} AND gp.name = 'Интеграции'
+      ORDER BY gps."order" ASC
+      LIMIT 1
+    `
+    if (existing.length > 0) return existing[0]
+
+    const pipelineId = globalThis.crypto.randomUUID()
+    await sql`
+      INSERT INTO "GamePipeline" (id, name, "franchiseeId", "createdAt")
+      VALUES (${pipelineId}, 'Интеграции', ${franchiseeId}, NOW())
+    `
+
+    const stages = [
+      { name: "Новый", color: "#3B82F6", order: 0, stageType: "new" },
+      { name: "В работе", color: "#F59E0B", order: 1, stageType: "in_progress" },
+      { name: "Успешно", color: "#10B981", order: 2, stageType: "won" },
+      { name: "Отказ", color: "#EF4444", order: 3, stageType: "lost" },
+    ]
+
+    let firstStageId = ""
+    for (const stage of stages) {
+      const stageId = globalThis.crypto.randomUUID()
+      if (stage.order === 0) firstStageId = stageId
+      await sql`
+        INSERT INTO "GamePipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType", "createdAt")
+        VALUES (${stageId}, ${pipelineId}, ${stage.name}, ${stage.color}, ${stage.order}, true, ${stage.stageType}, NOW())
+      `
+    }
+
+    return { pipeline_id: pipelineId, stage_id: firstStageId }
+  }
+
+  // Найти или создать воронку "Архив" для B2C (франчайзи)
+  static async getOrCreateB2CArchivePipeline(franchiseeId: string): Promise<{ pipeline_id: string; stage_id: string }> {
+    const existing = await sql`
+      SELECT gp.id as pipeline_id, gps.id as stage_id
+      FROM "GamePipeline" gp
+      JOIN "GamePipelineStage" gps ON gps."pipelineId" = gp.id
+      WHERE gp."franchiseeId" = ${franchiseeId} AND gp.name = 'Архив'
+      ORDER BY gps."order" ASC
+      LIMIT 1
+    `
+    if (existing.length > 0) return existing[0]
+
+    const pipelineId = globalThis.crypto.randomUUID()
+    await sql`
+      INSERT INTO "GamePipeline" (id, name, "franchiseeId", "createdAt")
+      VALUES (${pipelineId}, 'Архив', ${franchiseeId}, NOW())
+    `
+
+    const stageId = globalThis.crypto.randomUUID()
+    await sql`
+      INSERT INTO "GamePipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType", "createdAt")
+      VALUES (${stageId}, ${pipelineId}, 'Архив', '#6B7280', 0, true, 'archive', NOW())
+    `
+
+    return { pipeline_id: pipelineId, stage_id: stageId }
+  }
+
+  // Найти или создать воронку "Архив" для B2B
+  static async getOrCreateB2BArchivePipeline(): Promise<{ pipeline_id: string; stage_id: string }> {
+    const existing = await sql`
+      SELECT p.id as pipeline_id, ps.id as stage_id
+      FROM "Pipeline" p
+      JOIN "PipelineStage" ps ON ps."pipelineId" = p.id
+      WHERE p.name = 'Архив'
+      ORDER BY ps."order" ASC
+      LIMIT 1
+    `
+    if (existing.length > 0) return existing[0]
+
+    const pipelineId = globalThis.crypto.randomUUID()
+    await sql`
+      INSERT INTO "Pipeline" (id, name, description, color, "isDefault", "createdAt")
+      VALUES (${pipelineId}, 'Архив', 'Архивированные лиды', '#6B7280', false, NOW())
+    `
+
+    const stageId = globalThis.crypto.randomUUID()
+    await sql`
+      INSERT INTO "PipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType", "createdAt")
+      VALUES (${stageId}, ${pipelineId}, 'Архив', '#6B7280', 0, true, 'archive', NOW())
+    `
+
+    return { pipeline_id: pipelineId, stage_id: stageId }
+  }
+
   // Создать B2B Deal (для УК - продажа франшиз)
   private static async createB2BDeal(message: NormalizedMessage, integrationId: string): Promise<string> {
     const assignee = await this.getAssignee(integrationId, "uk")
@@ -182,14 +316,11 @@ export class LeadCreator {
     const clientName = data.fullName || message.username || message.external_user_id
     const comment = `Автосоздано из ${message.channel}: ${message.message_text}`
 
-    // Получить первый pipeline и его первую стадию
-    const pipeline = await sql`
-      SELECT p.id as pipeline_id, ps.id as stage_id
-      FROM "Pipeline" p
-      JOIN "PipelineStage" ps ON ps."pipelineId" = p.id
-      ORDER BY p."createdAt" ASC, ps."order" ASC
-      LIMIT 1
-    `
+    // Получить воронку "Интеграции" (создать если нет)
+    const pipeline = await this.getOrCreateB2BIntegrationPipeline()
+    if (!pipeline) {
+      throw new Error("Failed to get or create B2B integration pipeline")
+    }
 
     // Маппинг канала → leadSource для B2B CRM
     const leadSourceMap: Record<string, string> = {
@@ -220,8 +351,8 @@ export class LeadCreator {
         ${`${message.channel}_bot`},
         ${leadSource},
         'NEW',
-        ${pipeline.length > 0 ? pipeline[0].pipeline_id : null},
-        ${pipeline.length > 0 ? pipeline[0].stage_id : null},
+        ${pipeline.pipeline_id},
+        ${pipeline.stage_id},
         ${data.clientTelegram},
         ${data.messengerLink},
         ${data.city},
@@ -233,9 +364,9 @@ export class LeadCreator {
     `
 
     // Записать в DealLog
-    const channelLabels: Record<string, string> = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито", tilda: "Tilda (сайт)", max: "MAX" }
+    const channelLabels: Record<string, string> = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито", tilda: "Tilda (сайт)", marquiz: "Marquiz", max: "MAX" }
     const channelLabel = channelLabels[message.channel] || message.channel
-    await this.logDealCreation(dealId, `Автосоздано из ${channelLabel}`, pipeline.length > 0 ? pipeline[0].stage_id : null, pipeline.length > 0 ? pipeline[0].pipeline_id : null)
+    await this.logDealCreation(dealId, `Автосоздано из ${channelLabel}`, pipeline.stage_id, pipeline.pipeline_id)
 
     if (assignee?.id) {
       await this.sendNotification(assignee.id, dealId, clientName, message.channel, "b2b")
@@ -253,19 +384,8 @@ export class LeadCreator {
       throw new Error("Franchisee ID is required for B2C lead")
     }
 
-    // Получить первую воронку и стадию для этого франчайзи
-    const pipeline = await sql`
-      SELECT gp.id as pipeline_id, gps.id as stage_id
-      FROM "GamePipeline" gp
-      JOIN "GamePipelineStage" gps ON gps."pipelineId" = gp.id
-      WHERE gp."franchiseeId" = ${franchiseeId}
-      ORDER BY gp."createdAt" ASC, gps."order" ASC
-      LIMIT 1
-    `
-
-    if (pipeline.length === 0) {
-      throw new Error("No pipeline found for franchisee")
-    }
+    // Получить воронку "Интеграции" для этого франчайзи (создать если нет)
+    const pipeline = await this.getOrCreateB2CIntegrationPipeline(franchiseeId)
 
     const leadId = globalThis.crypto.randomUUID()
     const data = this.extractMessageData(message)
@@ -288,8 +408,8 @@ export class LeadCreator {
         ${data.gameDate},
         ${null},
         ${assignee?.id || null},
-        ${pipeline[0].pipeline_id},
-        ${pipeline[0].stage_id},
+        ${pipeline.pipeline_id},
+        ${pipeline.stage_id},
         ${franchiseeId},
         NOW(), NOW()
       )
