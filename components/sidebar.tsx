@@ -158,6 +158,20 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
       { id: "finances", label: "Финансы", icon: RussianRuble, path: "/finances", module: "canViewErp" as const },
+      {
+        id: "messages",
+        label: "Чат",
+        icon: MessageSquare,
+        path: "/messages",
+        module: "canViewMessages" as const,
+      },
+      {
+        id: "social-integrations",
+        label: "Интеграции",
+        icon: Share2,
+        path: "/social-integrations",
+        module: "canViewDashboard" as const,
+      },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
       {
         id: "knowledge",
@@ -167,6 +181,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewKnowledgeBase" as const,
       },
       { id: "users", label: "Пользователи", icon: UserCog, path: "/users", module: "canViewUsers" as const },
+      { id: "access", label: "Доступ", icon: Shield, path: "/access", module: "canViewAccess" as const },
       {
         id: "notifications",
         label: "Уведомления",
