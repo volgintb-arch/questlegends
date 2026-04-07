@@ -446,6 +446,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const ukRoles = ["uk", "super_admin", "uk_employee"]
 
+    // Admin cannot delete leads — only franchisee owner and UK
+    if (user.role === "admin") {
+      return NextResponse.json({ error: "Администратор не может удалять заявки" }, { status: 403 })
+    }
+
     const [game] = await sql`SELECT * FROM "GameLead" WHERE id = ${id}`
     if (!game) {
       return NextResponse.json({ error: "Game not found" }, { status: 404 })

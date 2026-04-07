@@ -13,16 +13,60 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const { id } = await params
 
-    // Check if pipeline has games
-    const games = await sql`SELECT COUNT(*) as count FROM "GameLead" WHERE "pipelineId" = ${id}`
-    if (games[0].count > 0) {
-      return NextResponse.json({ error: "Cannot delete pipeline with games" }, { status: 400 })
+    // Get pipeline info
+    const [pipeline] = await sql`SELECT * FROM "GamePipeline" WHERE id = ${id}`
+    if (!pipeline) {
+      return NextResponse.json({ error: "Pipeline not found" }, { status: 404 })
     }
 
-    // Delete stages first
-    await sql`DELETE FROM "GamePipelineStage" WHERE "pipelineId" = ${id}`
+    // Don't allow deleting the Archive pipeline
+    if (pipeline.name === "Архив") {
+      return NextResponse.json({ error: "Нельзя удалить воронку Архив" }, { status: 400 })
+    }
 
-    // Delete pipeline
+    // Check if pipeline has leads
+    const leads = await sql`SELECT COUNT(*) as count FROM "GameLead" WHERE "pipelineId" = ${id}`
+
+    if (Number(leads[0].count) > 0) {
+      // Find or create Archive pipeline for this franchisee
+      let [archive] = await sql`
+        SELECT * FROM "GamePipeline" WHERE "franchiseeId" = ${pipeline.franchiseeId} AND name = 'Архив'
+      `
+
+      if (!archive) {
+        const archiveId = globalThis.crypto.randomUUID()
+        const [created] = await sql`
+          INSERT INTO "GamePipeline" (id, name, "franchiseeId", "createdAt")
+          VALUES (${archiveId}, 'Архив', ${pipeline.franchiseeId}, NOW())
+          RETURNING *
+        `
+        archive = created
+
+        // Create default stage for archive
+        const stageId = globalThis.crypto.randomUUID()
+        await sql`
+          INSERT INTO "GamePipelineStage" (id, "pipelineId", name, color, "order", "isFixed", "stageType", "createdAt")
+          VALUES (${stageId}, ${archiveId}, 'Архив', '#6B7280', 0, true, 'archive', NOW())
+        `
+      }
+
+      // Get the archive stage
+      const [archiveStage] = await sql`
+        SELECT id FROM "GamePipelineStage" WHERE "pipelineId" = ${archive.id} ORDER BY "order" LIMIT 1
+      `
+
+      if (archiveStage) {
+        // Move all leads to archive
+        await sql`
+          UPDATE "GameLead"
+          SET "pipelineId" = ${archive.id}, "stageId" = ${archiveStage.id}, "updatedAt" = NOW()
+          WHERE "pipelineId" = ${id}
+        `
+      }
+    }
+
+    // Delete stages, then pipeline
+    await sql`DELETE FROM "GamePipelineStage" WHERE "pipelineId" = ${id}`
     await sql`DELETE FROM "GamePipeline" WHERE id = ${id}`
 
     return NextResponse.json({ success: true })

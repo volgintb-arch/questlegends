@@ -17,6 +17,7 @@ import {
   Mail,
   Network,
   Check,
+  ArrowRightLeft,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -528,6 +529,23 @@ export function GameCardFranchisee({
     }
   }
 
+  const handleMovePipeline = async (targetPipelineId: string) => {
+    if (targetPipelineId === gameData.pipelineId) return
+    try {
+      const res = await fetch(`/api/game-leads/${game.id}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ pipelineId: targetPipelineId }),
+      })
+      if (res.ok) {
+        onClose()
+        onUpdate()
+      }
+    } catch (e) {
+      console.error("[v0] Error moving lead:", e)
+    }
+  }
+
   const handleDelete = async () => {
     try {
       await fetch(`/api/game-leads/${game.id}`, {
@@ -602,17 +620,34 @@ export function GameCardFranchisee({
                 ))}
               </SelectContent>
             </Select>
+            {pipelines.length > 1 && (
+              <Select value={gameData.pipelineId} onValueChange={handleMovePipeline}>
+                <SelectTrigger className="h-7 w-auto text-xs">
+                  <ArrowRightLeft className="h-3 w-3 mr-1" />
+                  <SelectValue placeholder="Воронка" />
+                </SelectTrigger>
+                <SelectContent>
+                  {pipelines.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs text-destructive"
-              onClick={() => setShowDeleteDialog(true)}
-            >
-              <Trash2 className="h-3 w-3 mr-1" />
-              Удалить
-            </Button>
+            {user?.role !== "admin" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-destructive"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Удалить
+              </Button>
+            )}
             <button onClick={onClose} className="p-1 hover:bg-muted rounded">
               <X className="h-4 w-4" />
             </button>

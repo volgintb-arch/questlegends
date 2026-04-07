@@ -86,6 +86,14 @@ export function FinancesFranchisee() {
   const extrasTransactions = transactions.filter((t: any) => t.type === "income" && t.category === "extras")
   const extrasTotal = extrasTransactions.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
+  // Cash vs Card breakdown
+  const revenueCash = transactions
+    .filter((t: any) => (t.type === "income" || (!t.type && !t.category)) && (t.paymentMethod === "cash" || !t.paymentMethod))
+    .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+  const revenueCard = transactions
+    .filter((t: any) => (t.type === "income" || (!t.type && !t.category)) && t.paymentMethod === "card")
+    .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+
   const isOwnPoint = user?.role === "own_point" || hasPermission("noRoyalty")
 
   // Auto-calculate royalty from revenue * royaltyPercent
@@ -214,6 +222,8 @@ export function FinancesFranchisee() {
         [],
         ["Ключевые показатели", "Сумма (₽)"],
         ["Выручка", revenue],
+        ["  Наличные", revenueCash],
+        ["  Банковская карта", revenueCard],
         ["  в т.ч. допродажи", extrasTotal],
         ["Расходы", totalExpenses],
         ["ФОТ (персонал)", fot],
@@ -254,12 +264,13 @@ export function FinancesFranchisee() {
       ])
 
       // Sheet 4: Transactions detail
-      const txHeaders = ["Дата", "Тип", "Категория", "Описание", "Сумма (₽)"]
+      const txHeaders = ["Дата", "Тип", "Категория", "Описание", "Способ оплаты", "Сумма (₽)"]
       const txRows = transactions.map((t: any) => [
         new Date(t.date || t.paymentDate || t.createdAt).toLocaleDateString("ru-RU"),
         t.type === "income" ? "Доход" : t.type === "expense" ? "Расход" : "Доход",
         t.category === "prepayment" ? "Предоплата" : t.category === "postpayment" ? "Постоплата" : t.category === "fot" ? "ФОТ" : t.category === "extras" ? "Допродажа" : t.dealTitle || "Сделка",
         t.description || t.notes || t.dealTitle || "—",
+        t.paymentMethod === "card" ? "Карта" : "Наличные",
         Number(t.amount) || 0,
       ])
 
@@ -279,7 +290,7 @@ export function FinancesFranchisee() {
 
       if (txRows.length > 0) {
         const ws4 = XLSX.utils.aoa_to_sheet([txHeaders, ...txRows])
-        ws4["!cols"] = [{ wch: 15 }, { wch: 12 }, { wch: 18 }, { wch: 35 }, { wch: 15 }]
+        ws4["!cols"] = [{ wch: 15 }, { wch: 12 }, { wch: 18 }, { wch: 35 }, { wch: 16 }, { wch: 15 }]
         XLSX.utils.book_append_sheet(wb, ws4, "Транзакции")
       }
 
@@ -339,6 +350,12 @@ export function FinancesFranchisee() {
             <p className="text-xs text-muted-foreground">Выручка</p>
           </div>
           <p className="text-xl font-bold text-foreground">{revenue.toLocaleString("ru-RU")} ₽</p>
+          {(revenueCash > 0 || revenueCard > 0) && (
+            <div className="flex gap-3 mt-1">
+              <p className="text-xs text-muted-foreground">Нал: {revenueCash.toLocaleString("ru-RU")} ₽</p>
+              <p className="text-xs text-muted-foreground">Карта: {revenueCard.toLocaleString("ru-RU")} ₽</p>
+            </div>
+          )}
         </div>
 
         <div className="bg-card border border-border rounded-lg p-4">

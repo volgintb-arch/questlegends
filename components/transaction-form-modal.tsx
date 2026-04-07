@@ -36,6 +36,7 @@ export function TransactionFormModal({
     category: transaction?.category || "",
     description: transaction?.description || "",
     date: transaction?.date?.split("T")[0] || new Date().toISOString().split("T")[0],
+    paymentMethod: (transaction as any)?.paymentMethod || "cash",
   })
 
   useEffect(() => {
@@ -83,6 +84,7 @@ export function TransactionFormModal({
           category: formData.category,
           description: formData.description,
           date: formData.date,
+          paymentMethod: formData.paymentMethod,
           franchiseeId: user?.franchiseeId,
         }),
       })
@@ -162,6 +164,35 @@ export function TransactionFormModal({
               className="w-full bg-background border border-border rounded-lg px-4 py-2 text-sm outline-none focus:border-primary"
               placeholder="10000"
             />
+          </div>
+
+          {/* Payment Method */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Способ оплаты</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, paymentMethod: "cash" })}
+                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                  formData.paymentMethod === "cash"
+                    ? "bg-primary text-white"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                Наличные
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, paymentMethod: "card" })}
+                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                  formData.paymentMethod === "card"
+                    ? "bg-primary text-white"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                Банковская карта
+              </button>
+            </div>
           </div>
 
           {/* Category */}

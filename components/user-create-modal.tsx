@@ -40,10 +40,12 @@ export function UserCreateModal({ open, onClose, onSuccess }: UserCreateModalPro
     availableRoles.push(
       { value: "uk_employee", label: "Сотрудник УК" },
       { value: "franchisee", label: "Франчайзи" },
+      { value: "own_point", label: "Собственная точка" },
     )
   } else if (currentUser.role === "uk_employee") {
     availableRoles.push(
       { value: "franchisee", label: "Франчайзи" },
+      { value: "own_point", label: "Собственная точка" },
     )
   } else if (currentUser.role === "franchisee" || currentUser.role === "own_point") {
     availableRoles.push(

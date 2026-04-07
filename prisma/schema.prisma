@@ -721,6 +721,7 @@ model GameLead {
 
   extras          String?
   extrasAmount    Int      @default(0)
+  paymentMethod   String?
 
   responsibleId   String?
   pipelineId      String

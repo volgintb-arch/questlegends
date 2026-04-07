@@ -53,6 +53,7 @@ export function GameCreateModal({
     hostRate: "2000",
     djsCount: "0",
     djRate: "2500",
+    paymentMethod: "cash",
   })
   const [extrasItems, setExtrasItems] = useState<{ name: string; amount: string }[]>([])
 
@@ -121,6 +122,7 @@ export function GameCreateModal({
           ? JSON.stringify(extrasItems.filter((i) => i.name.trim() || Number(i.amount) > 0).map((i) => ({ name: i.name, amount: Number(i.amount) || 0 })))
           : undefined,
         extrasAmount: extrasItems.reduce((sum, i) => sum + (Number(i.amount) || 0), 0),
+        paymentMethod: formData.paymentMethod,
       }
 
       const response = await fetch("/api/game-leads", {
@@ -436,6 +438,35 @@ export function GameCreateModal({
           {/* Finance Section */}
           <div className="space-y-2 pt-2 border-t border-border">
             <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Финансы</h3>
+
+            {/* Payment Method */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-medium text-foreground">Способ оплаты</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, paymentMethod: "cash" })}
+                  className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${
+                    formData.paymentMethod === "cash"
+                      ? "bg-primary text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  Наличные
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, paymentMethod: "card" })}
+                  className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${
+                    formData.paymentMethod === "card"
+                      ? "bg-primary text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  Банковская карта
+                </button>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">

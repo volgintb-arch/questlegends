@@ -147,6 +147,7 @@ export async function POST(req: NextRequest) {
       djRate = 2500,
       extras,
       extrasAmount = 0,
+      paymentMethod,
     } = body
 
     if (!clientName || !pipelineId || !stageId || !franchiseeId) {
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
         "playersCount", "pricePerPerson", "totalAmount", "prepayment",
         "notes", "source", "responsibleId", "pipelineId", "stageId", "franchiseeId",
         "animatorsCount", "animatorRate", "hostsCount", "hostRate", "djsCount", "djRate",
-        "extras", "extrasAmount",
+        "extras", "extrasAmount", "paymentMethod",
         "createdAt", "updatedAt"
       )
       VALUES (
@@ -176,7 +177,7 @@ export async function POST(req: NextRequest) {
         ${notes || null}, ${source || null}, ${responsibleId || null},
         ${pipelineId}, ${stageId}, ${franchiseeId},
         ${animatorsCount}, ${animatorRate}, ${hostsCount}, ${hostRate}, ${djsCount}, ${djRate},
-        ${extras || null}, ${extrasAmount},
+        ${extras || null}, ${extrasAmount}, ${paymentMethod || "cash"},
         NOW(), NOW()
       )
       RETURNING *

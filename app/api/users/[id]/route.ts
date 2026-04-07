@@ -186,10 +186,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const canDelete =
       currentUser.role === "super_admin" ||
       currentUser.role === "uk" ||
-      (currentUser.role === "uk_employee" && ["franchisee", "admin", "employee", "animator", "host", "dj"].includes(targetUser.role)) ||
-      (currentUser.role === "franchisee" &&
+      (currentUser.role === "uk_employee" && ["franchisee", "own_point", "admin", "employee", "animator", "host", "dj"].includes(targetUser.role)) ||
+      ((currentUser.role === "franchisee" || currentUser.role === "own_point") &&
         targetUser.franchiseeId === currentUser.franchiseeId &&
-        ["admin", "employee", "animator", "host", "dj"].includes(targetUser.role))
+        ["admin", "employee", "animator", "host", "dj"].includes(targetUser.role)) ||
+      (currentUser.role === "admin" &&
+        targetUser.franchiseeId === currentUser.franchiseeId &&
+        ["employee", "animator", "host", "dj"].includes(targetUser.role))
 
     if (!canDelete) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
