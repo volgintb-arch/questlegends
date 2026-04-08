@@ -34,6 +34,7 @@ export function FinancesFranchisee() {
     name: "",
     amount: "",
     date: new Date().toISOString().split("T")[0],
+    paymentMethod: "cash" as string,
   })
   const [franchiseeInfo, setFranchiseeInfo] = useState<FranchiseeInfo | null>(null)
   const [newExpense, setNewExpense] = useState({
@@ -41,6 +42,7 @@ export function FinancesFranchisee() {
     amount: "",
     date: new Date().toISOString().split("T")[0],
     description: "",
+    paymentMethod: "cash" as string,
   })
 
   const { data: expensesData, isLoading: expensesLoading } = useExpenses()
@@ -169,13 +171,15 @@ export function FinancesFranchisee() {
         amount: Number.parseInt(newExpense.amount),
         date: new Date(newExpense.date),
         description: newExpense.description || undefined,
-      })
+        paymentMethod: newExpense.paymentMethod,
+      } as any)
 
       setNewExpense({
         category: "Аренда",
         amount: "",
         date: new Date().toISOString().split("T")[0],
         description: "",
+        paymentMethod: "cash",
       })
       setShowExpenseForm(false)
     } catch (error) {
@@ -197,11 +201,12 @@ export function FinancesFranchisee() {
         category: "extras",
         description: "Допродажа: " + newExtras.name,
         amount: Number(newExtras.amount),
+        paymentMethod: newExtras.paymentMethod,
         date: newExtras.date,
         franchiseeId: user?.franchiseeId,
       } as any)
 
-      setNewExtras({ name: "", amount: "", date: new Date().toISOString().split("T")[0] })
+      setNewExtras({ name: "", amount: "", date: new Date().toISOString().split("T")[0], paymentMethod: "cash" })
       setShowExtrasForm(false)
     } catch (error) {
       console.error("Failed to create extras:", error)
@@ -467,6 +472,25 @@ export function FinancesFranchisee() {
                 />
               </div>
             </div>
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-foreground mb-1">Способ оплаты</label>
+              <div className="flex rounded-lg overflow-hidden border border-border w-fit">
+                <button
+                  type="button"
+                  onClick={() => setNewExtras({ ...newExtras, paymentMethod: "cash" })}
+                  className={`px-4 py-1.5 text-sm transition-colors ${newExtras.paymentMethod === "cash" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                >
+                  Наличные
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewExtras({ ...newExtras, paymentMethod: "card" })}
+                  className={`px-4 py-1.5 text-sm transition-colors ${newExtras.paymentMethod === "card" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                >
+                  Карта
+                </button>
+              </div>
+            </div>
             <div className="flex gap-2 mt-3">
               <button
                 onClick={handleCreateExtras}
@@ -589,6 +613,26 @@ export function FinancesFranchisee() {
                   placeholder="Детали расхода"
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-foreground mb-2">Способ оплаты</label>
+              <div className="flex rounded-lg overflow-hidden border border-border w-fit">
+                <button
+                  type="button"
+                  onClick={() => setNewExpense({ ...newExpense, paymentMethod: "cash" })}
+                  className={`px-4 py-2 text-sm transition-colors ${newExpense.paymentMethod === "cash" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                >
+                  Наличные
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewExpense({ ...newExpense, paymentMethod: "card" })}
+                  className={`px-4 py-2 text-sm transition-colors ${newExpense.paymentMethod === "card" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                >
+                  Карта
+                </button>
               </div>
             </div>
 

@@ -105,13 +105,14 @@ export async function POST(request: Request) {
     const expenseId = globalThis.crypto.randomUUID()
     const result = await sql`
       INSERT INTO "Expense" (
-        id, category, amount, "expenseDate", description, "franchiseeId", "createdById", "createdAt"
+        id, category, amount, "expenseDate", description, "paymentMethod", "franchiseeId", "createdById", "createdAt"
       ) VALUES (
         ${expenseId},
         ${body.category || "other"},
         ${body.amount || 0},
         ${body.date ? new Date(body.date).toISOString() : new Date().toISOString()},
         ${body.description || ""},
+        ${body.paymentMethod || "cash"},
         ${targetFranchiseeId},
         ${user.id},
         NOW()
