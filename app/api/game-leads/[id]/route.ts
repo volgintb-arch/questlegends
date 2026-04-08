@@ -246,7 +246,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       } else if (newPrepayment > 0) {
         await sql`
           INSERT INTO "Transaction" (
-            id, type, amount, category, description, "franchiseeId", "gameLeadId", date, "createdAt"
+            id, type, amount, category, description, "franchiseeId", "gameLeadId", "paymentMethod", date, "createdAt"
           ) VALUES (
             ${globalThis.crypto.randomUUID()},
             'income',
@@ -255,6 +255,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             ${"Предоплата за игру: " + game.clientName},
             ${game.franchiseeId},
             ${id},
+            ${game.paymentMethod || "cash"},
             ${game.gameDate || new Date().toISOString().split("T")[0]},
             NOW()
           )
@@ -349,7 +350,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         if (postpayment > 0) {
           await sql`
             INSERT INTO "Transaction" (
-              id, type, amount, category, description, "franchiseeId", "gameLeadId", date, "createdAt"
+              id, type, amount, category, description, "franchiseeId", "gameLeadId", "paymentMethod", date, "createdAt"
             ) VALUES (
               ${globalThis.crypto.randomUUID()},
               'income',
@@ -358,6 +359,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
               ${"Постоплата за игру: " + game.clientName + " (" + game.playersCount + " чел.)"},
               ${game.franchiseeId},
               ${id},
+              ${game.paymentMethod || "cash"},
               ${gameDate},
               NOW()
             )

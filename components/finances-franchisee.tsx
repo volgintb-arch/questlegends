@@ -350,12 +350,10 @@ export function FinancesFranchisee() {
             <p className="text-xs text-muted-foreground">Выручка</p>
           </div>
           <p className="text-xl font-bold text-foreground">{revenue.toLocaleString("ru-RU")} ₽</p>
-          {(revenueCash > 0 || revenueCard > 0) && (
-            <div className="flex gap-3 mt-1">
-              <p className="text-xs text-muted-foreground">Нал: {revenueCash.toLocaleString("ru-RU")} ₽</p>
-              <p className="text-xs text-muted-foreground">Карта: {revenueCard.toLocaleString("ru-RU")} ₽</p>
-            </div>
-          )}
+          <div className="flex gap-3 mt-1">
+            <p className="text-xs text-muted-foreground">💵 Нал: {revenueCash.toLocaleString("ru-RU")} ₽</p>
+            <p className="text-xs text-muted-foreground">💳 Карта: {revenueCard.toLocaleString("ru-RU")} ₽</p>
+          </div>
         </div>
 
         <div className="bg-card border border-border rounded-lg p-4">

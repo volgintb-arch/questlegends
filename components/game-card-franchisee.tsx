@@ -120,6 +120,7 @@ interface GameData {
   djRate: number
   extras?: string
   extrasAmount?: number
+  paymentMethod?: string
 }
 
 interface PipelineStage {
@@ -185,6 +186,7 @@ export function GameCardFranchisee({
     djRate: safeGame.djRate ?? 2500, // Fixed: use safeGame
     extras: safeGame.extras || "",
     extrasAmount: safeGame.extrasAmount ?? 0,
+    paymentMethod: safeGame.paymentMethod || "cash",
   })
   const [events, setEvents] = useState<FeedEvent[]>([])
   const [tasks, setTasks] = useState<GameTask[]>([])
@@ -238,6 +240,7 @@ export function GameCardFranchisee({
         djRate: game.djRate ?? 2500,
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
+        paymentMethod: game.paymentMethod || "cash",
       })
       // Renamed loadGameDetails to loadGameData to match the updates
       loadGameData()
@@ -277,6 +280,7 @@ export function GameCardFranchisee({
         djRate: game.djRate ?? 2500,
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
+        paymentMethod: game.paymentMethod || "cash",
       })
     }
   }, [game])
@@ -316,6 +320,7 @@ export function GameCardFranchisee({
             djRate: data.data.djRate ?? 2500,
             extras: data.data.extras || "",
             extrasAmount: data.data.extrasAmount ?? 0,
+            paymentMethod: data.data.paymentMethod || "cash",
           })
         }
       }
@@ -781,6 +786,23 @@ export function GameCardFranchisee({
                     onBlur={(e) => handleSaveField("prepayment", Number(e.target.value))}
                     className="h-8 w-32 text-sm text-right"
                   />
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span>Способ оплаты</span>
+                  <div className="flex rounded-lg overflow-hidden border">
+                    <button
+                      onClick={() => { setGameData({ ...gameData, paymentMethod: "cash" }); handleSaveField("paymentMethod", "cash") }}
+                      className={`px-3 py-1 text-xs transition-colors ${(gameData.paymentMethod || "cash") === "cash" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                    >
+                      Наличные
+                    </button>
+                    <button
+                      onClick={() => { setGameData({ ...gameData, paymentMethod: "card" }); handleSaveField("paymentMethod", "card") }}
+                      className={`px-3 py-1 text-xs transition-colors ${gameData.paymentMethod === "card" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                    >
+                      Карта
+                    </button>
+                  </div>
                 </div>
                 <div className="flex justify-between text-sm border-t pt-2">
                   <span>Остаток</span>
