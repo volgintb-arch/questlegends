@@ -239,7 +239,7 @@ export class LeadCreator {
     try {
       const notifId = globalThis.crypto.randomUUID()
       const now = new Date().toISOString()
-      const channelName = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито", tilda: "Tilda (сайт)", marquiz: "Marquiz" }[channel] || channel
+      const channelName = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито", tilda: "Tilda (сайт)", marquiz: "Marquiz", max: "MAX" }[channel] || channel
       const title = "Новый лид из " + channelName
       const msg = `Новая заявка от ${clientName} через ${channelName}`
 

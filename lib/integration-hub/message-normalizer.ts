@@ -279,23 +279,37 @@ export class MessageNormalizer {
     }
   }
 
-  // Нормализация MAX мессенджер сообщения
-  static normalizeMAX(message: any, integration: any): NormalizedMessage {
+  // Нормализация MAX мессенджер сообщения (MAX Bot API webhook payload)
+  // Формат: { update_type: "message_created", timestamp: ..., message: { sender: { user_id, name }, body: { mid, text, attachments }, recipient: { chat_id } } }
+  static normalizeMAX(payload: any, integration: any): NormalizedMessage {
+    const message = payload.message || payload
+    const sender = message.sender || {}
+    const body = message.body || {}
+    const text = body.text || message.text || message.content || ""
+
+    const userId = sender.user_id || message.sender_id || payload.user_id || "unknown"
+    const userName = sender.name || sender.username || message.sender_name || undefined
+
+    // Извлечь вложения
+    const attachments = (body.attachments || message.attachments || [])
+      .filter((att: any) => att.type === "image" || att.type === "video" || att.type === "file" || att.type === "audio")
+      .map((att: any) => ({
+        type: this.detectFileType(att.type === "file" ? "application/octet-stream" : att.type === "image" ? "image/jpeg" : att.type === "video" ? "video/mp4" : "audio/mpeg"),
+        url: att.payload?.url || att.url || att.token || "",
+        filename: att.filename || att.payload?.filename,
+      }))
+
     return {
       channel: "max",
-      external_user_id: message.sender_id.toString(),
-      username: message.sender_name,
-      phone: message.phone,
-      message_text: message.content || "",
-      attachments: message.files?.map((file: any) => ({
-        type: this.detectFileType(file.mime_type),
-        url: file.url,
-        filename: file.name,
-      })),
+      external_user_id: String(userId),
+      username: userName,
+      phone: undefined,
+      message_text: text,
+      attachments: attachments.length > 0 ? attachments : undefined,
       owner_type: integration.owner_type,
       owner_id: integration.owner_id,
-      received_at: new Date(message.timestamp),
-      raw_payload: message,
+      received_at: payload.timestamp ? new Date(payload.timestamp) : new Date(),
+      raw_payload: payload,
     }
   }
 

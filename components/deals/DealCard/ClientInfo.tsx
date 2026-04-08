@@ -1,9 +1,12 @@
 "use client"
 
 import type React from "react"
-import { User, Phone, Link, MapPin, Edit3 } from "lucide-react"
+import { User, Phone, PhoneCall, Link, MapPin, Edit3 } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { PhoneInput } from "@/components/ui/phone-input"
+import { useAuth } from "@/contexts/auth-context"
+import { toast } from "@/hooks/use-toast"
 import type { DealData, PipelineStage } from "./types"
 
 interface ClientInfoProps {
@@ -106,6 +109,7 @@ export function ClientInfo({
   saveDeal,
   handleStageChange,
 }: ClientInfoProps) {
+  const { getAuthHeaders } = useAuth()
   const fieldProps = { dealData, setDealData, editingField, setEditingField, saveDeal }
 
   return (
@@ -144,7 +148,30 @@ export function ClientInfo({
         </h3>
         <div className="space-y-2">
           <EditableField fieldKey="contactName" label="ФИО" icon={<User size={12} className="text-muted-foreground" />} {...fieldProps} />
-          <EditableField fieldKey="contactPhone" label="Номер телефона" icon={<Phone size={12} className="text-muted-foreground" />} type="tel" {...fieldProps} />
+          <div className="flex items-center gap-1">
+            <div className="flex-1">
+              <EditableField fieldKey="contactPhone" label="Номер телефона" icon={<Phone size={12} className="text-muted-foreground" />} type="tel" {...fieldProps} />
+            </div>
+            {dealData.contactPhone && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 mt-4 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                title="Позвонить"
+                onClick={async () => {
+                  try {
+                    const { clickToCall } = await import("@/lib/click-to-call")
+                    await clickToCall(dealData.contactPhone!, getAuthHeaders)
+                    toast({ title: "Звонок инициирован" })
+                  } catch (err: any) {
+                    toast({ title: err.message || "Ошибка звонка", variant: "destructive" })
+                  }
+                }}
+              >
+                <PhoneCall size={14} />
+              </Button>
+            )}
+          </div>
           <EditableField fieldKey="messengerLink" label="Ссылка на мессенджер" icon={<Link size={12} className="text-muted-foreground" />} type="url" {...fieldProps} />
           <EditableField fieldKey="city" label="Город" icon={<MapPin size={12} className="text-muted-foreground" />} {...fieldProps} />
         </div>

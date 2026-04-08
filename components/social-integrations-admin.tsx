@@ -50,6 +50,7 @@ const channelIcons: Record<string, React.ReactNode> = {
   vk: <MessageCircle className="w-5 h-5" />,
   avito: <ShoppingBag className="w-5 h-5" />,
   marquiz: <Zap className="w-5 h-5" />,
+  max: <MessageCircle className="w-5 h-5" />,
 }
 
 const channelNames: Record<string, string> = {
@@ -60,6 +61,7 @@ const channelNames: Record<string, string> = {
   avito: "Авито",
   tilda: "Tilda",
   marquiz: "Marquiz",
+  max: "MAX",
 }
 
 const channelColors: Record<string, string> = {
@@ -70,6 +72,7 @@ const channelColors: Record<string, string> = {
   avito: "text-[#00AAFF]",
   tilda: "text-[#FF7B54]",
   marquiz: "text-[#FFD100]",
+  max: "text-[#2AAC4E]",
 }
 
 const channelBgColors: Record<string, string> = {
@@ -80,6 +83,7 @@ const channelBgColors: Record<string, string> = {
   avito: "border-[#00AAFF]/20 bg-[#00AAFF]/5",
   tilda: "border-[#FF7B54]/20 bg-[#FF7B54]/5",
   marquiz: "border-[#FFD100]/20 bg-[#FFD100]/5",
+  max: "border-[#2AAC4E]/20 bg-[#2AAC4E]/5",
 }
 
 export function SocialIntegrationsAdmin() {

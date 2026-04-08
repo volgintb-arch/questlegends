@@ -53,6 +53,8 @@ export class IntegrationHub {
         return MessageNormalizer.normalizeTilda(payload, integration)
       case "marquiz":
         return MessageNormalizer.normalizeMarquiz(payload, integration)
+      case "max":
+        return MessageNormalizer.normalizeMAX(payload, integration)
       default:
         throw new Error(`Unsupported channel: ${channel}`)
     }

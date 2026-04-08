@@ -17,6 +17,7 @@ import {
   Share2,
   Building2,
   ScrollText,
+  Phone,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -53,6 +54,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         label: "Интеграции",
         icon: Share2,
         path: "/social-integrations",
+        module: "canViewDashboard" as const,
+      },
+      {
+        id: "telephony",
+        label: "Телефония",
+        icon: Phone,
+        path: "/telephony",
         module: "canViewDashboard" as const,
       },
       {
@@ -100,6 +108,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewDashboard" as const,
       },
       {
+        id: "telephony",
+        label: "Телефония",
+        icon: Phone,
+        path: "/telephony",
+        module: "canViewDashboard" as const,
+      },
+      {
         id: "knowledge",
         label: "База Знаний",
         icon: BookOpen,
@@ -133,6 +148,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         label: "Интеграции",
         icon: Share2,
         path: "/social-integrations",
+        module: "canViewDashboard" as const,
+      },
+      {
+        id: "telephony",
+        label: "Телефония",
+        icon: Phone,
+        path: "/telephony",
         module: "canViewDashboard" as const,
       },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },
@@ -170,6 +192,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         label: "Интеграции",
         icon: Share2,
         path: "/social-integrations",
+        module: "canViewDashboard" as const,
+      },
+      {
+        id: "telephony",
+        label: "Телефония",
+        icon: Phone,
+        path: "/telephony",
         module: "canViewDashboard" as const,
       },
       { id: "personnel", label: "График", icon: Calendar, path: "/personnel", module: "canViewDashboard" as const },

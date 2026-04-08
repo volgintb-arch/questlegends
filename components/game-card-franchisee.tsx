@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from "react"
 import {
   X,
   Phone,
+  PhoneCall,
   User,
   MessageSquare,
   CheckSquare,
@@ -26,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/contexts/auth-context"
+import { toast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import {
@@ -680,6 +682,25 @@ export function GameCardFranchisee({
                     placeholder="Телефон"
                     className="h-7 text-xs"
                   />
+                  {gameData.clientPhone && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                      title="Позвонить"
+                      onClick={async () => {
+                        try {
+                          const { clickToCall } = await import("@/lib/click-to-call")
+                          await clickToCall(gameData.clientPhone, getAuthHeaders)
+                          toast({ title: "Звонок инициирован" })
+                        } catch (err: any) {
+                          toast({ title: err.message || "Ошибка звонка", variant: "destructive" })
+                        }
+                      }}
+                    >
+                      <PhoneCall className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-muted-foreground" />

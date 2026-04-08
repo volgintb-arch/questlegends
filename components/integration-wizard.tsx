@@ -28,7 +28,7 @@ import {
   Phone,
 } from "lucide-react"
 
-type Channel = "telegram" | "whatsapp" | "instagram" | "vk" | "avito" | "tilda" | "marquiz"
+type Channel = "telegram" | "whatsapp" | "instagram" | "vk" | "avito" | "tilda" | "marquiz" | "max"
 
 interface ChannelConfig {
   id: Channel
@@ -276,6 +276,34 @@ const CHANNELS: ChannelConfig[] = [
       "Ответы из квиза начнут поступать как лиды автоматически",
     ],
   },
+  {
+    id: "max",
+    name: "MAX",
+    icon: <MessageCircle className="w-6 h-6" />,
+    color: "text-[#2AAC4E]",
+    bgColor: "bg-[#2AAC4E]/10 border-[#2AAC4E]/20",
+    description: "Сообщения из мессенджера MAX (VK Team)",
+    fields: [
+      {
+        key: "bot_token",
+        label: "Bot Token",
+        placeholder: "Токен бота MAX",
+        type: "password",
+        required: true,
+        helpText: "Получите в настройках бота через @MasterBot",
+      },
+    ],
+    instructions: [
+      "Откройте MAX и найдите @MasterBot",
+      "Создайте нового бота командой /create",
+      "Задайте имя и описание бота",
+      "Скопируйте полученный токен",
+    ],
+    webhookInstructions: [
+      "Webhook будет установлен автоматически",
+      "Бот начнёт получать сообщения сразу после подключения",
+    ],
+  },
 ]
 
 interface IntegrationWizardProps {
@@ -384,6 +412,22 @@ export function IntegrationWizard({ open, onClose, onSuccess, isAdmin }: Integra
             )
           } catch {
             // Не критично - webhook можно установить вручную
+          }
+        }
+
+        // Для MAX пытаемся автоустановить webhook
+        if (selectedChannel === "max" && credentials.bot_token) {
+          try {
+            await fetch("https://platform-api.max.ru/subscriptions", {
+              method: "POST",
+              headers: {
+                Authorization: credentials.bot_token,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ url: data.integration.webhook_url }),
+            })
+          } catch {
+            // Не критично
           }
         }
       } else {
@@ -592,7 +636,7 @@ export function IntegrationWizard({ open, onClose, onSuccess, isAdmin }: Integra
             </div>
 
             {/* Webhook URL */}
-            {selectedChannel !== "telegram" && (
+            {selectedChannel !== "telegram" && selectedChannel !== "max" && (
               <div className="space-y-2">
                 <Label className="text-xs font-medium">Webhook URL</Label>
                 <div className="flex gap-1.5">
@@ -626,7 +670,7 @@ export function IntegrationWizard({ open, onClose, onSuccess, isAdmin }: Integra
               </div>
             )}
 
-            {selectedChannel === "telegram" && (
+            {(selectedChannel === "telegram" || selectedChannel === "max") && (
               <div className="rounded-md bg-accent/10 border border-accent/20 p-3">
                 <div className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-accent" />

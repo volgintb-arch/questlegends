@@ -11,7 +11,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
 
     // Валидация канала
-    const supportedChannels = ["telegram", "instagram", "vk", "whatsapp", "avito", "tilda", "marquiz"]
+    const supportedChannels = ["telegram", "instagram", "vk", "whatsapp", "avito", "tilda", "marquiz", "max"]
     if (!supportedChannels.includes(channel)) {
       return NextResponse.json({ error: "Unsupported channel" }, { status: 400 })
     }
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } else {
       payload = await request.json()
     }
-    console.log(`[v0] Webhook ${channel}: payload keys=${Object.keys(payload).join(",")}`, (channel === "tilda" || channel === "marquiz") ? payload : "")
+    console.log(`[v0] Webhook ${channel}: payload keys=${Object.keys(payload).join(",")}`, ["tilda", "marquiz", "max"].includes(channel) ? payload : "")
 
     // Tilda отправляет тестовый запрос с полем test=test — отвечаем 200
     if (channel === "tilda" && payload.test === "test") {
@@ -39,6 +39,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Marquiz тестовый запрос
     if (channel === "marquiz" && (payload.test === true || payload.test === "test")) {
       return NextResponse.json({ ok: true })
+    }
+
+    // MAX: пропустить если нет сообщения (callback, bot_started и т.п. — обрабатываем только message_created)
+    if (channel === "max") {
+      const updateType = payload.update_type
+      if (updateType && updateType !== "message_created") {
+        return NextResponse.json({ ok: true })
+      }
     }
 
     // VK Callback API: confirmation — вернуть строку подтверждения

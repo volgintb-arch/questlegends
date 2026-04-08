@@ -174,6 +174,7 @@ model Franchisee {
   games              Game[]
   socialMediaConfigs SocialMediaConfig[]
   userAssignments    UserFranchiseeAssignment[]
+  sipuniSettings     SipuniSettings?
 
   @@index([city])
 }
@@ -1066,4 +1067,49 @@ model integrationstats {
 
   @@map("integrationstats")
   @@unique([integration_id, date])
+}
+
+// ============================================================
+// Sipuni IP-Telephony
+// ============================================================
+
+model SipuniSettings {
+  id              String   @id @default(cuid())
+  franchiseeId    String?
+  franchisee      Franchisee? @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  apiKey          String
+  sipNumbers      String[] @default([])
+  webhookSecret   String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([franchiseeId])
+  @@map("sipuni_settings")
+}
+
+model CallLog {
+  id              String   @id @default(cuid())
+  franchiseeId    String?
+  callId          String?
+  direction       String   // "inbound" | "outbound"
+  callerNumber    String
+  calledNumber    String
+  sipNumber       String?
+  status          String   @default("missed") // "answered" | "missed" | "busy" | "voicemail"
+  duration        Int      @default(0)
+  recordUrl       String?
+  answeredBy      String?  // userId
+  answeredByName  String?
+  linkedLeadId    String?
+  linkedLeadType  String?  // "b2b" | "b2c"
+  notes           String?
+  startedAt       DateTime @default(now())
+  endedAt         DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([franchiseeId])
+  @@index([callerNumber])
+  @@index([startedAt])
+  @@map("call_log")
 }
