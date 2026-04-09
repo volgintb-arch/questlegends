@@ -2,11 +2,11 @@ import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest, createSignedToken } from "@/lib/simple-auth"
 import { sql } from "@/lib/db"
 
-// POST — вход как другой пользователь (для super_admin)
+// POST — вход как другой пользователь (для super_admin или uk)
 export async function POST(request: NextRequest) {
   try {
     const user = await verifyRequest(request)
-    if (!user || user.role !== "super_admin") {
+    if (!user || (user.role !== "super_admin" && user.role !== "uk")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

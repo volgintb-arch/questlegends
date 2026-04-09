@@ -258,8 +258,8 @@ export default function UsersPage() {
   const renderUserCard = (userItem: User) => {
     const variant = roleBadgeVariants[userItem.role] || "outline"
     const label = roleLabels[userItem.role] || userItem.role
-    const isSuperAdmin = user?.role === "super_admin"
-    const canViewAs = isSuperAdmin && ["franchisee", "own_point", "admin"].includes(userItem.role)
+    const isTopAdmin = user?.role === "super_admin" || user?.role === "uk"
+    const canViewAs = isTopAdmin && ["franchisee", "own_point", "admin"].includes(userItem.role)
 
     return (
       <Card key={userItem.id} className="p-3">
