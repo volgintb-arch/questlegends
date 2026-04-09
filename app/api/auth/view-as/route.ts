@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     // Get target user from database
     const targetUsers = await sql`
-      SELECT u.id, u.name, u.role, u."franchiseeId", u."isActive"
+      SELECT u.id, u.name, u.phone, u.role, u."franchiseeId", u."isActive"
       FROM "User" u
       WHERE u.id = ${userId} AND u."isActive" = true
     `
@@ -35,15 +35,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Cannot view this user" }, { status: 403 })
     }
 
-    // Generate viewing token with viewingAs flag
+    // Generate viewing token
     const token = await createSignedToken({
       userId: targetUser.id,
+      phone: targetUser.phone || "hidden",
       name: targetUser.name,
       role: targetUser.role,
       franchiseeId: targetUser.franchiseeId,
-      viewingAs: true, // Mark as viewing mode (read-only)
-      viewingByAdminId: user.userId, // Track who's viewing
-    } as any)
+    })
 
     return NextResponse.json({ token })
   } catch (error) {

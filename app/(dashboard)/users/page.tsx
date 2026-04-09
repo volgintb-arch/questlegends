@@ -149,9 +149,12 @@ export default function UsersPage() {
         const data = await response.json()
         localStorage.setItem("viewAsToken", data.token)
         localStorage.setItem("viewAsUserId", targetUser.id)
-        router.push("/")
+        // Reload page to apply new token
+        window.location.href = "/"
       } else {
-        toast({ title: "Ошибка просмотра", variant: "destructive" })
+        const errorData = await response.json()
+        console.error("View-as error:", errorData)
+        toast({ title: errorData.error || "Ошибка просмотра", variant: "destructive" })
       }
     } catch (error) {
       console.error("Error viewing as user:", error)
