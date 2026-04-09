@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Moon, Sun, Bell, User, LogOut, SettingsIcon, ChevronDown, Menu } from "lucide-react"
+import { Moon, Sun, Bell, User, LogOut, SettingsIcon, ChevronDown, Menu, Eye, EyeOff } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
@@ -23,7 +23,7 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [showProfileSettings, setShowProfileSettings] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
-  const { user, getAuthHeaders, logout } = useAuth()
+  const { user, getAuthHeaders, logout, exitViewingMode } = useAuth()
   const router = useRouter()
 
   const fetchNotificationCount = useCallback(async () => {
@@ -143,28 +143,54 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
               {showAccountMenu && (
                 <div className="absolute right-0 mt-2 w-56 sm:w-64 glass-popover rounded-xl shadow-lg overflow-hidden">
                   <div className="p-3 sm:p-4 border-b border-border">
-                    <p className="font-medium text-foreground text-sm sm:text-base">{userName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-foreground text-sm sm:text-base flex-1">{userName}</p>
+                      {user?.viewingAs && (
+                        <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500" />
+                      )}
+                    </div>
                   </div>
+                  {user?.viewingAs && (
+                    <div className="px-3 sm:px-4 py-2 bg-blue-500/10 border-b border-blue-500/20">
+                      <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400">Просмотр как другой пользователь</p>
+                    </div>
+                  )}
                   <div className="py-1 sm:py-2">
-                    <button
-                      onClick={handleSettings}
-                      className="w-full px-3 sm:px-4 py-2 text-left text-xs sm:text-sm hover:bg-muted/50 transition-colors flex items-center gap-2 sm:gap-3 text-foreground"
-                    >
-                      <SettingsIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      Настройки профиля
-                    </button>
-                    <button
-                      onClick={() => {
-                        router.push("/access")
-                        setShowAccountMenu(false)
-                      }}
-                      className="w-full px-3 sm:px-4 py-2 text-left text-xs sm:text-sm hover:bg-muted/50 transition-colors flex items-center gap-2 sm:gap-3 text-foreground"
-                    >
-                      <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      Управление доступом
-                    </button>
+                    {!user?.viewingAs && (
+                      <>
+                        <button
+                          onClick={handleSettings}
+                          className="w-full px-3 sm:px-4 py-2 text-left text-xs sm:text-sm hover:bg-muted/50 transition-colors flex items-center gap-2 sm:gap-3 text-foreground"
+                        >
+                          <SettingsIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          Настройки профиля
+                        </button>
+                        <button
+                          onClick={() => {
+                            router.push("/access")
+                            setShowAccountMenu(false)
+                          }}
+                          className="w-full px-3 sm:px-4 py-2 text-left text-xs sm:text-sm hover:bg-muted/50 transition-colors flex items-center gap-2 sm:gap-3 text-foreground"
+                        >
+                          <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          Управление доступом
+                        </button>
+                      </>
+                    )}
                   </div>
                   <div className="border-t border-border">
+                    {user?.viewingAs && (
+                      <button
+                        onClick={() => {
+                          exitViewingMode()
+                          setShowAccountMenu(false)
+                        }}
+                        className="w-full px-3 sm:px-4 py-2 text-left text-xs sm:text-sm hover:bg-blue-500/10 transition-colors flex items-center gap-2 sm:gap-3 text-blue-500"
+                      >
+                        <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        Выйти из просмотра
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         handleLogout()

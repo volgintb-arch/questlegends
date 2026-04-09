@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserCreateModal } from "@/components/user-create-modal"
 import { UserEditModal } from "@/components/user-edit-modal"
 import { useAuth } from "@/contexts/auth-context"
-import { Search, UserPlus, Phone, Calendar, Pencil, Trash2, Users, Building2, Briefcase, ShieldCheck, Music, Mic, PartyPopper } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Search, UserPlus, Phone, Calendar, Pencil, Trash2, Users, Building2, Briefcase, ShieldCheck, Music, Mic, PartyPopper, Eye } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 
 interface User {
@@ -56,12 +57,14 @@ const roleBadgeVariants: Record<string, "default" | "secondary" | "outline"> = {
 }
 
 export default function UsersPage() {
+  const router = useRouter()
   const { user, hasPermission, getAuthHeaders } = useAuth()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [viewingAsId, setViewingAsId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -130,6 +133,31 @@ export default function UsersPage() {
       }
     } catch (error) {
       console.error("[v0] Error deleting user:", error)
+    }
+  }
+
+  const handleViewAs = async (targetUser: User) => {
+    try {
+      setViewingAsId(targetUser.id)
+      const response = await fetch("/api/auth/view-as", {
+        method: "POST",
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: targetUser.id }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        localStorage.setItem("viewAsToken", data.token)
+        localStorage.setItem("viewAsUserId", targetUser.id)
+        router.push("/")
+      } else {
+        toast({ title: "Ошибка просмотра", variant: "destructive" })
+      }
+    } catch (error) {
+      console.error("Error viewing as user:", error)
+      toast({ title: "Ошибка", variant: "destructive" })
+    } finally {
+      setViewingAsId(null)
     }
   }
 
@@ -230,6 +258,8 @@ export default function UsersPage() {
   const renderUserCard = (userItem: User) => {
     const variant = roleBadgeVariants[userItem.role] || "outline"
     const label = roleLabels[userItem.role] || userItem.role
+    const isSuperAdmin = user?.role === "super_admin"
+    const canViewAs = isSuperAdmin && ["franchisee", "own_point", "admin"].includes(userItem.role)
 
     return (
       <Card key={userItem.id} className="p-3">
@@ -252,6 +282,18 @@ export default function UsersPage() {
             </div>
           </div>
           <div className="flex gap-1">
+            {canViewAs && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-blue-500 hover:text-blue-600"
+                onClick={() => handleViewAs(userItem)}
+                disabled={viewingAsId === userItem.id}
+                title="Просмотреть как этот пользователь"
+              >
+                <Eye size={12} />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingUser(userItem)}>
               <Pencil size={12} />
             </Button>

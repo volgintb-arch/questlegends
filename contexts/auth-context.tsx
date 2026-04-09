@@ -168,6 +168,7 @@ export interface User {
   avatarUrl?: string
   onboardingCompleted?: boolean
   permissions?: UserPermissions
+  viewingAs?: boolean
 }
 
 interface AuthContextType {
@@ -179,6 +180,7 @@ interface AuthContextType {
   setUser: (user: User | null) => void
   login: (phone: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  exitViewingMode: () => void
   canAccess: (requiredRole: UserRole[]) => boolean
   getAccessibleFranchisees: () => Franchisee[]
   hasPermission: (permission: string) => boolean
@@ -193,6 +195,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const getStoredToken = () => {
   if (typeof window === "undefined") return null
+  // Check for view-as token first
+  const viewAsToken = localStorage.getItem("viewAsToken")
+  if (viewAsToken) return viewAsToken
   return localStorage.getItem("auth-token")
 }
 
@@ -203,6 +208,12 @@ const setStoredToken = (token: string | null) => {
   } else {
     localStorage.removeItem("auth-token")
   }
+}
+
+const clearViewingMode = () => {
+  if (typeof window === "undefined") return
+  localStorage.removeItem("viewAsToken")
+  localStorage.removeItem("viewAsUserId")
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -260,13 +271,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (response.ok) {
           const data = await response.json()
+          const isViewingMode = !!localStorage.getItem("viewAsToken")
 
           let permissions: UserPermissions | undefined
           if (["uk", "uk_employee", "super_admin", "admin"].includes(data.user.role)) {
             permissions = await loadUserPermissions(data.user.id, storedToken)
           }
 
-          setUser({ ...data.user, permissions })
+          setUser({ ...data.user, permissions, viewingAs: isViewingMode })
 
           if (data.user.role === "uk" || data.user.role === "super_admin") {
             const franchiseesRes = await fetch("/api/franchisees", {
@@ -481,6 +493,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true
   }
 
+  const exitViewingMode = () => {
+    clearViewingMode()
+    // Reload user with original auth token
+    const originalToken = localStorage.getItem("auth-token")
+    if (originalToken) {
+      setToken(originalToken)
+      setUser((prev) => (prev ? { ...prev, viewingAs: false } : null))
+      router.push("/")
+    } else {
+      logout()
+    }
+  }
+
   const value: AuthContextType = {
     user,
     token,
@@ -490,6 +515,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser,
     login,
     logout,
+    exitViewingMode,
     canAccess,
     getAccessibleFranchisees,
     hasPermission,
