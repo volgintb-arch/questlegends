@@ -56,15 +56,13 @@ export function DashboardUK() {
     const fetchData = async () => {
       try {
         const headers = getAuthHeaders()
-        const [franchisesRes, transactionsRes, gamesRes] = await Promise.all([
+        const [franchisesRes, transactionsRes] = await Promise.all([
           fetch("/api/franchisees", { headers, cache: "no-store" }),
           fetch("/api/transactions?limit=1000", { headers, cache: "no-store" }),
-          fetch("/api/game-leads?status=completed", { headers, cache: "no-store" }),
         ])
 
         let franchisesData: any[] = []
         let transactionsData: any[] = []
-        let gamesData: any[] = []
 
         if (franchisesRes.ok) {
           const data = await franchisesRes.json()
@@ -80,11 +78,6 @@ export function DashboardUK() {
           setTransactions(transactionsData)
         }
 
-        if (gamesRes.ok) {
-          const data = await gamesRes.json()
-          gamesData = Array.isArray(data) ? data : data.data || []
-        }
-
         const revenue = transactionsData
           .filter((t) => t.type === "income" || t.type === "revenue")
           .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
@@ -97,8 +90,19 @@ export function DashboardUK() {
           return sum + (franchiseeRevenue * royaltyPercent) / 100
         }, 0)
 
-        const games = gamesData.length || transactionsData.filter((t) => t.gameLeadId).length
-        const avgCheck = games > 0 ? revenue / games : 0
+        // Завершённые игры = уникальные gameLeadId с постоплатой
+        const completedGameIds = new Set(
+          transactionsData
+            .filter((t) => t.gameLeadId && t.category === "postpayment")
+            .map((t) => t.gameLeadId)
+        )
+        const games = completedGameIds.size
+
+        // Средний чек = выручка только от игр (предоплата + постоплата) / кол-во завершённых игр
+        const gameRevenue = transactionsData
+          .filter((t) => t.gameLeadId && t.type === "income" && (t.category === "postpayment" || t.category === "prepayment"))
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+        const avgCheck = games > 0 ? gameRevenue / games : 0
 
         setMetrics({
           totalRevenue: revenue,
