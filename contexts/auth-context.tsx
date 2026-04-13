@@ -495,15 +495,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const exitViewingMode = () => {
     clearViewingMode()
-    // Reload user with original auth token
-    const originalToken = localStorage.getItem("auth-token")
-    if (originalToken) {
-      setToken(originalToken)
-      setUser((prev) => (prev ? { ...prev, viewingAs: false } : null))
-      router.push("/")
-    } else {
-      logout()
-    }
+    // Force page reload to pick up original token from localStorage
+    window.location.href = "/"
   }
 
   const value: AuthContextType = {
