@@ -13,6 +13,9 @@ export class ApiError extends Error {
 
 async function getAuthToken(): Promise<string | null> {
   if (typeof window === "undefined") return null
+  // Check for view-as token first (when UK admin views another user's dashboard)
+  const viewAsToken = localStorage.getItem("viewAsToken")
+  if (viewAsToken) return viewAsToken
   return localStorage.getItem("auth-token")
 }
 
