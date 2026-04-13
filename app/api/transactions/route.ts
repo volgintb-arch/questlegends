@@ -58,7 +58,8 @@ export async function GET(request: Request) {
       } else if (user.role === "uk_employee") {
         const transactions = await sql`
           SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
-            t."dealId", t."franchiseeId", t."royaltyAmount",
+            t."dealId", t."gameLeadId", t."franchiseeId", t."royaltyAmount",
+            t.type, t.category, t.description, t.date,
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
@@ -67,14 +68,15 @@ export async function GET(request: Request) {
           INNER JOIN "UserFranchiseeAssignment" ufa ON t."franchiseeId" = ufa."franchiseeId"
           WHERE ufa."userId" = ${user.id} AND t."franchiseeId" = ${franchiseeId}
           ORDER BY t."paymentDate" DESC
-          LIMIT 100
+          LIMIT 1000
         `
         return NextResponse.json({ transactions, data: transactions })
       } else {
         // UK/super_admin sees all or filtered by franchiseeId
         const transactions = await sql`
           SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
-            t."dealId", t."franchiseeId", t."royaltyAmount",
+            t."dealId", t."gameLeadId", t."franchiseeId", t."royaltyAmount",
+            t.type, t.category, t.description, t.date,
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
@@ -82,7 +84,7 @@ export async function GET(request: Request) {
           LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
           WHERE t."franchiseeId" = ${franchiseeId}
           ORDER BY t."paymentDate" DESC
-          LIMIT 100
+          LIMIT 1000
         `
         return NextResponse.json({ transactions, data: transactions })
       }
@@ -109,7 +111,8 @@ export async function GET(request: Request) {
       } else if (user.role === "uk_employee") {
         const transactions = await sql`
           SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
-            t."dealId", t."franchiseeId", t."royaltyAmount",
+            t."dealId", t."gameLeadId", t."franchiseeId", t."royaltyAmount",
+            t.type, t.category, t.description, t.date,
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
@@ -118,21 +121,22 @@ export async function GET(request: Request) {
           INNER JOIN "UserFranchiseeAssignment" ufa ON t."franchiseeId" = ufa."franchiseeId"
           WHERE ufa."userId" = ${user.id}
           ORDER BY t."paymentDate" DESC
-          LIMIT 100
+          LIMIT 1000
         `
         return NextResponse.json({ transactions, data: transactions })
       } else {
         // UK/super_admin sees all transactions
         const transactions = await sql`
           SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
-            t."dealId", t."franchiseeId", t."royaltyAmount",
+            t."dealId", t."gameLeadId", t."franchiseeId", t."royaltyAmount",
+            t.type, t.category, t.description, t.date,
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
           LEFT JOIN "Deal" d ON t."dealId" = d.id
           LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
           ORDER BY t."paymentDate" DESC
-          LIMIT 100
+          LIMIT 1000
         `
         return NextResponse.json({ transactions, data: transactions })
       }
