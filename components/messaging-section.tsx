@@ -134,12 +134,12 @@ export function MessagingSection() {
   const fetchAvailableUsers = async () => {
     try {
       const headers = getAuthHeaders()
-      const isFranchiseeOrAdmin = user?.role === "franchisee" || user?.role === "own_point" || user?.role === "admin"
+      const isFranchisee = user?.role === "franchisee" || user?.role === "own_point"
 
-      // Franchisee/admin: fetch own staff + UK users (who are not in the same franchiseeId query)
+      // Franchisee: fetch own staff + UK users (to see assigned UK employee)
+      // Admin: only fetch own location staff
       const fetches: Promise<Response>[] = [fetch("/api/users", { headers })]
-      if (isFranchiseeOrAdmin) {
-        // Also fetch UK-level users so franchisee can see assigned UK employee
+      if (isFranchisee) {
         fetches.push(fetch("/api/users?role=uk", { headers }))
       }
 
@@ -164,7 +164,7 @@ export function MessagingSection() {
 
       // For franchisee: find which UK employees are assigned to this franchisee
       let assignedUkEmployeeIds: string[] = []
-      if (isFranchiseeOrAdmin && user?.franchiseeId) {
+      if (isFranchisee && user?.franchiseeId) {
         try {
           const assignRes = await fetch("/api/franchise-assignments", { headers })
           if (assignRes.ok) {
@@ -197,9 +197,8 @@ export function MessagingSection() {
           return false
         }
         if (user?.role === "admin") {
+          // Admin can only chat with their own franchisee owner and location staff
           const uFranchiseeId = u.franchiseeId || u.franchisee?.id
-          if (u.role === "uk" || u.role === "super_admin") return true
-          if (u.role === "uk_employee" && assignedUkEmployeeIds.includes(u.id)) return true
           if (uFranchiseeId === user.franchiseeId) return true
           return false
         }
@@ -350,9 +349,13 @@ export function MessagingSection() {
 
   const groupedUsers = {
     ukTeam: availableUsers.filter((u) => ["uk", "uk_employee", "super_admin"].includes(u.role)),
-    franchisees: availableUsers.filter((u) => u.role === "franchisee"),
+    franchisees: availableUsers.filter((u) => ["franchisee", "own_point"].includes(u.role)),
     myTeam: availableUsers.filter(
       (u) => (u.franchiseeId || u.franchisee?.id) === user?.franchiseeId && ["admin", "employee", "animator", "host", "dj"].includes(u.role),
+    ),
+    // For admin: franchisee owner of their location
+    myFranchisee: availableUsers.filter(
+      (u) => (u.franchiseeId || u.franchisee?.id) === user?.franchiseeId && ["franchisee", "own_point"].includes(u.role),
     ),
   }
 
@@ -498,7 +501,18 @@ export function MessagingSection() {
                 </div>
               )}
 
-            {groupedUsers.myTeam.length > 0 && (user?.role === "franchisee" || user?.role === "admin") && (
+            {groupedUsers.myFranchisee.length > 0 && user?.role === "admin" && (
+              <div className="mb-2">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
+                  Руководство
+                </p>
+                {groupedUsers.myFranchisee
+                  .filter((u) => !searchQuery || u.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((u) => renderUserItem(u, false))}
+              </div>
+            )}
+
+            {groupedUsers.myTeam.length > 0 && (user?.role === "franchisee" || user?.role === "own_point" || user?.role === "admin") && (
               <div className="mb-2">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
                   Моя команда
