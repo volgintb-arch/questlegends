@@ -75,6 +75,21 @@ export async function GET(request: Request) {
         WHERE u.role IN ('uk', 'uk_employee')
         ORDER BY u."createdAt" DESC
       `
+    } else if (user.role === "uk_employee") {
+      // uk_employee sees only users from their assigned franchisees
+      users = await sql`
+        SELECT
+          u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp,
+          u."telegramId", u.description, u."avatarUrl", u."isActive", u."createdAt",
+          f.id as "franchiseeId", f.name as "franchiseeName", f.city as "franchiseeCity",
+          p.role as "personnelRole"
+        FROM "User" u
+        LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
+        LEFT JOIN "Personnel" p ON p."userId" = u.id
+        INNER JOIN "UserFranchiseeAssignment" ufa ON u."franchiseeId" = ufa."franchiseeId"
+        WHERE ufa."userId" = ${user.userId}
+        ORDER BY u."createdAt" DESC
+      `
     } else if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
       users = await sql`
         SELECT

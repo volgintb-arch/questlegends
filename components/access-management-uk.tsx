@@ -21,6 +21,8 @@ interface UserPermissions {
   messages: boolean
   knowledgeBase: boolean
   notifications: boolean
+  viewUsers: boolean
+  manageUsers: boolean
 }
 
 interface AccessUser {
@@ -44,6 +46,7 @@ const permissionLabels: Record<keyof UserPermissions, string> = {
   messages: "Сообщения",
   knowledgeBase: "База Знаний",
   notifications: "Уведомления",
+  viewUsers: "Просмотр пользователей",
   manageUsers: "Управление пользователями",
 }
 
@@ -98,6 +101,7 @@ export function AccessManagementUK() {
           messages: u.userPermissions?.canViewMessages ?? true,
           knowledgeBase: u.userPermissions?.canViewKnowledgeBase ?? true,
           notifications: u.userPermissions?.canViewNotifications ?? true,
+          viewUsers: u.userPermissions?.canViewUsers ?? false,
           manageUsers: u.userPermissions?.canManageUsers ?? false,
         },
         assignedFranchisees: u.assignedFranchisees || [],
@@ -165,7 +169,7 @@ export function AccessManagementUK() {
             canViewKpi: false,
             canViewMessages: newPermissions.messages,
             canViewKnowledgeBase: newPermissions.knowledgeBase,
-            canViewUsers: newPermissions.manageUsers,
+            canViewUsers: newPermissions.viewUsers,
             canViewAccess: false,
             canViewNotifications: newPermissions.notifications,
             canManageUsers: newPermissions.manageUsers,

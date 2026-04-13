@@ -90,6 +90,11 @@ export default function UsersPage() {
         filteredUsers = allUsers.filter(
           (u: User) => u.id !== user.id && ["uk_employee", "franchisee", "own_point", "admin", "employee", "animator", "host", "dj"].includes(u.role),
         )
+      } else if (user?.role === "uk_employee") {
+        // uk_employee sees users from assigned franchisees (API already filters)
+        filteredUsers = allUsers.filter(
+          (u: User) => u.id !== user.id && ["franchisee", "own_point", "admin", "employee", "animator", "host", "dj"].includes(u.role),
+        )
       } else if (user?.role === "franchisee" || user?.role === "own_point") {
         filteredUsers = allUsers.filter(
           (u: User) =>
@@ -180,6 +185,7 @@ export default function UsersPage() {
   // Categorize users into tabs based on current user's role
   const tabs = useMemo(() => {
     const isUK = user?.role === "uk" || user?.role === "super_admin"
+    const isUKEmployee = user?.role === "uk_employee"
     const isFranchisee = user?.role === "franchisee" || user?.role === "own_point"
     const isAdmin = user?.role === "admin"
 
@@ -198,6 +204,25 @@ export default function UsersPage() {
           icon: Briefcase,
           roles: ["uk_employee"],
           users: users.filter((u) => u.role === "uk_employee"),
+        },
+        {
+          id: "location_staff",
+          label: "Персонал локаций",
+          icon: Users,
+          roles: ["admin", "employee", "animator", "host", "dj"],
+          users: users.filter((u) => ["admin", "employee", "animator", "host", "dj"].includes(u.role)),
+        },
+      ]
+    }
+
+    if (isUKEmployee) {
+      return [
+        {
+          id: "franchisees",
+          label: "Франчайзи",
+          icon: Building2,
+          roles: ["franchisee", "own_point"],
+          users: users.filter((u) => ["franchisee", "own_point"].includes(u.role)),
         },
         {
           id: "location_staff",
@@ -263,6 +288,7 @@ export default function UsersPage() {
     const label = roleLabels[userItem.role] || userItem.role
     const isTopAdmin = user?.role === "super_admin" || user?.role === "uk"
     const canViewAs = isTopAdmin && ["franchisee", "own_point", "admin"].includes(userItem.role)
+    const isReadOnly = user?.role === "uk_employee"
 
     return (
       <Card key={userItem.id} className="p-3">
@@ -284,31 +310,33 @@ export default function UsersPage() {
               )}
             </div>
           </div>
-          <div className="flex gap-1">
-            {canViewAs && (
+          {!isReadOnly && (
+            <div className="flex gap-1">
+              {canViewAs && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-blue-500 hover:text-blue-600"
+                  onClick={() => handleViewAs(userItem)}
+                  disabled={viewingAsId === userItem.id}
+                  title="Просмотреть как этот пользователь"
+                >
+                  <Eye size={12} />
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingUser(userItem)}>
+                <Pencil size={12} />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-blue-500 hover:text-blue-600"
-                onClick={() => handleViewAs(userItem)}
-                disabled={viewingAsId === userItem.id}
-                title="Просмотреть как этот пользователь"
+                className="h-6 w-6 text-destructive"
+                onClick={() => handleDeleteUser(userItem.id)}
               >
-                <Eye size={12} />
+                <Trash2 size={12} />
               </Button>
-            )}
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingUser(userItem)}>
-              <Pencil size={12} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-destructive"
-              onClick={() => handleDeleteUser(userItem.id)}
-            >
-              <Trash2 size={12} />
-            </Button>
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-1 text-xs">
