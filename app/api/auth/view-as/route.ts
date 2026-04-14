@@ -6,7 +6,7 @@ import { sql } from "@/lib/db"
 export async function POST(request: NextRequest) {
   try {
     const user = await verifyRequest(request)
-    if (!user || (user.role !== "super_admin" && user.role !== "uk")) {
+    if (!user || !["super_admin", "uk", "uk_employee"].includes(user.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
