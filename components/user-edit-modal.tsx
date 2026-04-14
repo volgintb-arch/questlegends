@@ -90,13 +90,24 @@ export function UserEditModal({ isOpen, onClose, user, onUpdated }: UserEditModa
         { value: "uk", label: "Директор УК" },
         { value: "uk_employee", label: "Сотрудник УК" },
         { value: "franchisee", label: "Франчайзи" },
+        { value: "own_point", label: "Собственная точка" },
         { value: "admin", label: "Администратор" },
         { value: "employee", label: "Сотрудник" },
         { value: "animator", label: "Аниматор" },
         { value: "host", label: "Ведущий" },
         { value: "dj", label: "DJ" },
       ]
-    } else if (currentUser?.role === "franchisee") {
+    } else if (currentUser?.role === "uk_employee" && currentUser?.permissions?.canManageUsers) {
+      return [
+        { value: "franchisee", label: "Франчайзи" },
+        { value: "own_point", label: "Собственная точка" },
+        { value: "admin", label: "Администратор" },
+        { value: "employee", label: "Сотрудник" },
+        { value: "animator", label: "Аниматор" },
+        { value: "host", label: "Ведущий" },
+        { value: "dj", label: "DJ" },
+      ]
+    } else if (currentUser?.role === "franchisee" || currentUser?.role === "own_point") {
       return [
         { value: "admin", label: "Администратор" },
         { value: "employee", label: "Сотрудник" },

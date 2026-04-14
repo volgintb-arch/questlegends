@@ -287,7 +287,8 @@ export default function UsersPage() {
     const variant = roleBadgeVariants[userItem.role] || "outline"
     const label = roleLabels[userItem.role] || userItem.role
     const isTopAdmin = user?.role === "super_admin" || user?.role === "uk"
-    const canViewAs = isTopAdmin && ["franchisee", "own_point", "admin"].includes(userItem.role)
+    const isUkEmployeeWithManage = user?.role === "uk_employee" && user?.permissions?.canManageUsers
+    const canViewAs = (isTopAdmin || isUkEmployeeWithManage) && ["franchisee", "own_point", "admin"].includes(userItem.role)
     const isReadOnly = user?.role === "uk_employee" && !user?.permissions?.canManageUsers
 
     return (
