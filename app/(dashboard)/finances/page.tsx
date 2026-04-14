@@ -13,11 +13,7 @@ export default function FinancesPage() {
     return <TransactionsERP role="uk" />
   }
 
-  if (user.role === "admin") {
-    return <FinancesAdmin />
-  }
-
-  if (user.role === "franchisee" || user.role === "own_point") {
+  if (user.role === "admin" || user.role === "franchisee" || user.role === "own_point") {
     return <FinancesFranchisee />
   }
 

@@ -223,6 +223,7 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
     const adminItems = [
       { id: "dashboard", label: "Дашборд", icon: LayoutGrid, path: "/", module: "canViewDashboard" as const },
       { id: "deals", label: "CRM", icon: HandshakeIcon, path: "/crm", module: "canViewCrm" as const },
+      { id: "finances", label: "Финансы", icon: RussianRuble, path: "/finances", module: "canViewErp" as const },
       { id: "schedule", label: "График", icon: Calendar, path: "/personnel", module: "canViewKpi" as const },
       { id: "messages", label: "Чат", icon: MessageSquare, path: "/messages", module: "canViewMessages" as const },
       {

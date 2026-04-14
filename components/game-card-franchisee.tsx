@@ -179,11 +179,11 @@ export function GameCardFranchisee({
     responsibleName: safeGame.responsibleName,
     source: safeGame.source || "",
     animatorsCount: safeGame.animatorsCount ?? 0,
-    animatorRate: safeGame.animatorRate ?? 1500,
+    animatorRate: safeGame.animatorRate ?? 0,
     hostsCount: safeGame.hostsCount ?? 0,
-    hostRate: safeGame.hostRate ?? 2000,
+    hostRate: safeGame.hostRate ?? 0,
     djsCount: safeGame.djsCount ?? 0, // Fixed: use safeGame
-    djRate: safeGame.djRate ?? 2500, // Fixed: use safeGame
+    djRate: safeGame.djRate ?? 0, // Fixed: use safeGame
     extras: safeGame.extras || "",
     extrasAmount: safeGame.extrasAmount ?? 0,
     paymentMethod: safeGame.paymentMethod || "cash",
@@ -233,11 +233,11 @@ export function GameCardFranchisee({
         responsibleName: game.responsibleName,
         source: game.source || "",
         animatorsCount: game.animatorsCount ?? 0,
-        animatorRate: game.animatorRate ?? 1500,
+        animatorRate: game.animatorRate ?? 0,
         hostsCount: game.hostsCount ?? 0,
-        hostRate: game.hostRate ?? 2000,
+        hostRate: game.hostRate ?? 0,
         djsCount: game.djsCount ?? 0,
-        djRate: game.djRate ?? 2500,
+        djRate: game.djRate ?? 0,
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
@@ -273,11 +273,11 @@ export function GameCardFranchisee({
         responsibleName: game.responsibleName,
         source: game.source || "",
         animatorsCount: game.animatorsCount ?? 0,
-        animatorRate: game.animatorRate ?? 1500,
+        animatorRate: game.animatorRate ?? 0,
         hostsCount: game.hostsCount ?? 0,
-        hostRate: game.hostRate ?? 2000,
+        hostRate: game.hostRate ?? 0,
         djsCount: game.djsCount ?? 0,
-        djRate: game.djRate ?? 2500,
+        djRate: game.djRate ?? 0,
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
@@ -313,11 +313,11 @@ export function GameCardFranchisee({
             responsibleName: data.data.responsibleName,
             source: data.data.source || "",
             animatorsCount: data.data.animatorsCount ?? 0,
-            animatorRate: data.data.animatorRate ?? 1500,
+            animatorRate: data.data.animatorRate ?? 0,
             hostsCount: data.data.hostsCount ?? 0,
-            hostRate: data.data.hostRate ?? 2000,
+            hostRate: data.data.hostRate ?? 0,
             djsCount: data.data.djsCount ?? 0,
-            djRate: data.data.djRate ?? 2500,
+            djRate: data.data.djRate ?? 0,
             extras: data.data.extras || "",
             extrasAmount: data.data.extrasAmount ?? 0,
             paymentMethod: data.data.paymentMethod || "cash",
@@ -835,7 +835,8 @@ export function GameCardFranchisee({
                       <Input
                         type="number"
                         min="0"
-                        value={gameData.animatorRate ?? 1500}
+                        value={gameData.animatorRate || ""}
+                        placeholder="1500"
                         onChange={(e) => setGameData({ ...gameData, animatorRate: Number(e.target.value) })}
                         onBlur={(e) => handleSaveField("animatorRate", Number(e.target.value))}
                         className="h-8 w-24 text-sm text-right"
@@ -863,7 +864,8 @@ export function GameCardFranchisee({
                       <Input
                         type="number"
                         min="0"
-                        value={gameData.hostRate ?? 2000}
+                        value={gameData.hostRate || ""}
+                        placeholder="2000"
                         onChange={(e) => setGameData({ ...gameData, hostRate: Number(e.target.value) })}
                         onBlur={(e) => handleSaveField("hostRate", Number(e.target.value))}
                         className="h-8 w-24 text-sm text-right"
@@ -891,7 +893,8 @@ export function GameCardFranchisee({
                       <Input
                         type="number"
                         min="0"
-                        value={gameData.djRate ?? 2500}
+                        value={gameData.djRate || ""}
+                        placeholder="2500"
                         onChange={(e) => setGameData({ ...gameData, djRate: Number(e.target.value) })}
                         onBlur={(e) => handleSaveField("djRate", Number(e.target.value))}
                         className="h-8 w-24 text-sm text-right"

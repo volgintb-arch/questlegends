@@ -92,6 +92,7 @@ export function DashboardFranchisee() {
         fetch(`/api/franchisees/${user.franchiseeId}`, { headers }),
         fetch(`/api/game-leads?franchiseeId=${user.franchiseeId}`, { headers }),
         fetch(`/api/notifications`, { headers }),
+        fetch(`/api/expenses`, { headers }),
       ])
 
       const transactionsRes = results[0]
@@ -118,18 +119,31 @@ export function DashboardFranchisee() {
         notificationsList = notificationsData?.data?.notifications || []
       }
 
+      // Parse expenses
+      const expensesRes = results[4]
+      let expenses: any[] = []
+      if (expensesRes.status === "fulfilled" && expensesRes.value.ok) {
+        const expData = await expensesRes.value.json()
+        expenses = Array.isArray(expData) ? expData : expData.data || []
+      }
+
       const royaltyPercent = Number(franchiseeData?.data?.royaltyPercent ?? franchiseeData?.royaltyPercent) || 0
 
+      // Revenue = income transactions + legacy transactions without type
       const revenue = transactions
-        .filter((t: any) => t.type === "income")
+        .filter((t: any) => t.type === "income" || (!t.type && !t.category))
         .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
 
+      // FOT from transactions
       const fot = transactions
-        .filter((t: any) => t.category?.startsWith("fot"))
+        .filter((t: any) => t.type === "expense" && t.category === "fot")
         .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
 
-      const royaltyAmount = revenue * (royaltyPercent / 100)
-      const profit = revenue - fot - royaltyAmount
+      // Expenses from Expense table
+      const totalExpenses = expenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
+
+      const royaltyAmount = Math.round(revenue * (royaltyPercent / 100))
+      const profit = revenue - fot - royaltyAmount - totalExpenses
 
       const completedGames = leads.filter(
         (l) => l.stageType === "completed" || l.stageName?.toLowerCase().includes("завершен"),
