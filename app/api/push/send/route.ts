@@ -3,14 +3,25 @@ import { verifyRequest } from "@/lib/simple-auth"
 import { sql } from "@/lib/db"
 import webpush from "web-push"
 
-webpush.setVapidDetails(
-  "mailto:admin@legendaobiskatelyah.ru",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!,
-)
+let vapidReady = false
+function ensureVapid() {
+  if (vapidReady) return true
+  if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return false
+  webpush.setVapidDetails(
+    "mailto:admin@legendaobiskatelyah.ru",
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  )
+  vapidReady = true
+  return true
+}
 
 export async function POST(request: NextRequest) {
   try {
+    if (!ensureVapid()) {
+      return NextResponse.json({ error: "Push notifications not configured" }, { status: 503 })
+    }
+
     const user = await verifyRequest(request)
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
