@@ -108,23 +108,31 @@ export function FinancesFranchisee() {
     }
   }
 
-  // Filter helper
-  const inRange = (dateStr: string) => {
-    if (!dateFrom && !dateTo) return true
-    const d = dateStr?.split("T")[0] || ""
-    if (dateFrom && d < dateFrom) return false
-    if (dateTo && d > dateTo) return false
-    return true
-  }
-
   const getTxDate = (t: any) => t.date || t.paymentDate || t.createdAt || ""
   const getExpDate = (e: any) => e.date || e.expenseDate || e.createdAt || ""
 
-  // Filtered data
-  const transactions = useMemo(() => allTransactions.filter((t: any) => inRange(getTxDate(t))), [allTransactions, dateFrom, dateTo])
-  const expenses = useMemo(() => allExpenses.filter((e: any) => inRange(getExpDate(e))), [allExpenses, dateFrom, dateTo])
+  // Filtered data by date range
+  const transactions = useMemo(() => {
+    return allTransactions.filter((t: any) => {
+      if (!dateFrom && !dateTo) return true
+      const d = (getTxDate(t))?.split("T")[0] || ""
+      if (dateFrom && d < dateFrom) return false
+      if (dateTo && d > dateTo) return false
+      return true
+    })
+  }, [allTransactions, dateFrom, dateTo])
 
-  const isOwnPoint = user?.role === "own_point" || hasPermission("noRoyalty")
+  const expenses = useMemo(() => {
+    return allExpenses.filter((e: any) => {
+      if (!dateFrom && !dateTo) return true
+      const d = (getExpDate(e))?.split("T")[0] || ""
+      if (dateFrom && d < dateFrom) return false
+      if (dateTo && d > dateTo) return false
+      return true
+    })
+  }, [allExpenses, dateFrom, dateTo])
+
+  const isOwnPoint = user?.role === "own_point" || user?.role === "admin" || hasPermission("noRoyalty")
 
   const totalExpenses = expenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
 
