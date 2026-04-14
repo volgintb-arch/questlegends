@@ -84,6 +84,11 @@ export function FinancesFranchisee() {
     .filter((t: any) => t.type === "expense" && t.category === "fot")
     .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
+  // Other expense transactions (not fot) — e.g. other_expense, consumables
+  const otherExpenseTransactions = transactions
+    .filter((t: any) => t.type === "expense" && t.category && t.category !== "fot")
+    .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+
   // Extras = income transactions with category 'extras'
   const extrasTransactions = transactions.filter((t: any) => t.type === "income" && t.category === "extras")
   const extrasTotal = extrasTransactions.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
@@ -104,7 +109,7 @@ export function FinancesFranchisee() {
   const royaltyCalculated = Math.round(revenue * royaltyPercent / 100)
   const royalty = isOwnPoint ? 0 : Math.max(royaltyFromTransactions, royaltyCalculated)
 
-  const netProfit = revenue - royalty - fot - totalExpenses
+  const netProfit = revenue - royalty - fot - totalExpenses - otherExpenseTransactions
 
   // Royalty payment date
   const royaltyPaymentDay = franchiseeInfo?.royaltyPaymentDay || 10
@@ -366,12 +371,11 @@ export function FinancesFranchisee() {
             <TrendingDown className="w-4 h-4 text-red-500" />
             <p className="text-xs text-muted-foreground">Расходы + ФОТ</p>
           </div>
-          <p className="text-xl font-bold text-foreground">{(totalExpenses + fot).toLocaleString("ru-RU")} ₽</p>
-          {fot > 0 && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Расходы: {totalExpenses.toLocaleString("ru-RU")} ₽ / ФОТ: {fot.toLocaleString("ru-RU")} ₽
-            </p>
-          )}
+          <p className="text-xl font-bold text-foreground">{(totalExpenses + fot + otherExpenseTransactions).toLocaleString("ru-RU")} ₽</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {fot > 0 && <>ФОТ: {fot.toLocaleString("ru-RU")} ₽</>}
+            {(totalExpenses + otherExpenseTransactions) > 0 && <>{fot > 0 && " / "}Расходы: {(totalExpenses + otherExpenseTransactions).toLocaleString("ru-RU")} ₽</>}
+          </p>
         </div>
 
         {!isOwnPoint && (

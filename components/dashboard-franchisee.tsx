@@ -142,8 +142,13 @@ export function DashboardFranchisee() {
       // Expenses from Expense table
       const totalExpenses = expenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
 
+      // Other expense transactions (not fot) — e.g. other_expense, consumables
+      const otherExpenseTx = transactions
+        .filter((t: any) => t.type === "expense" && t.category && t.category !== "fot")
+        .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
+
       const royaltyAmount = Math.round(revenue * (royaltyPercent / 100))
-      const profit = revenue - fot - royaltyAmount - totalExpenses
+      const profit = revenue - fot - royaltyAmount - totalExpenses - otherExpenseTx
 
       const completedGames = leads.filter(
         (l) => l.stageType === "completed" || l.stageName?.toLowerCase().includes("завершен"),
