@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { RussianRuble, TrendingUp, TrendingDown, Download, Users, Plus, X, Building2, Calendar, Percent, ShoppingBag } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { RussianRuble, TrendingUp, TrendingDown, Download, Users, Plus, X, Building2, Calendar, Percent, ShoppingBag, Filter } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useExpenses, useCreateExpense } from "@/hooks/use-expenses"
 import { useTransactions, useCreateTransaction } from "@/hooks/use-transactions"
@@ -24,9 +24,31 @@ interface FranchiseeInfo {
   royaltyPaymentDay: number | null
 }
 
+function getMonthRange(offset = 0) {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)
+  return { from: start.toISOString().split("T")[0], to: end.toISOString().split("T")[0] }
+}
+
+function getQuarterRange() {
+  const now = new Date()
+  const qStart = Math.floor(now.getMonth() / 3) * 3
+  const start = new Date(now.getFullYear(), qStart, 1)
+  const end = new Date(now.getFullYear(), qStart + 3, 0)
+  return { from: start.toISOString().split("T")[0], to: end.toISOString().split("T")[0] }
+}
+
+function getYearRange() {
+  const now = new Date()
+  return { from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` }
+}
+
 export function FinancesFranchisee() {
   const { user, hasPermission, getAuthHeaders } = useAuth()
-  const [dateFilter, setDateFilter] = useState("current-month")
+  const [datePreset, setDatePreset] = useState("current-month")
+  const [dateFrom, setDateFrom] = useState(getMonthRange().from)
+  const [dateTo, setDateTo] = useState(getMonthRange().to)
   const [showExpenseForm, setShowExpenseForm] = useState(false)
   const [showExtrasForm, setShowExtrasForm] = useState(false)
   const [isCreatingExtras, setIsCreatingExtras] = useState(false)
@@ -50,8 +72,8 @@ export function FinancesFranchisee() {
   const createExpenseMutation = useCreateExpense()
   const createTransactionMutation = useCreateTransaction()
 
-  const expenses = (expensesData || []) as any[]
-  const transactions = (transactionsData || []) as any[]
+  const allExpenses = (expensesData || []) as any[]
+  const allTransactions = (transactionsData || []) as any[]
 
   // Load franchisee info for royalty
   useEffect(() => {
@@ -70,9 +92,43 @@ export function FinancesFranchisee() {
     loadInfo()
   }, [user?.franchiseeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Handle date preset changes
+  const handlePresetChange = (preset: string) => {
+    setDatePreset(preset)
+    if (preset === "current-month") {
+      const r = getMonthRange(0); setDateFrom(r.from); setDateTo(r.to)
+    } else if (preset === "last-month") {
+      const r = getMonthRange(-1); setDateFrom(r.from); setDateTo(r.to)
+    } else if (preset === "quarter") {
+      const r = getQuarterRange(); setDateFrom(r.from); setDateTo(r.to)
+    } else if (preset === "year") {
+      const r = getYearRange(); setDateFrom(r.from); setDateTo(r.to)
+    } else if (preset === "all") {
+      setDateFrom(""); setDateTo("")
+    }
+  }
+
+  // Filter helper
+  const inRange = (dateStr: string) => {
+    if (!dateFrom && !dateTo) return true
+    const d = dateStr?.split("T")[0] || ""
+    if (dateFrom && d < dateFrom) return false
+    if (dateTo && d > dateTo) return false
+    return true
+  }
+
+  const getTxDate = (t: any) => t.date || t.paymentDate || t.createdAt || ""
+  const getExpDate = (e: any) => e.date || e.expenseDate || e.createdAt || ""
+
+  // Filtered data
+  const transactions = useMemo(() => allTransactions.filter((t: any) => inRange(getTxDate(t))), [allTransactions, dateFrom, dateTo])
+  const expenses = useMemo(() => allExpenses.filter((e: any) => inRange(getExpDate(e))), [allExpenses, dateFrom, dateTo])
+
+  const isOwnPoint = user?.role === "own_point" || hasPermission("noRoyalty")
+
   const totalExpenses = expenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
 
-  // Revenue = income transactions (game postpayments, prepayments) + old deal transactions
+  // Revenue = income transactions + legacy transactions without type
   const revenue = transactions.reduce((sum: number, t: any) => {
     if (t.type === "income") return sum + (Number(t.amount) || 0)
     if (!t.type && !t.category) return sum + (Number(t.amount) || 0)
@@ -85,9 +141,53 @@ export function FinancesFranchisee() {
     .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
   // Other expense transactions (not fot) — e.g. other_expense, consumables
-  const otherExpenseTransactions = transactions
-    .filter((t: any) => t.type === "expense" && t.category && t.category !== "fot")
-    .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+  const expenseTransactions = transactions.filter((t: any) => t.type === "expense" && t.category && t.category !== "fot")
+  const otherExpenseTransactionsTotal = expenseTransactions.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+
+  // Combined expenses list for table (Expense table + expense transactions)
+  const allExpenseRows = useMemo(() => {
+    const rows: { id: string; date: string; category: string; description: string; amount: number; source: string }[] = []
+    expenses.forEach((e: any) => {
+      rows.push({
+        id: e.id,
+        date: getExpDate(e),
+        category: e.category || "Прочее",
+        description: e.description || "—",
+        amount: Number(e.amount) || 0,
+        source: "expense",
+      })
+    })
+    expenseTransactions.forEach((t: any) => {
+      const catMap: Record<string, string> = {
+        other_expense: "Прочие расходы",
+        consumables: "Расходные материалы",
+        marketing: "Маркетинг",
+        rent: "Аренда",
+      }
+      rows.push({
+        id: t.id,
+        date: getTxDate(t),
+        category: catMap[t.category] || t.category || "Прочее",
+        description: t.description || t.notes || "—",
+        amount: Number(t.amount) || 0,
+        source: "transaction",
+      })
+    })
+    // FOT transactions too
+    transactions.filter((t: any) => t.type === "expense" && t.category === "fot").forEach((t: any) => {
+      rows.push({
+        id: t.id,
+        date: getTxDate(t),
+        category: "ФОТ (персонал)",
+        description: t.description || "ФОТ",
+        amount: Number(t.amount) || 0,
+        source: "transaction",
+      })
+    })
+    return rows.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+  }, [expenses, expenseTransactions, transactions])
+
+  const allExpensesTotal = totalExpenses + otherExpenseTransactionsTotal + fot
 
   // Extras = income transactions with category 'extras'
   const extrasTransactions = transactions.filter((t: any) => t.type === "income" && t.category === "extras")
@@ -101,15 +201,12 @@ export function FinancesFranchisee() {
     .filter((t: any) => (t.type === "income" || (!t.type && !t.category)) && t.paymentMethod === "card")
     .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
-  const isOwnPoint = user?.role === "own_point" || hasPermission("noRoyalty")
-
-  // Auto-calculate royalty from revenue * royaltyPercent
+  // Royalty
   const royaltyPercent = franchiseeInfo?.royaltyPercent ?? 10
-  const royaltyFromTransactions = transactions.reduce((sum: number, t: any) => sum + (Number(t.royaltyAmount) || 0), 0)
   const royaltyCalculated = Math.round(revenue * royaltyPercent / 100)
-  const royalty = isOwnPoint ? 0 : Math.max(royaltyFromTransactions, royaltyCalculated)
+  const royalty = isOwnPoint ? 0 : royaltyCalculated
 
-  const netProfit = revenue - royalty - fot - totalExpenses - otherExpenseTransactions
+  const netProfit = revenue - royalty - fot - totalExpenses - otherExpenseTransactionsTotal
 
   // Royalty payment date
   const royaltyPaymentDay = franchiseeInfo?.royaltyPaymentDay || 10
@@ -352,6 +449,49 @@ export function FinancesFranchisee() {
         </button>
       </div>
 
+      {/* Date Range Filter */}
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Filter className="w-4 h-4 text-muted-foreground" />
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { value: "current-month", label: "Текущий месяц" },
+              { value: "last-month", label: "Прошлый месяц" },
+              { value: "quarter", label: "Квартал" },
+              { value: "year", label: "Год" },
+              { value: "all", label: "Всё время" },
+            ].map((p) => (
+              <button
+                key={p.value}
+                onClick={() => handlePresetChange(p.value)}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                  datePreset === p.value
+                    ? "bg-primary text-white"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setDatePreset("custom") }}
+              className="px-2 py-1.5 bg-background border border-border rounded-lg text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <span className="text-xs text-muted-foreground">—</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setDatePreset("custom") }}
+              className="px-2 py-1.5 bg-background border border-border rounded-lg text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* P&L Summary Cards */}
       <div className={`grid grid-cols-1 gap-4 ${isOwnPoint ? "md:grid-cols-3" : "md:grid-cols-4"}`}>
         <div className="bg-card border border-border rounded-lg p-4">
@@ -371,10 +511,10 @@ export function FinancesFranchisee() {
             <TrendingDown className="w-4 h-4 text-red-500" />
             <p className="text-xs text-muted-foreground">Расходы + ФОТ</p>
           </div>
-          <p className="text-xl font-bold text-foreground">{(totalExpenses + fot + otherExpenseTransactions).toLocaleString("ru-RU")} ₽</p>
+          <p className="text-xl font-bold text-foreground">{allExpensesTotal.toLocaleString("ru-RU")} ₽</p>
           <p className="text-xs text-muted-foreground mt-1">
             {fot > 0 && <>ФОТ: {fot.toLocaleString("ru-RU")} ₽</>}
-            {(totalExpenses + otherExpenseTransactions) > 0 && <>{fot > 0 && " / "}Расходы: {(totalExpenses + otherExpenseTransactions).toLocaleString("ru-RU")} ₽</>}
+            {(totalExpenses + otherExpenseTransactionsTotal) > 0 && <>{fot > 0 && " / "}Расходы: {(totalExpenses + otherExpenseTransactionsTotal).toLocaleString("ru-RU")} ₽</>}
           </p>
         </div>
 
@@ -385,6 +525,9 @@ export function FinancesFranchisee() {
               <p className="text-xs text-muted-foreground">Роялти ({royaltyPercent}%)</p>
             </div>
             <p className="text-xl font-bold text-foreground">{royalty.toLocaleString("ru-RU")} ₽</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              От выручки {revenue.toLocaleString("ru-RU")} ₽
+            </p>
             <div className="flex items-center gap-1 mt-1">
               <Calendar className="w-3 h-3 text-muted-foreground" />
               <p className="text-xs text-muted-foreground">
@@ -532,26 +675,14 @@ export function FinancesFranchisee() {
       {/* Expenses Table */}
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
-          <h2 className="text-lg font-semibold text-foreground">Общие Расходы</h2>
-          <div className="flex items-center gap-3">
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-[180px] bg-muted/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="current-month">Текущий месяц</SelectItem>
-                <SelectItem value="last-month">Прошлый месяц</SelectItem>
-                <SelectItem value="quarter">Квартал</SelectItem>
-              </SelectContent>
-            </Select>
-            <button
-              onClick={() => setShowExpenseForm(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors text-sm"
-            >
-              <Plus size={16} />
-              Добавить расход
-            </button>
-          </div>
+          <h2 className="text-lg font-semibold text-foreground">Все Расходы</h2>
+          <button
+            onClick={() => setShowExpenseForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors text-sm"
+          >
+            <Plus size={16} />
+            Добавить расход
+          </button>
         </div>
 
         {showExpenseForm && (
@@ -675,33 +806,33 @@ export function FinancesFranchisee() {
                     Загрузка расходов...
                   </td>
                 </tr>
-              ) : expenses.length === 0 ? (
+              ) : allExpenseRows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-8 text-center text-muted-foreground">
-                    Расходов пока нет. Добавьте первый расход.
+                    Расходов за выбранный период нет.
                   </td>
                 </tr>
               ) : (
-                expenses.map((expense: any) => (
-                  <tr key={expense.id} className="border-b border-border/50 hover:bg-muted/30">
+                allExpenseRows.map((row) => (
+                  <tr key={row.id} className="border-b border-border/50 hover:bg-muted/30">
                     <td className="py-3 px-4 text-sm text-foreground">
-                      {new Date(expense.date || expense.expenseDate || expense.createdAt).toLocaleDateString("ru-RU")}
+                      {new Date(row.date).toLocaleDateString("ru-RU")}
                     </td>
-                    <td className="py-3 px-4 text-sm text-foreground">{expense.category}</td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">{expense.description || "—"}</td>
+                    <td className="py-3 px-4 text-sm text-foreground">{row.category}</td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">{row.description}</td>
                     <td className="py-3 px-4 text-sm text-right font-semibold text-foreground">
-                      {(Number(expense.amount) || 0).toLocaleString("ru-RU")} ₽
+                      {row.amount.toLocaleString("ru-RU")} ₽
                     </td>
                   </tr>
                 ))
               )}
-              {!expensesLoading && expenses.length > 0 && (
+              {!expensesLoading && allExpenseRows.length > 0 && (
                 <tr className="bg-muted/50">
                   <td colSpan={3} className="py-3 px-4 text-sm font-semibold text-foreground">
                     ИТОГО
                   </td>
                   <td className="py-3 px-4 text-sm text-right font-bold text-primary">
-                    {totalExpenses.toLocaleString("ru-RU")} ₽
+                    {allExpensesTotal.toLocaleString("ru-RU")} ₽
                   </td>
                 </tr>
               )}
