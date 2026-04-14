@@ -1,5 +1,6 @@
 // Lead Creator - автоматическое создание лидов в B2B или B2C CRM
 import { sql } from "@/lib/db"
+import { sendPushToUsers } from "@/lib/push"
 import type { NormalizedMessage } from "./message-normalizer"
 import type { RoutingDecision } from "./routing-engine"
 import { saveDeduplicationRecord } from "./deduplication-record-saver" // Import the saveDeduplicationRecord function
@@ -252,6 +253,13 @@ export class LeadCreator {
           false, false, ${now}, ${now}
         )
       `
+
+      // Push-уведомление (non-blocking)
+      sendPushToUsers([recipientId], {
+        title,
+        body: msg,
+        url: `/crm?dealId=${dealId}`,
+      }).catch(() => {})
     } catch (error) {
       console.error("[v0] LeadCreator: Notification failed", error)
     }

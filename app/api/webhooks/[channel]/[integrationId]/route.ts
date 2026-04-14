@@ -4,6 +4,7 @@ import { IntegrationHub } from "@/lib/integration-hub/integration-hub"
 import { RoutingEngine } from "@/lib/integration-hub/routing-engine"
 import { LeadCreator } from "@/lib/integration-hub/lead-creator"
 import { logWebhookError } from "@/lib/app-logger"
+import { sendPushToUsers } from "@/lib/push"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ channel: string; integrationId: string }> }) {
   const { channel, integrationId } = await params
@@ -113,6 +114,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } else if (routing.existingLeadId) {
       console.log(`[v0] Webhook ${channel}: Step 4 — duplicate, existingLeadId=${routing.existingLeadId}`)
       await LeadCreator.updateDuplicateStats(integrationId)
+
+      // Пуш-уведомление ответственному о новом сообщении в существующий лид
+      try {
+        const { sql: dbSql } = await import("@/lib/db")
+        const channelName = { telegram: "Telegram", instagram: "Instagram", vk: "VK", whatsapp: "WhatsApp", avito: "Авито", max: "MAX" }[channel] || channel
+        const [lead] = await dbSql`
+          SELECT "responsibleId", "clientName" FROM "Deal" WHERE id = ${routing.existingLeadId}
+          UNION ALL
+          SELECT "responsibleId", "clientName" FROM "GameLead" WHERE id = ${routing.existingLeadId}
+          LIMIT 1
+        `
+        if (lead?.responsibleId) {
+          sendPushToUsers([lead.responsibleId], {
+            title: `Новое сообщение от ${lead.clientName || "клиента"}`,
+            body: (message.message_text || "").slice(0, 100) || `Сообщение через ${channelName}`,
+            url: `/crm?dealId=${routing.existingLeadId}`,
+          }).catch(() => {})
+        }
+      } catch (e) {
+        console.error(`[v0] Webhook ${channel}: Push notify error`, e)
+      }
     }
 
     // VK требует plain text "ok" в ответ на все callback-события
