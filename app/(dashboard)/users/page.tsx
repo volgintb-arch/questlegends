@@ -288,7 +288,7 @@ export default function UsersPage() {
     const label = roleLabels[userItem.role] || userItem.role
     const isTopAdmin = user?.role === "super_admin" || user?.role === "uk"
     const canViewAs = isTopAdmin && ["franchisee", "own_point", "admin"].includes(userItem.role)
-    const isReadOnly = user?.role === "uk_employee"
+    const isReadOnly = user?.role === "uk_employee" && !user?.permissions?.canManageUsers
 
     return (
       <Card key={userItem.id} className="p-3">
