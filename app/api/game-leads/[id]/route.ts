@@ -430,6 +430,96 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
+    // Recalculate transactions if game is already completed and financial fields changed
+    const financialFieldsChanged = body.playersCount !== undefined || body.pricePerPerson !== undefined ||
+      body.prepayment !== undefined || body.animatorsCount !== undefined || body.animatorRate !== undefined ||
+      body.hostsCount !== undefined || body.hostRate !== undefined || body.djsCount !== undefined || body.djRate !== undefined ||
+      body.extras !== undefined || body.extrasAmount !== undefined
+
+    if (financialFieldsChanged && !body.stageId) {
+      const [game] = await sql`SELECT * FROM "GameLead" WHERE id = ${id}`
+      const [stage] = await sql`SELECT "stageType" FROM "GamePipelineStage" WHERE id = ${game.stageId}`
+
+      if (stage?.stageType === "completed") {
+        const totalAmount = Number.parseFloat(game.totalAmount) || 0
+        const prepayment = Number.parseFloat(game.prepayment) || 0
+        const postpayment = totalAmount - prepayment
+
+        // Update postpayment transaction
+        const existingPost = await sql`SELECT id FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'postpayment'`
+        if (existingPost.length > 0) {
+          if (postpayment > 0) {
+            await sql`
+              UPDATE "Transaction"
+              SET amount = ${postpayment},
+                  description = ${"Постоплата за игру: " + game.clientName + " (" + game.playersCount + " чел.)"}
+              WHERE "gameLeadId" = ${id} AND category = 'postpayment'
+            `
+          } else {
+            await sql`DELETE FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'postpayment'`
+          }
+        } else if (postpayment > 0) {
+          await sql`
+            INSERT INTO "Transaction" (id, type, amount, category, description, "franchiseeId", "gameLeadId", "paymentMethod", date, "createdAt")
+            VALUES (${globalThis.crypto.randomUUID()}, 'income', ${postpayment}, 'postpayment',
+              ${"Постоплата за игру: " + game.clientName + " (" + game.playersCount + " чел.)"},
+              ${game.franchiseeId}, ${id}, ${game.paymentMethod || "cash"},
+              ${game.gameDate || new Date().toISOString().split("T")[0]}, NOW())
+          `
+        }
+
+        // Update or create prepayment transaction
+        const existingPre = await sql`SELECT id FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'prepayment'`
+        if (existingPre.length > 0) {
+          if (prepayment > 0) {
+            await sql`
+              UPDATE "Transaction"
+              SET amount = ${prepayment},
+                  description = ${"Предоплата за игру: " + game.clientName}
+              WHERE "gameLeadId" = ${id} AND category = 'prepayment'
+            `
+          } else {
+            await sql`DELETE FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'prepayment'`
+          }
+        } else if (prepayment > 0) {
+          await sql`
+            INSERT INTO "Transaction" (id, type, amount, category, description, "franchiseeId", "gameLeadId", "paymentMethod", date, "createdAt")
+            VALUES (${globalThis.crypto.randomUUID()}, 'income', ${prepayment}, 'prepayment',
+              ${"Предоплата за игру: " + game.clientName},
+              ${game.franchiseeId}, ${id}, ${game.paymentMethod || "cash"},
+              ${game.gameDate || new Date().toISOString().split("T")[0]}, NOW())
+          `
+        }
+
+        // Update FOT transaction
+        const animatorsCost = (Number.parseInt(game.animatorsCount) || 0) * (Number.parseFloat(game.animatorRate) || 0)
+        const hostsCost = (Number.parseInt(game.hostsCount) || 0) * (Number.parseFloat(game.hostRate) || 0)
+        const djsCost = (Number.parseInt(game.djsCount) || 0) * (Number.parseFloat(game.djRate) || 0)
+        const totalStaffCost = animatorsCost + hostsCost + djsCost
+
+        const existingFot = await sql`SELECT id FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'fot'`
+        if (existingFot.length > 0) {
+          if (totalStaffCost > 0) {
+            await sql`
+              UPDATE "Transaction"
+              SET amount = ${totalStaffCost},
+                  description = ${"ФОТ за игру: " + game.clientName + " (Аним: " + (game.animatorsCount || 0) + ", Вед: " + (game.hostsCount || 0) + ", DJ: " + (game.djsCount || 0) + ")"}
+              WHERE "gameLeadId" = ${id} AND category = 'fot'
+            `
+          } else {
+            await sql`DELETE FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'fot'`
+          }
+        } else if (totalStaffCost > 0) {
+          await sql`
+            INSERT INTO "Transaction" (id, type, amount, category, description, "franchiseeId", "gameLeadId", date, "createdAt")
+            VALUES (${globalThis.crypto.randomUUID()}, 'expense', ${totalStaffCost}, 'fot',
+              ${"ФОТ за игру: " + game.clientName + " (Аним: " + (game.animatorsCount || 0) + ", Вед: " + (game.hostsCount || 0) + ", DJ: " + (game.djsCount || 0) + ")"},
+              ${game.franchiseeId}, ${id}, ${game.gameDate || new Date().toISOString().split("T")[0]}, NOW())
+          `
+        }
+      }
+    }
+
     const [finalGame] = await sql`SELECT * FROM "GameLead" WHERE id = ${id}`
     return NextResponse.json({ success: true, data: finalGame })
   } catch (error: any) {
