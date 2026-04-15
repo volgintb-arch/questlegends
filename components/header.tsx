@@ -58,15 +58,21 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
 
   // Check push notification status
   useEffect(() => {
-    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (typeof window === "undefined") {
       setPushState("unsupported")
       return
     }
-    // Don't block on .ready — check existing registration first
+    // Check basic support — show button even if not fully supported, handle in togglePush
+    const hasSupport = "Notification" in window && "serviceWorker" in navigator
+    if (!hasSupport) {
+      setPushState("unsupported")
+      return
+    }
+    // Check existing registration
     navigator.serviceWorker.getRegistration().then(async (reg) => {
       if (!reg) { setPushState("off"); return }
       try {
-        const sub = await reg.pushManager.getSubscription()
+        const sub = await reg.pushManager?.getSubscription()
         setPushState(sub ? "on" : "off")
       } catch {
         setPushState("off")
@@ -77,12 +83,19 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
   const togglePush = async () => {
     if (pushState === "unsupported" || pushState === "loading") return
 
+    if (!("PushManager" in window)) {
+      alert("Ваш браузер не поддерживает push-уведомления. Попробуйте Chrome или обновите браузер.")
+      return
+    }
+
     try {
       // Ensure service worker is registered
       let reg = await navigator.serviceWorker.getRegistration()
       if (!reg) {
         reg = await navigator.serviceWorker.register("/sw.js")
         await navigator.serviceWorker.ready
+        reg = await navigator.serviceWorker.getRegistration()
+        if (!reg) { alert("Не удалось зарегистрировать сервис-воркер"); return }
       }
 
       const existing = await reg.pushManager.getSubscription()
