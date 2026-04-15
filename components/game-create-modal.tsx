@@ -42,26 +42,26 @@ export function GameCreateModal({
     clientPhone: "",
     gameDate: "",
     gameTime: "14:00",
-    playersCount: "10",
-    packagePrice: "1500",
+    playersCount: "",
+    packagePrice: "",
     prepayment: "0",
     notes: "",
     responsibleId: "",
     animatorsCount: "0",
-    animatorRate: "1500",
+    animatorRate: "",
     hostsCount: "0",
-    hostRate: "2000",
+    hostRate: "",
     djsCount: "0",
-    djRate: "2500",
+    djRate: "",
     paymentMethod: "cash",
   })
   const [extrasItems, setExtrasItems] = useState<{ name: string; amount: string }[]>([])
 
   const totalAmount = Number(formData.playersCount) * Number(formData.packagePrice)
   const staffCost =
-    Number(formData.animatorsCount) * Number(formData.animatorRate) +
-    Number(formData.hostsCount) * Number(formData.hostRate) +
-    Number(formData.djsCount) * Number(formData.djRate)
+    Number(formData.animatorsCount) * (Number(formData.animatorRate) || 0) +
+    Number(formData.hostsCount) * (Number(formData.hostRate) || 0) +
+    Number(formData.djsCount) * (Number(formData.djRate) || 0)
   const profit = totalAmount - staffCost
 
   const actualPipelineId = pipelineId || pipeline?.id
@@ -154,17 +154,18 @@ export function GameCreateModal({
         clientPhone: "",
         gameDate: "",
         gameTime: "14:00",
-        playersCount: "10",
-        packagePrice: "1500",
+        playersCount: "",
+        packagePrice: "",
         prepayment: "0",
         notes: "",
         responsibleId: "",
         animatorsCount: "0",
-        animatorRate: "1500",
+        animatorRate: "",
         hostsCount: "0",
-        hostRate: "2000",
+        hostRate: "",
         djsCount: "0",
-        djRate: "2500",
+        djRate: "",
+        paymentMethod: "cash",
       })
       setExtrasItems([])
     } catch (error) {
