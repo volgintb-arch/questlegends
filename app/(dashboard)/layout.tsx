@@ -37,6 +37,54 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }).catch(() => {})
   }, [user])
 
+  // Auto-subscribe to push notifications
+  useEffect(() => {
+    if (!user) return
+    if (typeof window === "undefined") return
+    if (!("Notification" in window && "serviceWorker" in navigator && "PushManager" in window)) return
+
+    const trySubscribe = async () => {
+      try {
+        // Check if already subscribed
+        const reg = await navigator.serviceWorker.ready
+        const existing = await reg.pushManager.getSubscription()
+        if (existing) return // already subscribed
+
+        // Only proceed if permission already granted or ask once per session
+        const asked = sessionStorage.getItem("push-asked")
+        if (asked) return
+        sessionStorage.setItem("push-asked", "1")
+
+        const perm = await Notification.requestPermission()
+        if (perm !== "granted") return
+
+        const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        if (!vapidKey) return
+
+        const padding = "=".repeat((4 - (vapidKey.length % 4)) % 4)
+        const base64 = (vapidKey + padding).replace(/-/g, "+").replace(/_/g, "/")
+        const rawData = window.atob(base64)
+        const applicationServerKey = Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)))
+
+        const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })
+
+        const token = localStorage.getItem("auth-token")
+        if (!token) return
+
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ subscription: sub.toJSON() }),
+        })
+        console.log("[Push] Auto-subscribed successfully")
+      } catch (err) {
+        console.error("[Push] Auto-subscribe error:", err)
+      }
+    }
+
+    trySubscribe()
+  }, [user])
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-mesh">
