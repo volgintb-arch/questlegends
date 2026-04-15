@@ -8,6 +8,7 @@ import { useTheme } from "next-themes"
 import { ProfileSettingsModal } from "./profile-settings-modal"
 import { GlobalSearch } from "./global-search"
 import { PWAInstallButton } from "./pwa-install-button"
+import { isStandalone, canInstallPWA, installPWA } from "@/lib/pwa"
 
 interface HeaderProps {
   userName: string
@@ -74,9 +75,22 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
     }
   }, [])
 
+  const [showPushInstallHint, setShowPushInstallHint] = useState(false)
+
   const togglePush = async () => {
-    if (!("serviceWorker" in navigator) || !("Notification" in window) || !("PushManager" in window)) {
-      alert("Ваш браузер не поддерживает push-уведомления. Попробуйте Google Chrome.")
+    const hasPushSupport = "serviceWorker" in navigator && "Notification" in window && "PushManager" in window
+
+    if (!hasPushSupport) {
+      // If not installed as PWA — prompt to install
+      if (!isStandalone()) {
+        if (canInstallPWA()) {
+          const accepted = await installPWA()
+          if (accepted) return // will reload as PWA
+        }
+        setShowPushInstallHint(true)
+        return
+      }
+      alert("Ваш браузер не поддерживает push-уведомления.")
       return
     }
 
@@ -305,6 +319,51 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
       </header>
 
       <ProfileSettingsModal isOpen={showProfileSettings} onClose={() => setShowProfileSettings(false)} />
+
+      {/* Push install hint modal */}
+      {showPushInstallHint && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowPushInstallHint(false)} />
+          <div className="relative bg-card border border-border rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold">Push-уведомления</h3>
+              <button onClick={() => setShowPushInstallHint(false)} className="p-1 hover:bg-muted rounded-lg">
+                <BellOff className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              Для получения push-уведомлений установите приложение на главный экран:
+            </p>
+
+            <div className="text-sm space-y-3">
+              <div className="p-3 bg-muted/50 rounded-lg space-y-1">
+                <p className="font-medium">Android (Chrome)</p>
+                <p className="text-muted-foreground text-xs">Меню <strong>⋮</strong> → «Установить приложение»</p>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg space-y-1">
+                <p className="font-medium">Android (Яндекс)</p>
+                <p className="text-muted-foreground text-xs">Меню <strong>☰</strong> → «Добавить на главный экран»</p>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg space-y-1">
+                <p className="font-medium">iPhone / iPad</p>
+                <p className="text-muted-foreground text-xs">Safari → <strong>Поделиться</strong> → «На экран Домой»</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              После установки откройте приложение и нажмите эту кнопку ещё раз.
+            </p>
+
+            <button
+              onClick={() => setShowPushInstallHint(false)}
+              className="w-full py-2.5 rounded-lg gradient-primary text-white font-medium text-sm"
+            >
+              Понятно
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }
