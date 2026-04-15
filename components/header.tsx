@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Moon, Sun, Bell, User, LogOut, SettingsIcon, ChevronDown, Menu, Eye, EyeOff } from "lucide-react"
+import { Moon, Sun, Bell, BellRing, BellOff, User, LogOut, SettingsIcon, ChevronDown, Menu, Eye, EyeOff } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
@@ -23,6 +23,7 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [showProfileSettings, setShowProfileSettings] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [pushState, setPushState] = useState<"loading" | "unsupported" | "off" | "on">("loading")
   const { user, getAuthHeaders, logout, exitViewingMode } = useAuth()
   const router = useRouter()
 
@@ -54,6 +55,84 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
   }, [fetchNotificationCount])
 
   useEffect(() => { setMounted(true) }, [])
+
+  // Check push notification status
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setPushState("unsupported")
+      return
+    }
+    // Don't block on .ready — check existing registration first
+    navigator.serviceWorker.getRegistration().then(async (reg) => {
+      if (!reg) { setPushState("off"); return }
+      try {
+        const sub = await reg.pushManager.getSubscription()
+        setPushState(sub ? "on" : "off")
+      } catch {
+        setPushState("off")
+      }
+    }).catch(() => setPushState("off"))
+  }, [])
+
+  const togglePush = async () => {
+    if (pushState === "unsupported" || pushState === "loading") return
+
+    try {
+      // Ensure service worker is registered
+      let reg = await navigator.serviceWorker.getRegistration()
+      if (!reg) {
+        reg = await navigator.serviceWorker.register("/sw.js")
+        await navigator.serviceWorker.ready
+      }
+
+      const existing = await reg.pushManager.getSubscription()
+
+      if (existing) {
+        // Unsubscribe
+        await existing.unsubscribe()
+        const token = localStorage.getItem("auth-token")
+        if (token) {
+          await fetch("/api/push/subscribe", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ endpoint: existing.endpoint }),
+          }).catch(() => {})
+        }
+        setPushState("off")
+        return
+      }
+
+      // Subscribe
+      const perm = await Notification.requestPermission()
+      if (perm !== "granted") {
+        setPushState("off")
+        return
+      }
+
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      if (!vapidKey) { setPushState("off"); return }
+
+      const padding = "=".repeat((4 - (vapidKey.length % 4)) % 4)
+      const base64 = (vapidKey + padding).replace(/-/g, "+").replace(/_/g, "/")
+      const rawData = window.atob(base64)
+      const applicationServerKey = Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)))
+
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })
+
+      const token = localStorage.getItem("auth-token")
+      if (token) {
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ subscription: sub.toJSON() }),
+        })
+      }
+      setPushState("on")
+    } catch (err) {
+      console.error("[Push] Toggle error:", err)
+      setPushState("off")
+    }
+  }
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark")
@@ -106,6 +185,20 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
                 )}
               </button>
             </div>
+
+            {pushState !== "unsupported" && pushState !== "loading" && (
+              <button
+                onClick={togglePush}
+                className={`p-2 rounded-lg transition-colors ${pushState === "on" ? "text-primary bg-primary/10" : "hover:bg-muted/50 text-muted-foreground"}`}
+                title={pushState === "on" ? "Push-уведомления включены" : "Включить push-уведомления"}
+              >
+                {pushState === "on" ? (
+                  <BellRing className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
+                ) : (
+                  <BellOff className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
+                )}
+              </button>
+            )}
 
             <button onClick={toggleTheme} className="p-2 hover:bg-muted/50 rounded-lg transition-colors">
               {!mounted ? (

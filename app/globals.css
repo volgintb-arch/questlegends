@@ -320,6 +320,11 @@
   background: rgba(139, 92, 246, 0.45);
 }
 
+/* ── Safe area for mobile input bars ── */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* ── Native form element overrides ── */
 
 /* Hide number input spinners globally */

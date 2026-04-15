@@ -6,7 +6,6 @@ import { useAuth } from "@/contexts/auth-context"
 export default function MessagesPage() {
   const { user } = useAuth()
 
-  // Only UK, franchisees, and admins can access messaging
   if (!user || !["uk", "uk_employee", "super_admin", "franchisee", "own_point", "admin"].includes(user.role)) {
     return (
       <div className="p-4">
@@ -15,10 +14,5 @@ export default function MessagesPage() {
     )
   }
 
-  return (
-    <div className="p-4">
-      <h1 className="text-lg font-medium mb-4">Сообщения</h1>
-      <MessagingSection />
-    </div>
-  )
+  return <MessagingSection />
 }

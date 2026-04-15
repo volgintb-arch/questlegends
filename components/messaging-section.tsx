@@ -407,7 +407,7 @@ export function MessagingSection() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-120px)] glass-card rounded-xl overflow-hidden">
+    <div className="flex h-full glass-card md:rounded-xl overflow-hidden">
       {/* Conversations Sidebar */}
       <div className={`w-full md:w-80 lg:w-96 border-r border-border/50 flex flex-col bg-card/30 ${selectedPartner ? "hidden md:flex" : "flex"}`}>
         {/* Search Header */}
@@ -531,24 +531,24 @@ export function MessagingSection() {
         {selectedPartner ? (
           <>
             {/* Chat Header */}
-            <div className="px-3 sm:px-4 py-3 border-b border-border/30 glass-header flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="px-2 sm:px-4 py-2 sm:py-3 border-b border-border/30 glass-header flex items-center justify-between">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 md:hidden"
+                  className="h-8 w-8 flex-shrink-0 md:hidden"
                   onClick={() => setSelectedPartner(null)}
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
-                <Avatar className="h-9 w-9">
+                <Avatar className="h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0">
                   {selectedPartner.avatarUrl && <AvatarImage src={selectedPartner.avatarUrl} alt={selectedPartner.name} />}
                   <AvatarFallback className="text-xs bg-primary/10 text-primary font-medium">
                     {getInitials(selectedPartner.name)}
                   </AvatarFallback>
                 </Avatar>
-                <div>
-                  <h3 className="font-semibold text-sm leading-tight">{selectedPartner.name}</h3>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-sm leading-tight truncate">{selectedPartner.name}</h3>
                   <p className="text-[11px] text-muted-foreground">{getRoleLabel(selectedPartner.role)}</p>
                 </div>
               </div>
@@ -569,7 +569,7 @@ export function MessagingSection() {
 
             {/* Messages Area */}
             <ScrollArea className="flex-1">
-              <div className="px-3 sm:px-6 py-4 space-y-1">
+              <div className="px-2 sm:px-6 py-3 sm:py-4 space-y-1">
                 {messages.map((msg, idx) => {
                   const isOwnMessage = msg.senderId === user?.id
                   const isEditing = editingMessageId === msg.id
@@ -592,7 +592,7 @@ export function MessagingSection() {
 
                       {/* Message bubble */}
                       <div className={`flex ${isOwnMessage ? "justify-end" : "justify-start"} ${isLastInGroup ? "mb-3" : "mb-0.5"} group`}>
-                        <div className={`flex items-end gap-1.5 ${isOwnMessage ? "flex-row-reverse" : ""} max-w-[85%] sm:max-w-[70%]`}>
+                        <div className={`flex items-end gap-1 sm:gap-1.5 ${isOwnMessage ? "flex-row-reverse" : ""} max-w-[88%] sm:max-w-[70%]`}>
                           {/* Avatar */}
                           {!isOwnMessage && (
                             <div className="w-7 flex-shrink-0">
@@ -723,13 +723,13 @@ export function MessagingSection() {
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="px-3 sm:px-4 py-3 border-t border-border/30 bg-card/30">
-              <div className="flex items-end gap-2">
+            <div className="px-2 sm:px-4 py-2 sm:py-3 border-t border-border/30 bg-card/30 safe-bottom">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9 rounded-full flex-shrink-0"
+                  className="h-8 w-8 sm:h-9 sm:w-9 rounded-full flex-shrink-0"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Paperclip className="h-4 w-4" />
@@ -738,13 +738,13 @@ export function MessagingSection() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9 rounded-full flex-shrink-0"
+                    className="h-8 w-8 sm:h-9 sm:w-9 rounded-full flex-shrink-0"
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                   >
                     <Smile className="h-4 w-4" />
                   </Button>
                   {showEmojiPicker && (
-                    <div className="absolute bottom-12 left-0 z-50 bg-popover border rounded-xl shadow-lg p-2 w-[280px] grid grid-cols-8 gap-1">
+                    <div className="absolute bottom-12 left-0 z-50 bg-popover border rounded-xl shadow-lg p-2 w-[260px] sm:w-[280px] grid grid-cols-8 gap-1">
                       {EMOJI_LIST.map((emoji) => (
                         <button
                           key={emoji}
@@ -758,7 +758,7 @@ export function MessagingSection() {
                     </div>
                   )}
                 </div>
-                <div className="flex-1 relative">
+                <div className="flex-1 min-w-0">
                   <Input
                     placeholder="Сообщение..."
                     value={newMessage}
@@ -769,12 +769,12 @@ export function MessagingSection() {
                         handleSendMessage()
                       }
                     }}
-                    className="pr-2 h-10 text-sm rounded-2xl bg-muted/30"
+                    className="h-9 sm:h-10 text-sm rounded-2xl bg-muted/30"
                   />
                 </div>
                 <Button
                   size="icon"
-                  className="h-9 w-9 rounded-full flex-shrink-0"
+                  className="h-8 w-8 sm:h-9 sm:w-9 rounded-full flex-shrink-0"
                   onClick={handleSendMessage}
                   disabled={!newMessage.trim() || isLoading}
                 >
