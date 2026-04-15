@@ -362,30 +362,122 @@ export function GameScheduleGrid() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
           <Calendar className="h-5 w-5" />
           График игр
         </h2>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={handleRefresh} title="Обновить">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleRefresh} title="Обновить">
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={prevWeek}>
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={prevWeek}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm font-medium px-2">
+          <span className="text-xs sm:text-sm font-medium px-1 sm:px-2">
             {currentWeekStart.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} -{" "}
             {weekDays[6].toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}
           </span>
-          <Button variant="outline" size="icon" onClick={nextWeek}>
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={nextWeek}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Personnel sidebar + Grid */}
-      <div className="flex gap-4">
+      {/* Mobile: list view */}
+      <div className="md:hidden space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-medium">Персонал ({personnel.length})</div>
+          <div className="flex gap-1">
+            {(["all", "animator", "host", "dj"] as const).map((r) => (
+              <Button
+                key={r}
+                variant={roleFilter === r ? "default" : "outline"}
+                size="sm"
+                className="text-xs px-2 h-7"
+                onClick={() => setRoleFilter(r)}
+              >
+                {r === "all" ? "Все" : r === "animator" ? "А" : r === "host" ? "В" : "DJ"}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {filteredPersonnel.length === 0 && (
+          <div className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg">Нет персонала</div>
+        )}
+
+        {/* Games for the week grouped by day */}
+        {weekDays.map((day, dayIdx) => {
+          const dayItems = scheduleItems.filter(
+            (item) => normalizeDate(item.gameDate) === normalizeDate(day),
+          )
+          if (dayItems.length === 0) return null
+
+          return (
+            <div key={dayIdx}>
+              <div className={cn(
+                "text-xs font-semibold uppercase tracking-wider px-1 py-1.5 mb-1",
+                normalizeDate(day) === normalizeDate(new Date()) && "text-primary",
+              )}>
+                {day.toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "short" })}
+              </div>
+              <div className="space-y-2">
+                {dayItems.map((item) => {
+                  const staffComplete = isStaffComplete(item)
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => openStaffModal(item)}
+                      className={cn(
+                        "p-3 rounded-lg border-2 cursor-pointer transition-colors",
+                        staffComplete ? "bg-green-500/5 border-green-500/40" : "bg-red-500/5 border-red-500/40",
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm font-semibold truncate">{item.clientName}</span>
+                        <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                          {item.gameTime} ({item.gameDuration || 3}ч)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">{item.playersCount} чел.</span>
+                        <div className="flex gap-1 ml-auto">
+                          <span className={cn("px-1.5 py-0.5 rounded", getStaffCount(item, "animator") >= item.animatorsNeeded ? "bg-green-500/20 text-green-700 dark:text-green-400" : "bg-red-500/20 text-red-700 dark:text-red-400")}>
+                            А:{getStaffCount(item, "animator")}/{item.animatorsNeeded}
+                          </span>
+                          <span className={cn("px-1.5 py-0.5 rounded", getStaffCount(item, "host") >= item.hostsNeeded ? "bg-green-500/20 text-green-700 dark:text-green-400" : "bg-red-500/20 text-red-700 dark:text-red-400")}>
+                            В:{getStaffCount(item, "host")}/{item.hostsNeeded}
+                          </span>
+                          <span className={cn("px-1.5 py-0.5 rounded", getStaffCount(item, "dj") >= item.djsNeeded ? "bg-green-500/20 text-green-700 dark:text-green-400" : "bg-red-500/20 text-red-700 dark:text-red-400")}>
+                            DJ:{getStaffCount(item, "dj")}/{item.djsNeeded}
+                          </span>
+                        </div>
+                      </div>
+                      {item.staff && item.staff.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {item.staff.map((s) => (
+                            <span key={s.id} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">
+                              {getRoleIcon(s.role)} {s.personnelName}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+
+        {scheduleItems.length === 0 && !loading && (
+          <div className="py-8 text-center text-muted-foreground text-sm">Нет игр на эту неделю</div>
+        )}
+      </div>
+
+      {/* Desktop: Personnel sidebar + Grid */}
+      <div className="hidden md:flex gap-4">
         {/* Personnel list */}
         <div className="w-48 flex-shrink-0 space-y-2">
           <div className="text-sm font-medium mb-2">Персонал ({personnel.length})</div>
@@ -485,7 +577,7 @@ export function GameScheduleGrid() {
                             key={item.id}
                             onClick={() => openStaffModal(item)}
                             onDragOver={(e) => {
-                              e.preventDefault() // Required to allow drop
+                              e.preventDefault()
                               e.stopPropagation()
                             }}
                             onDrop={(e) => {
@@ -496,7 +588,7 @@ export function GameScheduleGrid() {
                             className={cn(
                               "absolute inset-0 p-2 rounded cursor-pointer transition-all hover:shadow-md",
                               "overflow-hidden",
-                              draggedPerson && "ring-2 ring-primary ring-offset-2", // Highlight when dragging
+                              draggedPerson && "ring-2 ring-primary ring-offset-2",
                             )}
                             style={{
                               height: `calc(${rowSpan * 100}% + ${(rowSpan - 1) * 4}px)`,

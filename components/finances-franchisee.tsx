@@ -797,14 +797,15 @@ export function FinancesFranchisee() {
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        {/* Mobile: card layout, Desktop: table */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground">Дата</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground">Категория</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground">Описание</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground">Сумма</th>
+                <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground">Дата</th>
+                <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground">Категория</th>
+                <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground">Описание</th>
+                <th className="text-right py-3 px-3 text-xs font-semibold text-muted-foreground">Сумма</th>
               </tr>
             </thead>
             <tbody>
@@ -823,12 +824,12 @@ export function FinancesFranchisee() {
               ) : (
                 allExpenseRows.map((row) => (
                   <tr key={row.id} className="border-b border-border/50 hover:bg-muted/30">
-                    <td className="py-3 px-4 text-sm text-foreground">
+                    <td className="py-3 px-3 text-sm text-foreground">
                       {new Date(row.date).toLocaleDateString("ru-RU")}
                     </td>
-                    <td className="py-3 px-4 text-sm text-foreground">{row.category}</td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">{row.description}</td>
-                    <td className="py-3 px-4 text-sm text-right font-semibold text-foreground">
+                    <td className="py-3 px-3 text-sm text-foreground">{row.category}</td>
+                    <td className="py-3 px-3 text-sm text-muted-foreground">{row.description}</td>
+                    <td className="py-3 px-3 text-sm text-right font-semibold text-foreground">
                       {row.amount.toLocaleString("ru-RU")} ₽
                     </td>
                   </tr>
@@ -836,16 +837,48 @@ export function FinancesFranchisee() {
               )}
               {!expensesLoading && allExpenseRows.length > 0 && (
                 <tr className="bg-muted/50">
-                  <td colSpan={3} className="py-3 px-4 text-sm font-semibold text-foreground">
+                  <td colSpan={3} className="py-3 px-3 text-sm font-semibold text-foreground">
                     ИТОГО
                   </td>
-                  <td className="py-3 px-4 text-sm text-right font-bold text-primary">
+                  <td className="py-3 px-3 text-sm text-right font-bold text-primary">
                     {allExpensesTotal.toLocaleString("ru-RU")} ₽
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card layout */}
+        <div className="sm:hidden space-y-2">
+          {expensesLoading ? (
+            <div className="py-8 text-center text-muted-foreground">Загрузка расходов...</div>
+          ) : allExpenseRows.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">Расходов за выбранный период нет.</div>
+          ) : (
+            <>
+              {allExpenseRows.map((row) => (
+                <div key={row.id} className="flex items-center justify-between py-2.5 px-1 border-b border-border/30">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{new Date(row.date).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</span>
+                      <span className="text-sm font-medium text-foreground truncate">{row.category}</span>
+                    </div>
+                    {row.description && (
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{row.description}</p>
+                    )}
+                  </div>
+                  <span className="text-sm font-semibold text-foreground ml-3 flex-shrink-0">
+                    {row.amount.toLocaleString("ru-RU")} ₽
+                  </span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between py-3 px-1 bg-muted/50 rounded-lg mt-2">
+                <span className="text-sm font-semibold">ИТОГО</span>
+                <span className="text-sm font-bold text-primary">{allExpensesTotal.toLocaleString("ru-RU")} ₽</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
