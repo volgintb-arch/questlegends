@@ -72,7 +72,7 @@ export function PWAInstallButton() {
       {showGuide && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowGuide(false)} />
-          <div className="relative glass-card rounded-2xl w-full max-w-md p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
+          <div className="relative bg-card border border-border rounded-2xl w-full max-w-md p-5 sm:p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold gradient-primary-text">Установить приложение</h3>
               <button onClick={() => setShowGuide(false)} className="p-1 hover:bg-muted rounded-lg">
