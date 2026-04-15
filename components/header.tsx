@@ -23,7 +23,7 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [showProfileSettings, setShowProfileSettings] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
-  const [pushState, setPushState] = useState<"loading" | "unsupported" | "off" | "on">("loading")
+  const [pushState, setPushState] = useState<"off" | "on">("off")
   const { user, getAuthHeaders, logout, exitViewingMode } = useAuth()
   const router = useRouter()
 
@@ -56,40 +56,31 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
 
   useEffect(() => { setMounted(true) }, [])
 
-  // Check push notification status
+  // Check push notification status — always show button, check on mount
   useEffect(() => {
-    if (typeof window === "undefined") {
-      setPushState("unsupported")
-      return
-    }
-    // Check basic support — show button even if not fully supported, handle in togglePush
-    const hasSupport = "Notification" in window && "serviceWorker" in navigator
-    if (!hasSupport) {
-      setPushState("unsupported")
-      return
-    }
-    // Check existing registration
-    navigator.serviceWorker.getRegistration().then(async (reg) => {
-      if (!reg) { setPushState("off"); return }
-      try {
-        const sub = await reg.pushManager?.getSubscription()
-        setPushState(sub ? "on" : "off")
-      } catch {
+    if (typeof window === "undefined") return
+    try {
+      if ("serviceWorker" in navigator && "PushManager" in window) {
+        navigator.serviceWorker.getRegistration().then(async (reg) => {
+          if (!reg) { setPushState("off"); return }
+          const sub = await reg.pushManager?.getSubscription()
+          setPushState(sub ? "on" : "off")
+        }).catch(() => setPushState("off"))
+      } else {
         setPushState("off")
       }
-    }).catch(() => setPushState("off"))
+    } catch {
+      setPushState("off")
+    }
   }, [])
 
   const togglePush = async () => {
-    if (pushState === "unsupported" || pushState === "loading") return
-
-    if (!("PushManager" in window)) {
-      alert("Ваш браузер не поддерживает push-уведомления. Попробуйте Chrome или обновите браузер.")
+    if (!("serviceWorker" in navigator) || !("Notification" in window) || !("PushManager" in window)) {
+      alert("Ваш браузер не поддерживает push-уведомления. Попробуйте Google Chrome.")
       return
     }
 
     try {
-      // Ensure service worker is registered
       let reg = await navigator.serviceWorker.getRegistration()
       if (!reg) {
         reg = await navigator.serviceWorker.register("/sw.js")
@@ -199,19 +190,17 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
               </button>
             </div>
 
-            {pushState !== "unsupported" && pushState !== "loading" && (
-              <button
-                onClick={togglePush}
-                className={`p-2 rounded-lg transition-colors ${pushState === "on" ? "text-primary bg-primary/10" : "hover:bg-muted/50 text-muted-foreground"}`}
-                title={pushState === "on" ? "Push-уведомления включены" : "Включить push-уведомления"}
-              >
-                {pushState === "on" ? (
-                  <BellRing className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
-                ) : (
-                  <BellOff className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
-                )}
-              </button>
-            )}
+            <button
+              onClick={togglePush}
+              className={`p-2 rounded-lg transition-colors ${pushState === "on" ? "text-primary bg-primary/10" : "hover:bg-muted/50 text-muted-foreground"}`}
+              title={pushState === "on" ? "Push-уведомления включены" : "Включить push-уведомления"}
+            >
+              {pushState === "on" ? (
+                <BellRing className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
+              ) : (
+                <BellOff className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
+              )}
+            </button>
 
             <button onClick={toggleTheme} className="p-2 hover:bg-muted/50 rounded-lg transition-colors">
               {!mounted ? (
