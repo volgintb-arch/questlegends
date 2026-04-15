@@ -723,40 +723,42 @@ export function MessagingSection() {
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="px-2 sm:px-4 py-2 sm:py-3 border-t border-border/30 bg-card/30 safe-bottom">
-              <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="px-3 sm:px-4 py-3 sm:py-3 border-t border-border/30 bg-card/50 safe-bottom">
+              <div className="flex items-end gap-2">
                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 sm:h-9 sm:w-9 rounded-full flex-shrink-0"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                <div className="relative" ref={emojiPickerRef}>
+                <div className="flex gap-1 flex-shrink-0 pb-1">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 sm:h-9 sm:w-9 rounded-full flex-shrink-0"
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="h-9 w-9 rounded-full"
+                    onClick={() => fileInputRef.current?.click()}
                   >
-                    <Smile className="h-4 w-4" />
+                    <Paperclip className="h-[18px] w-[18px]" />
                   </Button>
-                  {showEmojiPicker && (
-                    <div className="absolute bottom-12 left-0 z-50 bg-popover border rounded-xl shadow-lg p-2 w-[260px] sm:w-[280px] grid grid-cols-8 gap-1">
-                      {EMOJI_LIST.map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          className="h-8 w-8 flex items-center justify-center rounded hover:bg-muted/80 text-lg transition-colors"
-                          onClick={() => { setNewMessage((prev) => prev + emoji); setShowEmojiPicker(false) }}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="relative" ref={emojiPickerRef}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-full"
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    >
+                      <Smile className="h-[18px] w-[18px]" />
+                    </Button>
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-12 left-0 z-50 bg-popover border rounded-xl shadow-lg p-2 w-[260px] sm:w-[280px] grid grid-cols-8 gap-1">
+                        {EMOJI_LIST.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            className="h-8 w-8 flex items-center justify-center rounded hover:bg-muted/80 text-lg transition-colors"
+                            onClick={() => { setNewMessage((prev) => prev + emoji); setShowEmojiPicker(false) }}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <Input
@@ -769,16 +771,16 @@ export function MessagingSection() {
                         handleSendMessage()
                       }
                     }}
-                    className="h-9 sm:h-10 text-sm rounded-2xl bg-muted/30"
+                    className="h-11 text-[15px] rounded-2xl bg-muted/30 px-4"
                   />
                 </div>
                 <Button
                   size="icon"
-                  className="h-8 w-8 sm:h-9 sm:w-9 rounded-full flex-shrink-0"
+                  className="h-10 w-10 rounded-full flex-shrink-0 mb-0.5"
                   onClick={handleSendMessage}
                   disabled={!newMessage.trim() || isLoading}
                 >
-                  <Send className="h-4 w-4" />
+                  <Send className="h-[18px] w-[18px]" />
                 </Button>
               </div>
             </div>

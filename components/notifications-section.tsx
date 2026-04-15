@@ -127,10 +127,14 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
     if (!notification.read) {
       await markAsRead(notification.id)
     }
-    // Navigate to CRM if dealId exists
+    // Navigate based on type
     if (notification.dealId) {
       const taskParam = notification.taskId ? `&taskId=${notification.taskId}` : ""
       router.push(`/crm?dealId=${notification.dealId}${taskParam}`)
+    } else if (notification.type === "message") {
+      router.push("/messages")
+    } else if (notification.type === "royalty_payment") {
+      router.push("/finances")
     }
   }
 
@@ -476,24 +480,30 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
                         📍 {notification.location}
                       </span>
                     )}
-                    {notification.dealId && (
-                      <span className="text-xs px-2 py-1 rounded bg-primary/20 text-primary flex items-center gap-1">
-                        <ExternalLink size={12} />
-                        Открыть сделку
-                      </span>
-                    )}
                   </div>
 
                   <div
                     className="flex items-center gap-2 mt-3 pt-3 border-t border-border/30"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <button
-                      onClick={() => handleViewNotification(notification)}
-                      className="text-xs px-3 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
-                    >
-                      Подробно
-                    </button>
+                    {notification.dealId && (
+                      <button
+                        onClick={() => handleNotificationClick(notification)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors font-medium flex items-center gap-1"
+                      >
+                        <ExternalLink size={12} />
+                        Перейти
+                      </button>
+                    )}
+                    {notification.type === "message" && (
+                      <button
+                        onClick={() => router.push("/messages")}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors font-medium flex items-center gap-1"
+                      >
+                        <ExternalLink size={12} />
+                        Перейти
+                      </button>
+                    )}
                     {notification.type === "royalty_payment" && isUkRole && (
                       <button
                         onClick={() => confirmRoyaltyPayment(notification.id)}
@@ -503,37 +513,12 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
                         Оплата прошла
                       </button>
                     )}
-                    {!notification.read && (
-                      <button
-                        onClick={() => markAsRead(notification.id)}
-                        className="text-xs px-3 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
-                      >
-                        Отметить прочитанным
-                      </button>
-                    )}
                     <button
                       onClick={() => deleteNotification(notification.id)}
-                      className="text-xs px-3 py-1 rounded bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+                      className="text-xs px-3 py-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition-colors flex items-center gap-1"
                     >
-                      <Trash2 size={14} className="inline mr-1" />
+                      <Trash2 size={12} />
                       Удалить
-                    </button>
-                  </div>
-
-                  <div className="mt-3 pt-3 border-t border-border/30 flex gap-2" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="text"
-                      placeholder="Добавить комментарий и архивировать..."
-                      value={commentInputs[notification.id] || ""}
-                      onChange={(e) => setCommentInputs({ ...commentInputs, [notification.id]: e.target.value })}
-                      onKeyPress={(e) => e.key === "Enter" && addCommentAndArchive(notification.id)}
-                      className="flex-1 bg-muted/20 border border-border rounded px-2 py-1 text-xs outline-none focus:border-primary"
-                    />
-                    <button
-                      onClick={() => addCommentAndArchive(notification.id)}
-                      className="text-xs px-3 py-1 rounded bg-green-500/20 text-green-600 hover:bg-green-500/30 transition-colors"
-                    >
-                      Архив
                     </button>
                   </div>
                 </div>
@@ -548,70 +533,44 @@ export function NotificationsSection({ role }: NotificationsSectionProps) {
         )}
       </div>
 
-      {/* Notification Settings */}
-      <div className="bg-card border border-border rounded-lg p-6 space-y-6">
-        <div>
+      {/* Push Notification Settings */}
+      {push.supported && (
+        <div className="bg-card border border-border rounded-lg p-5 sm:p-6">
           <h3 className="font-semibold text-foreground mb-4">Настройки уведомлений</h3>
-          <div className="space-y-3">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div className="w-4 h-4 rounded border-2 border-primary bg-primary flex items-center justify-center">
-                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              </div>
-              <span className="text-sm text-foreground">Получать критические оповещения</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div className="w-4 h-4 rounded border-2 border-primary bg-primary flex items-center justify-center">
-                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              </div>
-              <span className="text-sm text-foreground">Получать предупреждения о платежах</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div className="w-4 h-4 rounded border-2 border-primary bg-primary flex items-center justify-center">
-                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              </div>
-              <span className="text-sm text-foreground">Email уведомления</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Push Notifications */}
-        {push.supported && (
-          <div className="border-t border-border pt-5">
-            <div className="flex items-start gap-4">
-              <div className={`p-2.5 rounded-xl ${push.isSubscribed ? "gradient-primary" : "bg-muted"}`}>
-                {push.isSubscribed ? (
-                  <BellRing className="h-5 w-5 text-white" />
-                ) : (
-                  <Bell className="h-5 w-5 text-muted-foreground" />
-                )}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">Пуш-уведомления</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {push.isSubscribed
-                    ? "Уведомления включены — вы будете получать их даже когда приложение закрыто"
-                    : push.permission === "denied"
-                    ? "Уведомления заблокированы в браузере. Разрешите их в настройках браузера."
-                    : "Получайте уведомления о новых сообщениях, задачах и платежах"}
-                </p>
-              </div>
-              {push.permission !== "denied" && (
-                <button
-                  onClick={push.isSubscribed ? push.unsubscribe : push.subscribe}
-                  disabled={push.isLoading}
-                  className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer disabled:opacity-50 ${
-                    push.isSubscribed
-                      ? "bg-muted hover:bg-muted/80 text-muted-foreground"
-                      : "gradient-primary text-white hover:opacity-90"
-                  }`}
-                >
-                  {push.isLoading ? "..." : push.isSubscribed ? "Отключить" : "Включить"}
-                </button>
+          <div className="flex items-start gap-4">
+            <div className={`p-2.5 rounded-xl flex-shrink-0 ${push.isSubscribed ? "gradient-primary" : "bg-muted"}`}>
+              {push.isSubscribed ? (
+                <BellRing className="h-5 w-5 text-white" />
+              ) : (
+                <Bell className="h-5 w-5 text-muted-foreground" />
               )}
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">Пуш-уведомления</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {push.isSubscribed
+                  ? "Уведомления включены — вы будете получать их даже когда приложение закрыто"
+                  : push.permission === "denied"
+                  ? "Уведомления заблокированы в браузере. Разрешите их в настройках."
+                  : "Получайте уведомления о новых сообщениях и лидах"}
+              </p>
+            </div>
+            {push.permission !== "denied" && (
+              <button
+                onClick={push.isSubscribed ? push.unsubscribe : push.subscribe}
+                disabled={push.isLoading}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer disabled:opacity-50 ${
+                  push.isSubscribed
+                    ? "bg-muted hover:bg-muted/80 text-muted-foreground"
+                    : "gradient-primary text-white hover:opacity-90"
+                }`}
+              >
+                {push.isLoading ? "..." : push.isSubscribed ? "Отключить" : "Включить"}
+              </button>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Notification Detail Modal */}
       <NotificationDetailModal
