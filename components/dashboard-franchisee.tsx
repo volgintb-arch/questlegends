@@ -129,21 +129,35 @@ export function DashboardFranchisee() {
 
       const royaltyPercent = Number(franchiseeData?.data?.royaltyPercent ?? franchiseeData?.royaltyPercent) || 0
 
+      // Filter by current month
+      const now = new Date()
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      const monthEndStr = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}`
+
+      const inMonth = (dateStr: string) => {
+        const d = (dateStr || "").split("T")[0]
+        return d >= monthStart && d <= monthEndStr
+      }
+
+      const txThisMonth = transactions.filter((t: any) => inMonth(t.date || t.paymentDate || t.createdAt))
+      const expThisMonth = expenses.filter((e: any) => inMonth(e.date || e.expenseDate || e.createdAt))
+
       // Revenue = income transactions + legacy transactions without type
-      const revenue = transactions
+      const revenue = txThisMonth
         .filter((t: any) => t.type === "income" || (!t.type && !t.category))
         .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
 
       // FOT from transactions
-      const fot = transactions
+      const fot = txThisMonth
         .filter((t: any) => t.type === "expense" && t.category === "fot")
         .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
 
       // Expenses from Expense table
-      const totalExpenses = expenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
+      const totalExpenses = expThisMonth.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
 
       // Other expense transactions (not fot) — e.g. other_expense, consumables
-      const otherExpenseTx = transactions
+      const otherExpenseTx = txThisMonth
         .filter((t: any) => t.type === "expense" && t.category && t.category !== "fot")
         .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
 

@@ -42,7 +42,17 @@ export function DashboardAdmin() {
 
       if (transactionsRes.ok) {
         const transactionsData = await transactionsRes.json()
-        const transactions = transactionsData.data || transactionsData.transactions || transactionsData || []
+        const allTransactions = transactionsData.data || transactionsData.transactions || transactionsData || []
+
+        // Filter by current month
+        const now = new Date()
+        const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+        const monthEndStr = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}`
+        const transactions = allTransactions.filter((t: any) => {
+          const d = (t.date || t.paymentDate || t.createdAt || "").split("T")[0]
+          return d >= monthStart && d <= monthEndStr
+        })
 
         transactions.forEach((t: any) => {
           const amount = Number(t.amount) || 0
