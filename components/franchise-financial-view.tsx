@@ -123,7 +123,13 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
           .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
         const royaltyPercent = Number(f.royaltyPercent) || 0
         const royalty = Math.round(revenue * (royaltyPercent / 100))
-        const expensesTotal = franchiseeExpenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
+        // Expenses from Expense table
+        const tableExpenses = franchiseeExpenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
+        // Expenses from Transaction table (type=expense: fot, other_expense, consumables etc.)
+        const txExpenses = franchiseeTransactions
+          .filter((t: any) => t.type === "expense")
+          .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+        const expensesTotal = tableExpenses + txExpenses
         const profit = revenue - royalty - expensesTotal
 
         const completedGames = Number(f.completedGames) || 0

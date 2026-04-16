@@ -56,50 +56,67 @@ export function DashboardUK() {
     const fetchData = async () => {
       try {
         const headers = getAuthHeaders()
-        const [franchisesRes, transactionsRes] = await Promise.all([
+        const [franchisesRes, transactionsRes, expensesRes] = await Promise.all([
           fetch("/api/franchisees", { headers, cache: "no-store" }),
           fetch("/api/transactions?limit=1000", { headers, cache: "no-store" }),
+          fetch("/api/expenses", { headers, cache: "no-store" }),
         ])
 
         let franchisesData: any[] = []
         let transactionsData: any[] = []
+        let expensesData: any[] = []
 
         if (franchisesRes.ok) {
           const data = await franchisesRes.json()
           franchisesData = Array.isArray(data) ? data : data.data || []
           setFranchises(franchisesData)
-        } else {
-          console.error("Failed to load franchises:", franchisesRes.status)
         }
 
         if (transactionsRes.ok) {
           const data = await transactionsRes.json()
-          transactionsData = Array.isArray(data) ? data : data.data || []
+          transactionsData = Array.isArray(data) ? data : data.data || data.transactions || []
           setTransactions(transactionsData)
         }
 
-        const revenue = transactionsData
-          .filter((t) => t.type === "income" || t.type === "revenue")
+        if (expensesRes.ok) {
+          const data = await expensesRes.json()
+          expensesData = Array.isArray(data) ? data : data.data || []
+          setAllExpenses(expensesData)
+        }
+
+        // Filter by current month
+        const now = new Date()
+        const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+        const monthEndStr = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}`
+
+        const inMonth = (dateStr: string) => {
+          const d = (dateStr || "").split("T")[0]
+          return d >= monthStart && d <= monthEndStr
+        }
+
+        const monthTx = transactionsData.filter((t) => inMonth(t.date || t.paymentDate || t.createdAt))
+
+        const revenue = monthTx
+          .filter((t) => t.type === "income")
           .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
 
         const royalties = franchisesData.reduce((sum, f) => {
-          const franchiseeRevenue = transactionsData
-            .filter((t) => t.franchiseeId === f.id && (t.type === "income" || t.type === "revenue"))
+          const franchiseeRevenue = monthTx
+            .filter((t) => t.franchiseeId === f.id && t.type === "income")
             .reduce((s, t) => s + (Number(t.amount) || 0), 0)
           const royaltyPercent = Number(f.royaltyPercent) || 0
           return sum + (franchiseeRevenue * royaltyPercent) / 100
         }, 0)
 
-        // Завершённые игры = уникальные gameLeadId с постоплатой
         const completedGameIds = new Set(
-          transactionsData
+          monthTx
             .filter((t) => t.gameLeadId && t.category === "postpayment")
             .map((t) => t.gameLeadId)
         )
         const games = completedGameIds.size
 
-        // Средний чек = выручка только от игр (предоплата + постоплата) / кол-во завершённых игр
-        const gameRevenue = transactionsData
+        const gameRevenue = monthTx
           .filter((t) => t.gameLeadId && t.type === "income" && (t.category === "postpayment" || t.category === "prepayment"))
           .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
         const avgCheck = games > 0 ? gameRevenue / games : 0
@@ -122,19 +139,44 @@ export function DashboardUK() {
     return () => clearInterval(interval)
   }, [getAuthHeaders, user?.role, isUkEmployee])
 
-  // Обогащённые данные по каждому франчайзи (только базовые 4 метрики)
+  const [allExpenses, setAllExpenses] = useState<any[]>([])
+
+  // Обогащённые данные по каждому франчайзи (текущий месяц)
   const enrichedFranchises = useMemo(() => {
+    const now = new Date()
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    const monthEndStr = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}`
+
+    const inMonth = (dateStr: string) => {
+      const d = (dateStr || "").split("T")[0]
+      return d >= monthStart && d <= monthEndStr
+    }
+
     return franchises.map((f) => {
-      const revenue = transactions
-        .filter((t) => t.franchiseeId === f.id && (t.type === "income" || t.type === "revenue"))
+      const fTx = transactions.filter((t) => t.franchiseeId === f.id && inMonth(t.date || t.paymentDate || t.createdAt))
+
+      const revenue = fTx
+        .filter((t) => t.type === "income")
         .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+
+      // Expenses from Transaction table (type=expense)
+      const txExpenses = fTx
+        .filter((t) => t.type === "expense")
+        .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+
+      // Expenses from Expense table
+      const tableExpenses = allExpenses
+        .filter((e) => e.franchiseeId === f.id && inMonth(e.date || e.createdAt))
+        .reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+
+      const expenses = txExpenses + tableExpenses
       const royaltyPercent = Number(f.royaltyPercent) || 0
       const royalty = Math.round((revenue * royaltyPercent) / 100)
-      const expenses = Number(f.totalExpenses) || 0
       const profit = revenue - expenses - royalty
       return { ...f, revenue, royalty, expenses, profit }
     })
-  }, [franchises, transactions])
+  }, [franchises, transactions, allExpenses])
 
   if (loading) {
     return (
