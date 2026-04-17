@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 import crypto from "crypto"
+import { logApiError } from "@/lib/app-logger"
 
 async function getCurrentUser(request: NextRequest) {
   const payload = await verifyRequest(request)
@@ -100,7 +101,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
     })
   } catch (error) {
-    console.error("[v0] DEAL_GET error:")
+    console.error("[v0] DEAL_GET error:", error)
+    logApiError(error, request).catch(() => {})
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }
@@ -269,7 +271,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     return NextResponse.json({ success: true, data: result[0] })
   } catch (error) {
-    console.error("[v0] DEAL_PATCH error:")
+    console.error("[v0] DEAL_PATCH error:", error)
+    logApiError(error, request).catch(() => {})
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }
@@ -301,7 +304,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] DEAL_DELETE error:")
+    console.error("[v0] DEAL_DELETE error:", error)
+    logApiError(error, request).catch(() => {})
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }

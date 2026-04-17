@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
+import { logApiError } from "@/lib/app-logger"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -31,7 +32,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ success: true, transaction })
   } catch (error) {
-    console.error("[v0] Error fetching transaction:")
+    console.error("[v0] Error fetching transaction:", error)
+    await logApiError(error, req).catch(() => {})
     return NextResponse.json({ error: "Failed to fetch transaction" }, { status: 500 })
   }
 }
@@ -74,7 +76,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ success: true, transaction: updated })
   } catch (error) {
-    console.error("[v0] Error updating transaction:")
+    console.error("[v0] Error updating transaction:", error)
+    await logApiError(error, req).catch(() => {})
     return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 })
   }
 }
@@ -103,7 +106,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[v0] Error deleting transaction:")
+    console.error("[v0] Error deleting transaction:", error)
+    await logApiError(error, req).catch(() => {})
     return NextResponse.json({ error: "Failed to delete transaction" }, { status: 500 })
   }
 }

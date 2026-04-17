@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 import { cache } from "@/lib/cache"
+import { logApiError } from "@/lib/app-logger"
+import { logAuditEvent } from "@/lib/audit-log"
 
 // Префикс ключей кеша для франчайзи
 const CACHE_PREFIX = "franchisees:"
@@ -103,6 +105,7 @@ export async function GET(request: Request) {
     })
   } catch (error: any) {
     console.error("[v0] FRANCHISEES_GET error:", error?.message || error)
+    await logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
@@ -146,9 +149,21 @@ export async function POST(request: Request) {
     // --- Кеш: инвалидируем все ключи франчайзи после создания ---
     await cache.invalidatePattern(CACHE_PREFIX)
 
+    // Audit: логируем создание франчайзи
+    logAuditEvent({
+      action: "franchisee_created",
+      entityType: "franchisee",
+      entityId: result[0]?.id,
+      userId: user.userId,
+      userName: user.name || user.phone,
+      userRole: user.role,
+      details: { name: body.name, city: body.city },
+    }).catch(() => {})
+
     return NextResponse.json(result[0], { status: 201 })
   } catch (error) {
-    console.error("[v0] FRANCHISEES_POST error:")
+    console.error("[v0] FRANCHISEES_POST error:", error)
+    await logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

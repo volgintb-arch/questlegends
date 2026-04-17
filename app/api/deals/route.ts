@@ -3,6 +3,7 @@ import { verifyToken } from "@/lib/simple-auth"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import crypto from "crypto"
+import { logApiError } from "@/lib/app-logger"
 
 async function getCurrentUser(request: Request) {
   try {
@@ -163,6 +164,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: formattedDeals })
   } catch (error: any) {
     console.error("DEALS_GET error:", error?.message || error, error?.stack?.substring(0, 500))
+    logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Failed to fetch deals" }, { status: 500 })
   }
 }
@@ -228,6 +230,7 @@ export async function POST(request: Request) {
     return NextResponse.json(deal, { status: 201 })
   } catch (error: any) {
     console.error("DEALS_POST error:", error?.message || error)
+    logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Failed to create deal" }, { status: 500 })
   }
 }

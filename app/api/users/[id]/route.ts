@@ -4,6 +4,8 @@ import { verifyRequest } from "@/lib/simple-auth"
 import { cache } from "@/lib/cache"
 import bcrypt from "bcryptjs"
 import { v4 as uuidv4 } from "uuid"
+import { logApiError } from "@/lib/app-logger"
+import { logAuditEvent } from "@/lib/audit-log"
 
 // Safe user fields — never include passwordHash or password columns
 const USER_SAFE_FIELDS = `
@@ -35,7 +37,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true, data: users[0] })
   } catch (error) {
-    console.error("[users/id] GET error")
+    console.error("[users/id] GET error:", error)
+    await logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -158,9 +161,27 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
       WHERE u.id = ${id}
     `
+
+    // Audit: логируем изменение пользователя
+    logAuditEvent({
+      action: body.role !== undefined && body.role !== targetUser.role ? "role_changed" : "user_updated",
+      entityType: "user",
+      entityId: id,
+      userId: currentUser.userId,
+      userName: currentUser.name || currentUser.phone,
+      userRole: currentUser.role,
+      franchiseeId: currentUser.franchiseeId || null,
+      details: {
+        targetUserName: updated[0]?.name || id,
+        changedFields: Object.keys(body).filter(k => k !== "password" && k !== "currentPassword"),
+        ...(body.role !== undefined ? { oldRole: targetUser.role, newRole: body.role } : {}),
+      },
+    }).catch(() => {})
+
     return NextResponse.json({ success: true, data: updated[0] })
   } catch (error: any) {
     console.error("[users/id] PATCH error:", error?.message || error)
+    await logApiError(error, request, currentUser?.userId).catch(() => {})
     return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 })
   }
 }
@@ -221,9 +242,27 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     await sql`DELETE FROM "User" WHERE id = ${id}`
+
+    // Audit: логируем удаление пользователя
+    logAuditEvent({
+      action: "user_deleted",
+      entityType: "user",
+      entityId: id,
+      userId: currentUser.userId,
+      userName: currentUser.name || currentUser.phone,
+      userRole: currentUser.role,
+      franchiseeId: currentUser.franchiseeId || null,
+      details: {
+        deletedUserName: targetUser.name,
+        deletedUserRole: targetUser.role,
+        deletedUserFranchiseeId: targetUser.franchiseeId,
+      },
+    }).catch(() => {})
+
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[users/id] DELETE error")
+    console.error("[users/id] DELETE error:", error)
+    await logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

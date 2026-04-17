@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[AuditLog API] Error:")
+    console.error("[AuditLog API] Error:", error)
     return NextResponse.json({ error: "Failed to fetch audit logs" }, { status: 500 })
   }
 }

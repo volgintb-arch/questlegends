@@ -3,6 +3,7 @@ import { sql } from "@/lib/db"
 import { verifyRequest } from "@/lib/simple-auth"
 import { AccessControl } from "@/lib/access-control"
 import { AuditLog } from "@/lib/audit-log"
+import { logApiError } from "@/lib/app-logger"
 
 export async function GET(req: NextRequest) {
   try {
@@ -98,8 +99,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: leads })
   } catch (error: any) {
-    console.error("[v0] Error fetching game leads:")
-    const errorMessage = error?.message || String(error)
+    console.error("[v0] Error fetching game leads:", error)
+    logApiError(error, req).catch(() => {})
     return NextResponse.json(
       {
         success: false,
@@ -237,6 +238,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, data: lead })
   } catch (error) {
     console.error("[v0] Error creating game lead:", error)
+    logApiError(error, req).catch(() => {})
     return NextResponse.json({ error: "Failed to create lead", details: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }

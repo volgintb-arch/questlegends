@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyToken } from "@/lib/simple-auth"
+import { logApiError } from "@/lib/app-logger"
 
 async function getCurrentUser(request: Request) {
   const authHeader = request.headers.get("authorization")
@@ -142,7 +143,8 @@ export async function GET(request: Request) {
       }
     }
   } catch (error) {
-    console.error("[v0] TRANSACTIONS_GET error:")
+    console.error("[v0] TRANSACTIONS_GET error:", error)
+    logApiError(error, request).catch(() => {})
     return NextResponse.json({ transactions: [], data: [] })
   }
 }
@@ -200,7 +202,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result[0])
   } catch (error) {
-    console.error("[v0] TRANSACTIONS_POST error:")
+    console.error("[v0] TRANSACTIONS_POST error:", error)
+    logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

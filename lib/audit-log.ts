@@ -100,10 +100,6 @@ export async function getAuditLogs(params: {
   dateFrom?: Date
   dateTo?: Date
 }): Promise<{ logs: AuditLogEntry[]; total: number }> {
-  if (!process.env.DATABASE_URL) {
-    return { logs: [], total: 0 }
-  }
-
   const { page = 1, limit = 50, action, entityType, userId, franchiseeId, dateFrom, dateTo } = params
   const offset = (page - 1) * limit
 
@@ -115,9 +111,7 @@ export async function getAuditLogs(params: {
   const df = dateFrom ?? null
   const dt = dateTo ?? null
 
-  const neonSql = neon(process.env.DATABASE_URL)
-
-  const logsResult = await neonSql`
+  const logsResult = await sql`
     SELECT * FROM "AuditLog"
     WHERE (${a}::text IS NULL OR action = ${a})
       AND (${et}::text IS NULL OR "entityType" = ${et})
@@ -129,7 +123,7 @@ export async function getAuditLogs(params: {
     LIMIT ${limit} OFFSET ${offset}
   `
 
-  const countResult = await neonSql`
+  const countResult = await sql`
     SELECT COUNT(*) as count FROM "AuditLog"
     WHERE (${a}::text IS NULL OR action = ${a})
       AND (${et}::text IS NULL OR "entityType" = ${et})

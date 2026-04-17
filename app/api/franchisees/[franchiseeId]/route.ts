@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 import { cache } from "@/lib/cache"
+import { logApiError } from "@/lib/app-logger"
+import { logAuditEvent } from "@/lib/audit-log"
 
 // Префикс ключей кеша франчайзи (совпадает с route.ts)
 const CACHE_PREFIX = "franchisees:"
@@ -41,7 +43,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true, data: franchisee })
   } catch (error) {
-    console.error("[v0] FRANCHISEE_GET error:")
+    console.error("[v0] FRANCHISEE_GET error:", error)
+    await logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -91,9 +94,25 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Invalidate franchisees cache so GET returns fresh data
     await cache.invalidatePattern(CACHE_PREFIX)
 
+    // Audit: логируем обновление франчайзи
+    logAuditEvent({
+      action: "franchisee_updated",
+      entityType: "franchisee",
+      entityId: franchiseeId,
+      userId: user.userId,
+      userName: user.name || user.phone,
+      userRole: user.role,
+      details: {
+        franchiseeName: result[0]?.name,
+        changedFields: Object.keys(body),
+        ...(body.royaltyPercent !== undefined ? { oldRoyalty: current.royaltyPercent, newRoyalty: royaltyPercent } : {}),
+      },
+    }).catch(() => {})
+
     return NextResponse.json({ success: true, data: result[0] })
   } catch (error: any) {
     console.error("[v0] FRANCHISEE_PATCH error:", error?.message || error, error?.stack)
+    await logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Internal server error", detail: error?.message || String(error) }, { status: 500 })
   }
 }
@@ -117,9 +136,21 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     await cache.invalidatePattern(CACHE_PREFIX)
 
+    // Audit: логируем удаление франчайзи
+    logAuditEvent({
+      action: "franchisee_updated",
+      entityType: "franchisee",
+      entityId: franchiseeId,
+      userId: user.userId,
+      userName: user.name || user.phone,
+      userRole: user.role,
+      details: { action: "deleted" },
+    }).catch(() => {})
+
     return NextResponse.json({ success: true, message: "Franchisee deleted" })
   } catch (error) {
-    console.error("[v0] FRANCHISEE_DELETE error:")
+    console.error("[v0] FRANCHISEE_DELETE error:", error)
+    await logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

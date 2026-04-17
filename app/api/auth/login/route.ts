@@ -3,6 +3,8 @@ import { neon } from "@/lib/neon-compat"
 import bcrypt from "bcryptjs"
 import { rateLimit } from "@/lib/rate-limit"
 import { createSignedToken } from "@/lib/simple-auth"
+import { logApiError } from "@/lib/app-logger"
+import { logUserLogin } from "@/lib/audit-log"
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,6 +71,9 @@ export async function POST(request: NextRequest) {
       franchiseeId: user.franchiseeId,
     })
 
+    // Audit: логируем успешный вход
+    logUserLogin(user.id, user.name, user.role, user.franchiseeId || null, clientIp).catch(() => {})
+
     return NextResponse.json({
       success: true,
       token,
@@ -88,6 +93,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error("[login] Login error occurred")
+    await logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
