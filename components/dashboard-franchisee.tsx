@@ -143,26 +143,27 @@ export function DashboardFranchisee() {
       const txThisMonth = transactions.filter((t: any) => inMonth(t.date || t.paymentDate || t.createdAt))
       const expThisMonth = expenses.filter((e: any) => inMonth(e.date || e.expenseDate || e.createdAt))
 
-      // Revenue = income transactions + legacy transactions without type
+      // Revenue = income transactions only
       const revenue = txThisMonth
-        .filter((t: any) => t.type === "income" || (!t.type && !t.category))
-        .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
+        .filter((t: any) => t.type === "income")
+        .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
-      // FOT from transactions
+      // FOT from transactions (all fot_ categories)
       const fot = txThisMonth
-        .filter((t: any) => t.type === "expense" && t.category === "fot")
-        .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
+        .filter((t: any) => t.type === "expense" && (t.category === "fot" || (t.category && t.category.startsWith("fot_"))))
+        .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+
+      // All expense transactions (type=expense)
+      const txExpenses = txThisMonth
+        .filter((t: any) => t.type === "expense")
+        .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
       // Expenses from Expense table
-      const totalExpenses = expThisMonth.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
+      const tableExpenses = expThisMonth.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
 
-      // Other expense transactions (not fot) — e.g. other_expense, consumables
-      const otherExpenseTx = txThisMonth
-        .filter((t: any) => t.type === "expense" && t.category && t.category !== "fot")
-        .reduce((sum: number, t: any) => sum + (Number.parseFloat(t.amount) || 0), 0)
-
+      const totalExpensesAll = txExpenses + tableExpenses
       const royaltyAmount = Math.round(revenue * (royaltyPercent / 100))
-      const profit = revenue - fot - royaltyAmount - totalExpenses - otherExpenseTx
+      const profit = revenue - totalExpensesAll - royaltyAmount
 
       const completedGames = leads.filter(
         (l) => l.stageType === "completed" || l.stageName?.toLowerCase().includes("завершен"),
@@ -302,13 +303,10 @@ export function DashboardFranchisee() {
           </CardHeader>
           <CardContent>
             <div className={cn("text-2xl font-bold", stats.profit >= 0 ? "text-primary" : "text-red-600")}>
-              {isOwnPoint
-                ? (stats.totalRevenue - stats.totalFot).toLocaleString("ru-RU")
-                : stats.profit.toLocaleString("ru-RU")}{" "}
-              ₽
+              {stats.profit.toLocaleString("ru-RU")} ₽
             </div>
             <p className="text-xs text-muted-foreground">
-              {isOwnPoint ? "После вычета ФОТ" : "После вычета ФОТ и роялти"}
+              {isOwnPoint ? "После вычета расходов" : "После вычета расходов и роялти"}
             </p>
           </CardContent>
         </Card>

@@ -101,7 +101,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             onMobileMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
           />
 
-          <main className="flex-1 overflow-y-auto">
+          <main className={`flex-1 ${pathname === "/messages" ? "overflow-hidden" : "overflow-y-auto"}`}>
             {pathname === "/messages" ? (
               <div className="h-full">{children}</div>
             ) : (

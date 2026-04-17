@@ -49,7 +49,7 @@ export async function GET(request: Request) {
             LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
             WHERE t."franchiseeId" = ${user.franchiseeId}
             ORDER BY t."paymentDate" DESC
-            LIMIT 100
+            LIMIT 1000
           `
           return NextResponse.json({ transactions, data: transactions })
         } else {
@@ -102,7 +102,7 @@ export async function GET(request: Request) {
             LEFT JOIN "Franchisee" f ON t."franchiseeId" = f.id
             WHERE t."franchiseeId" = ${user.franchiseeId}
             ORDER BY t."paymentDate" DESC
-            LIMIT 100
+            LIMIT 1000
           `
           return NextResponse.json({ transactions, data: transactions })
         } else {

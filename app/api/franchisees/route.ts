@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     if (user.role === "super_admin" || user.role === "uk") {
       franchisees = await sql`
         SELECT f.*,
-          COALESCE(f."royaltyPercent", 7) as "royaltyPercent",
+          COALESCE(f."royaltyPercent", 0) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
           (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount",
           (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role = 'franchisee' LIMIT 1) as "ownerRole",
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
     } else if (user.role === "uk_employee") {
       franchisees = await sql`
         SELECT f.*,
-          COALESCE(f."royaltyPercent", 7) as "royaltyPercent",
+          COALESCE(f."royaltyPercent", 0) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
           (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount",
           (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role = 'franchisee' LIMIT 1) as "ownerRole",
@@ -76,7 +76,7 @@ export async function GET(request: Request) {
     } else if (user.franchiseeId) {
       franchisees = await sql`
         SELECT f.*,
-          COALESCE(f."royaltyPercent", 7) as "royaltyPercent",
+          COALESCE(f."royaltyPercent", 0) as "royaltyPercent",
           (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" = f.id) as "dealsCount",
           (SELECT COUNT(*) FROM "User" u WHERE u."franchiseeId" = f.id) as "usersCount",
           (SELECT u.role FROM "User" u WHERE u."franchiseeId" = f.id AND u.role = 'franchisee' LIMIT 1) as "ownerRole",
@@ -136,7 +136,7 @@ export async function POST(request: Request) {
         ${body.address || ""},
         ${body.phone || ""},
         ${body.email || ""},
-        ${body.royaltyPercent || 7},
+        ${body.royaltyPercent ?? 0},
         NOW(),
         NOW()
       )

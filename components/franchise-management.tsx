@@ -157,6 +157,71 @@ export function FranchiseManagement() {
 // ============================================================
 
 function OverviewTab({ franchises }: { franchises: Franchisee[] }) {
+  const { getAuthHeaders } = useAuth()
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [allExpenses, setAllExpenses] = useState<any[]>([])
+  const [dataLoaded, setDataLoaded] = useState(false)
+
+  useEffect(() => {
+    const fetchFinancials = async () => {
+      try {
+        const headers = getAuthHeaders()
+        const [txRes, expRes] = await Promise.all([
+          fetch("/api/transactions?limit=1000", { headers, cache: "no-store" }),
+          fetch("/api/expenses", { headers, cache: "no-store" }),
+        ])
+        if (txRes.ok) {
+          const data = await txRes.json()
+          setTransactions(Array.isArray(data) ? data : data.data || data.transactions || [])
+        }
+        if (expRes.ok) {
+          const data = await expRes.json()
+          setAllExpenses(Array.isArray(data) ? data : data.data || [])
+        }
+      } catch (e) {
+        console.error("OverviewTab: failed to fetch financials", e)
+      } finally {
+        setDataLoaded(true)
+      }
+    }
+    fetchFinancials()
+  }, [getAuthHeaders])
+
+  const enriched = useMemo(() => {
+    const now = new Date()
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    const monthEndStr = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}`
+
+    const inMonth = (dateStr: string) => {
+      const d = (dateStr || "").split("T")[0]
+      return d >= monthStart && d <= monthEndStr
+    }
+
+    return franchises.map((f) => {
+      const fTx = transactions.filter((t: any) => t.franchiseeId === f.id && inMonth(t.date || t.paymentDate || t.createdAt))
+
+      const revenue = fTx
+        .filter((t: any) => t.type === "income")
+        .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+
+      const txExpenses = fTx
+        .filter((t: any) => t.type === "expense")
+        .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+
+      const tableExpenses = allExpenses
+        .filter((e: any) => e.franchiseeId === f.id && inMonth(e.date || e.createdAt))
+        .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
+
+      const expenses = txExpenses + tableExpenses
+      const royaltyPercent = Number(f.royaltyPercent) || 0
+      const royalty = Math.round((revenue * royaltyPercent) / 100)
+      const profit = revenue - expenses - royalty
+
+      return { ...f, revenue, expenses, royalty, profit }
+    })
+  }, [franchises, transactions, allExpenses])
+
   const formatMoney = (v: number) => {
     if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M ₽`
     if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K ₽`
@@ -165,17 +230,13 @@ function OverviewTab({ franchises }: { franchises: Franchisee[] }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{franchises.length} франшиз</p>
+      <p className="text-sm text-muted-foreground">{franchises.length} франшиз · текущий месяц</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {franchises.map((f) => {
+        {enriched.map((f) => {
           const completed = Number(f.completedGames) || 0
           const cancelled = Number(f.cancelledGames) || 0
           const cancelRate = completed > 0 ? Math.round((cancelled / completed) * 100) : 0
-          const revenue = Number(f.gamesRevenue) || 0
-          const expenses = Number(f.totalExpenses) || 0
-          const royalty = Math.round((revenue * Number(f.royaltyPercent)) / 100)
-          const profit = revenue - expenses - royalty
 
           return (
             <div key={f.id} className="bg-card border border-border rounded-lg p-5 hover:shadow-md transition-shadow">
@@ -189,36 +250,39 @@ function OverviewTab({ franchises }: { franchises: Franchisee[] }) {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase">Выручка</p>
-                  <p className="text-sm font-medium">{formatMoney(revenue)}</p>
+                  <p className="text-sm font-medium">{formatMoney(f.revenue)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase">Расходы</p>
+                  <p className="text-sm font-medium text-muted-foreground">{formatMoney(f.expenses)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase">Роялти</p>
+                  <p className="text-sm font-medium text-muted-foreground">{formatMoney(f.royalty)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase">Прибыль</p>
-                  <p className={`text-sm font-semibold ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {formatMoney(profit)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase">Игры</p>
-                  <p className="text-sm font-medium">{completed}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase">Отказы</p>
-                  <p className="text-sm font-medium">
-                    {cancelled}{" "}
-                    <span className={`text-xs ${
-                      cancelRate > 30 ? "text-red-600" : cancelRate > 15 ? "text-orange-500" : "text-green-600"
-                    }`}>
-                      ({cancelRate}%)
-                    </span>
+                  <p className={`text-sm font-semibold ${f.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {formatMoney(f.profit)}
                   </p>
                 </div>
               </div>
 
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>Игры: {completed}</span>
+                <span>
+                  Отказы: {cancelled}{" "}
+                  <span className={cancelRate > 30 ? "text-red-600" : cancelRate > 15 ? "text-orange-500" : "text-green-600"}>
+                    ({cancelRate}%)
+                  </span>
+                </span>
+              </div>
+
               {f.royaltyPaymentDay && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[10px] text-muted-foreground mt-2">
                   Оплата роялти: {f.royaltyPaymentDay}-е число каждого месяца
                 </p>
               )}

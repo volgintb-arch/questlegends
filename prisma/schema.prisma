@@ -155,7 +155,7 @@ model Franchisee {
   address         String?
   phone           String?
   email           String?
-  royaltyPercent    Int      @default(10)
+  royaltyPercent    Int      @default(0)
   royaltyPaymentDay Int?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
