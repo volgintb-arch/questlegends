@@ -59,7 +59,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([])
+  const [locations, setLocations] = useState<Array<{ id: string; name: string; royaltyPercent: number }>>([])
   const [franchiseeData, setFranchiseeData] = useState<FranchiseeData | null>(null)
 
   const [filterType, setFilterType] = useState<"all" | "income" | "expense">("all")
@@ -135,6 +135,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
           const locs = franchisees.map((f: any) => ({
             id: f.id,
             name: f.name,
+            royaltyPercent: Number(f.royaltyPercent) || 0,
           }))
           setLocations(locs)
         }
@@ -177,6 +178,7 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
         const locs = franchisees.map((f: any) => ({
           id: f.id,
           name: f.name,
+          royaltyPercent: Number(f.royaltyPercent) || 0,
         }))
         setLocations(locs)
       }
@@ -258,14 +260,16 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
       const totalTransactions = exportTx.length
       const avgTransaction = totalTransactions > 0 ? Math.round((totalRevenue + totalExpenses) / totalTransactions) : 0
 
-      // === Рассчёт по франчайзи (используем для агрегации роялти) ===
-      const defaultRoyaltyRate = 0.07
-      const franchiseeBreakdown: Record<string, { revenue: number; expenses: number; royalties: number; profit: number; txCount: number }> = {}
+      // === Рассчёт по франчайзи (используем реальные проценты роялти) ===
+      const franchiseeRoyaltyMap = new Map<string, number>()
+      locations.forEach((loc) => { franchiseeRoyaltyMap.set(loc.id, loc.royaltyPercent) })
+
+      const franchiseeBreakdown: Record<string, { revenue: number; expenses: number; royalties: number; profit: number; txCount: number; franchiseeId?: string }> = {}
 
       exportTx.forEach((t) => {
         const name = t.franchiseeName || t.franchiseeCity || "Без франчайзи"
         if (!franchiseeBreakdown[name]) {
-          franchiseeBreakdown[name] = { revenue: 0, expenses: 0, royalties: 0, profit: 0, txCount: 0 }
+          franchiseeBreakdown[name] = { revenue: 0, expenses: 0, royalties: 0, profit: 0, txCount: 0, franchiseeId: t.franchiseeId }
         }
         if (t.type === "income") franchiseeBreakdown[name].revenue += t.amount
         else franchiseeBreakdown[name].expenses += t.amount
@@ -274,12 +278,13 @@ export function TransactionsERP({ role }: TransactionsERPProps) {
 
       Object.keys(franchiseeBreakdown).forEach((name) => {
         const d = franchiseeBreakdown[name]
-        d.royalties = Math.round(d.revenue * defaultRoyaltyRate)
-        d.profit = d.revenue - d.expenses
+        const royaltyRate = d.franchiseeId ? (franchiseeRoyaltyMap.get(d.franchiseeId) || 0) / 100 : 0
+        d.royalties = Math.round(d.revenue * royaltyRate)
+        d.profit = d.revenue - d.expenses - d.royalties
       })
 
       const totalRoyalties = Object.values(franchiseeBreakdown).reduce((sum, d) => sum + d.royalties, 0)
-      const totalProfit = totalRevenue - totalExpenses
+      const totalProfit = totalRevenue - totalExpenses - totalRoyalties
 
       // === Лист 1: Сводная ===
       const networkSummary = [

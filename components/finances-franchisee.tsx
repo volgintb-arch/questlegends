@@ -136,20 +136,19 @@ export function FinancesFranchisee() {
 
   const totalExpenses = expenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0)
 
-  // Revenue = income transactions + legacy transactions without type
-  const revenue = transactions.reduce((sum: number, t: any) => {
-    if (t.type === "income") return sum + (Number(t.amount) || 0)
-    if (!t.type && !t.category) return sum + (Number(t.amount) || 0)
-    return sum
-  }, 0)
+  // Revenue = income transactions only
+  const revenue = transactions
+    .filter((t: any) => t.type === "income")
+    .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
-  // FOT = expense transactions with category 'fot'
+  // FOT = expense transactions with fot categories
+  const isFotCategory = (cat: string | undefined) => cat === "fot" || (cat && cat.startsWith("fot_"))
   const fot = transactions
-    .filter((t: any) => t.type === "expense" && t.category === "fot")
+    .filter((t: any) => t.type === "expense" && isFotCategory(t.category))
     .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
   // Other expense transactions (not fot) — e.g. other_expense, consumables
-  const expenseTransactions = transactions.filter((t: any) => t.type === "expense" && t.category && t.category !== "fot")
+  const expenseTransactions = transactions.filter((t: any) => t.type === "expense" && t.category && !isFotCategory(t.category))
   const otherExpenseTransactionsTotal = expenseTransactions.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
   // Combined expenses list for table (Expense table + expense transactions)
@@ -182,7 +181,7 @@ export function FinancesFranchisee() {
       })
     })
     // FOT transactions too
-    transactions.filter((t: any) => t.type === "expense" && t.category === "fot").forEach((t: any) => {
+    transactions.filter((t: any) => t.type === "expense" && isFotCategory(t.category)).forEach((t: any) => {
       rows.push({
         id: t.id,
         date: getTxDate(t),
@@ -203,14 +202,14 @@ export function FinancesFranchisee() {
 
   // Cash vs Card breakdown
   const revenueCash = transactions
-    .filter((t: any) => (t.type === "income" || (!t.type && !t.category)) && (t.paymentMethod === "cash" || !t.paymentMethod))
+    .filter((t: any) => t.type === "income" && (t.paymentMethod === "cash" || !t.paymentMethod))
     .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
   const revenueCard = transactions
-    .filter((t: any) => (t.type === "income" || (!t.type && !t.category)) && t.paymentMethod === "card")
+    .filter((t: any) => t.type === "income" && t.paymentMethod === "card")
     .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
 
   // Royalty
-  const royaltyPercent = franchiseeInfo?.royaltyPercent ?? 10
+  const royaltyPercent = franchiseeInfo?.royaltyPercent ?? 0
   const royaltyCalculated = Math.round(revenue * royaltyPercent / 100)
   const royalty = isOwnPoint ? 0 : royaltyCalculated
 
@@ -234,9 +233,9 @@ export function FinancesFranchisee() {
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
     const existing = monthlyData.get(monthKey) || { revenue: 0, expenses: 0, fot: 0 }
     const amt = Number(t.amount) || 0
-    if (t.type === "income" || (!t.type && !t.category)) {
+    if (t.type === "income") {
       monthlyData.set(monthKey, { ...existing, revenue: existing.revenue + amt })
-    } else if (t.type === "expense" && t.category === "fot") {
+    } else if (t.type === "expense" && isFotCategory(t.category)) {
       monthlyData.set(monthKey, { ...existing, fot: existing.fot + amt })
     } else if (t.type === "expense") {
       monthlyData.set(monthKey, { ...existing, expenses: existing.expenses + amt })
