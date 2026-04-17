@@ -608,7 +608,7 @@ export function MessagingSection() {
             </div>
 
             {/* Input area — fixed at bottom */}
-            <div className="flex-shrink-0 px-2 sm:px-3 py-2 border-t border-border bg-card safe-bottom">
+            <div className="flex-shrink-0 px-3 sm:px-4 pt-2 pb-4 border-t border-border bg-card safe-bottom">
               <div className="flex items-end gap-1.5">
                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
 
