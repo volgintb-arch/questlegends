@@ -230,6 +230,7 @@ export function GameCreateModal({
                   <input
                     type="date"
                     value={formData.gameDate}
+                    min={(() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().split("T")[0] })()}
                     onChange={(e) => setFormData({ ...formData, gameDate: e.target.value })}
                     className="w-full bg-background border border-border rounded pl-7 pr-2 py-1.5 text-xs outline-none focus:border-primary"
                     required

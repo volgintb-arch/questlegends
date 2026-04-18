@@ -101,6 +101,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           value = null
         }
 
+        // Validate gameDate: not earlier than 3 months ago
+        if (field === "gameDate" && value) {
+          const minDate = new Date()
+          minDate.setMonth(minDate.getMonth() - 3)
+          if (new Date(value) < minDate) {
+            return NextResponse.json({ error: "Дата игры не может быть раньше чем 3 месяца назад" }, { status: 400 })
+          }
+        }
+
         const oldValue = currentGame[field]
         if (oldValue !== value && field !== "stageId") {
           await sql`
@@ -124,7 +133,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           await sql`UPDATE "GameLead" SET "gameDate" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
 
           const scheduleUpdateResult = await sql`
-            UPDATE "GameSchedule" 
+            UPDATE "GameSchedule"
             SET "gameDate" = ${value}
             WHERE "leadId" = ${id}
             RETURNING id, "gameDate", "leadId"
@@ -133,6 +142,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             `[v0] Synced gameDate to GameSchedule: ${scheduleUpdateResult.length} rows updated`,
             scheduleUpdateResult,
           )
+
+          // Sync date to linked Transactions so financial reports reflect the correct period
+          const txUpdateResult = await sql`
+            UPDATE "Transaction"
+            SET date = ${value}, "paymentDate" = ${value}
+            WHERE "gameLeadId" = ${id}
+            RETURNING id
+          `
+          if (txUpdateResult.length > 0) {
+            console.log(`[v0] Synced gameDate to ${txUpdateResult.length} Transactions for lead ${id}`)
+          }
         } else if (field === "gameTime") {
           await sql`UPDATE "GameLead" SET "gameTime" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
 

@@ -151,6 +151,15 @@ export async function POST(req: NextRequest) {
       paymentMethod,
     } = body
 
+    // Validate gameDate: not earlier than 3 months ago
+    if (gameDate) {
+      const minDate = new Date()
+      minDate.setMonth(minDate.getMonth() - 3)
+      if (new Date(gameDate) < minDate) {
+        return NextResponse.json({ error: "Дата игры не может быть раньше чем 3 месяца назад" }, { status: 400 })
+      }
+    }
+
     if (!clientName || !pipelineId || !stageId || !franchiseeId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { TrendingUp, TrendingDown, RussianRuble, Settings, X, Check, Download, Calendar, Building2 } from "lucide-react"
+import { TrendingUp, TrendingDown, RussianRuble, Settings, X, Check, Download, Calendar, Building2, Filter } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -39,6 +39,26 @@ interface FranchiseFinancialViewProps {
   searchTerm?: string
 }
 
+function getMonthRange(offset = 0) {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)
+  return { from: start.toISOString().split("T")[0], to: end.toISOString().split("T")[0] }
+}
+
+function getQuarterRange() {
+  const now = new Date()
+  const qStart = Math.floor(now.getMonth() / 3) * 3
+  const start = new Date(now.getFullYear(), qStart, 1)
+  const end = new Date(now.getFullYear(), qStart + 3, 0)
+  return { from: start.toISOString().split("T")[0], to: end.toISOString().split("T")[0] }
+}
+
+function getYearRange() {
+  const now = new Date()
+  return { from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` }
+}
+
 export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialViewProps) {
   const [sortBy, setSortBy] = useState<"revenue" | "profit">("revenue")
   const [franchiseData, setFranchiseData] = useState<FranchiseFinance[]>([])
@@ -52,8 +72,24 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
 
   // Filters
   const [selectedFranchiseId, setSelectedFranchiseId] = useState<string>("all")
-  const [dateFrom, setDateFrom] = useState("")
-  const [dateTo, setDateTo] = useState("")
+  const [datePreset, setDatePreset] = useState("current-month")
+  const [dateFrom, setDateFrom] = useState(getMonthRange().from)
+  const [dateTo, setDateTo] = useState(getMonthRange().to)
+
+  const handlePresetChange = (preset: string) => {
+    setDatePreset(preset)
+    if (preset === "current-month") {
+      const r = getMonthRange(0); setDateFrom(r.from); setDateTo(r.to)
+    } else if (preset === "last-month") {
+      const r = getMonthRange(-1); setDateFrom(r.from); setDateTo(r.to)
+    } else if (preset === "quarter") {
+      const r = getQuarterRange(); setDateFrom(r.from); setDateTo(r.to)
+    } else if (preset === "year") {
+      const r = getYearRange(); setDateFrom(r.from); setDateTo(r.to)
+    } else if (preset === "all") {
+      setDateFrom(""); setDateTo("")
+    }
+  }
 
   // Previous period data for dynamics
   const [prevPeriodData, setPrevPeriodData] = useState<{ revenue: number; royalty: number; expenses: number; profit: number } | null>(null)
@@ -346,59 +382,84 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
   return (
     <div className="space-y-6">
       {/* Filters row */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 bg-card border border-border rounded-lg p-4">
-        <div className="flex flex-col gap-1 min-w-[200px]">
-          <label className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3" /> Франшиза</label>
-          <Select value={selectedFranchiseId} onValueChange={setSelectedFranchiseId}>
-            <SelectTrigger className="bg-background">
-              <SelectValue placeholder="Все франшизы" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все франшизы</SelectItem>
-              {franchiseData.map((f) => (
-                <SelectItem key={f.id} value={f.id}>{f.name} — {f.location}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+        {/* Preset date buttons */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <Filter className="w-4 h-4 text-muted-foreground" />
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { value: "current-month", label: "Текущий месяц" },
+              { value: "last-month", label: "Прошлый месяц" },
+              { value: "quarter", label: "Квартал" },
+              { value: "year", label: "Год" },
+              { value: "all", label: "Всё время" },
+            ].map((p) => (
+              <button
+                key={p.value}
+                onClick={() => handlePresetChange(p.value)}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                  datePreset === p.value
+                    ? "bg-primary text-white"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setDatePreset("custom") }}
+              max={dateTo || ""}
+              className="px-2 py-1.5 bg-background border border-border rounded-lg text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <span className="text-xs text-muted-foreground">—</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setDatePreset("custom") }}
+              min={dateFrom || ""}
+              className="px-2 py-1.5 bg-background border border-border rounded-lg text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> От</label>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            max={dateTo || ""}
-            className="bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-primary h-9"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> До</label>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            min={dateFrom || ""}
-            className="bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-primary h-9"
-          />
-        </div>
-        {(dateFrom || dateTo || selectedFranchiseId !== "all") && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => { setDateFrom(""); setDateTo(""); setSelectedFranchiseId("all") }}
-            className="text-muted-foreground h-9"
-          >
-            <X className="w-4 h-4 mr-1" /> Сбросить
-          </Button>
-        )}
-        <div className="sm:ml-auto">
-          <Button variant="outline" size="sm" className="gap-2 bg-transparent h-9" onClick={() => {
-            const selected = selectedFranchiseId !== "all" ? franchiseData.find(f => f.id === selectedFranchiseId) : undefined
-            exportFranchiseExcel(selected)
-          }}>
-            <Download className="w-4 h-4" />
-            Экспорт Excel
-          </Button>
+        {/* Franchise selector + export */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+          <div className="flex flex-col gap-1 min-w-[200px]">
+            <label className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3" /> Франшиза</label>
+            <Select value={selectedFranchiseId} onValueChange={setSelectedFranchiseId}>
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Все франшизы" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все франшизы</SelectItem>
+                {franchiseData.map((f) => (
+                  <SelectItem key={f.id} value={f.id}>{f.name} — {f.location}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedFranchiseId !== "all" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedFranchiseId("all")}
+              className="text-muted-foreground h-9"
+            >
+              <X className="w-4 h-4 mr-1" /> Сбросить
+            </Button>
+          )}
+          <div className="sm:ml-auto">
+            <Button variant="outline" size="sm" className="gap-2 bg-transparent h-9" onClick={() => {
+              const selected = selectedFranchiseId !== "all" ? franchiseData.find(f => f.id === selectedFranchiseId) : undefined
+              exportFranchiseExcel(selected)
+            }}>
+              <Download className="w-4 h-4" />
+              Экспорт Excel
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -729,6 +729,7 @@ export function GameCardFranchisee({
                   <Input
                     type="date"
                     value={gameData.gameDate?.split("T")[0] || ""}
+                    min={(() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().split("T")[0] })()}
                     onChange={(e) => setGameData({ ...gameData, gameDate: e.target.value })}
                     onBlur={(e) => handleSaveField("gameDate", e.target.value)}
                     className="h-7 text-xs"
