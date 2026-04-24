@@ -27,7 +27,11 @@ export async function GET(req: NextRequest) {
     const type = sp.get("type") || "all"
 
     const isUK = ["uk", "super_admin", "uk_employee"].includes(user.role)
-    const franchiseeFilter = isUK ? null : user.franchiseeId || null
+    const franchiseeParam = sp.get("franchiseeId")
+    // UK can filter by specific franchisee via query param; others forced to their own
+    const franchiseeFilter = isUK
+      ? (franchiseeParam && franchiseeParam !== "all" ? franchiseeParam : null)
+      : user.franchiseeId || null
 
     const srcFilter = source === "all" ? null : source
     const df = dateFrom ? new Date(dateFrom) : null

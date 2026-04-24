@@ -30,11 +30,10 @@ interface Summary {
   }
 }
 
-function getMonthRange() {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth(), 1)
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return { from: start.toISOString().split("T")[0], to: end.toISOString().split("T")[0] }
+interface Franchisee {
+  id: string
+  name: string
+  city?: string
 }
 
 const STATUS_LABEL = {
@@ -50,17 +49,37 @@ const STATUS_COLOR = {
 }
 
 export function MarketingLeadsReport() {
-  const { getAuthHeaders } = useAuth()
+  const { user, getAuthHeaders } = useAuth()
+  const isUK = user?.role === "uk" || user?.role === "super_admin" || user?.role === "uk_employee"
+
   const [leads, setLeads] = useState<Lead[]>([])
   const [summary, setSummary] = useState<Summary>({})
   const [sources, setSources] = useState<string[]>([])
+  const [franchisees, setFranchisees] = useState<Franchisee[]>([])
   const [loading, setLoading] = useState(true)
 
   const [source, setSource] = useState("all")
-  const [type, setType] = useState<"all" | "b2b" | "b2c">("all")
+  // Franchisees/own_point can only see their own B2C leads
+  const [type, setType] = useState<"all" | "b2b" | "b2c">(isUK ? "all" : "b2c")
   const [status, setStatus] = useState<"all" | "confirmed" | "in_progress" | "cancelled">("all")
-  const [dateFrom, setDateFrom] = useState(getMonthRange().from)
-  const [dateTo, setDateTo] = useState(getMonthRange().to)
+  const [franchiseeId, setFranchiseeId] = useState<string>("all")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+
+  useEffect(() => {
+    if (!isUK) return
+    ;(async () => {
+      try {
+        const res = await fetch("/api/franchisees", { headers: getAuthHeaders() })
+        if (res.ok) {
+          const data = await res.json()
+          setFranchisees(Array.isArray(data) ? data : data.data || [])
+        }
+      } catch (e) {
+        console.error("Failed to load franchisees:", e)
+      }
+    })()
+  }, [isUK]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadReport = async () => {
     setLoading(true)
@@ -70,6 +89,7 @@ export function MarketingLeadsReport() {
       if (dateFrom) params.set("dateFrom", dateFrom)
       if (dateTo) params.set("dateTo", dateTo)
       if (type !== "all") params.set("type", type)
+      if (isUK && franchiseeId !== "all") params.set("franchiseeId", franchiseeId)
 
       const res = await fetch(`/api/marketing/leads-report?${params}`, { headers: getAuthHeaders() })
       if (res.ok) {
@@ -88,7 +108,7 @@ export function MarketingLeadsReport() {
   useEffect(() => {
     loadReport()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, type, dateFrom, dateTo])
+  }, [source, type, dateFrom, dateTo, franchiseeId])
 
   const filteredLeads = useMemo(() => {
     if (status === "all") return leads
@@ -110,7 +130,6 @@ export function MarketingLeadsReport() {
   const exportExcel = () => {
     const wb = XLSX.utils.book_new()
 
-    // Sheet 1: Summary by source
     const summaryRows = Object.entries(summary)
       .sort((a, b) => b[1].total - a[1].total)
       .map(([src, s]) => ({
@@ -126,7 +145,6 @@ export function MarketingLeadsReport() {
     summarySheet["!cols"] = [{ wch: 25 }, { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 15 }]
     XLSX.utils.book_append_sheet(wb, summarySheet, "Сводка")
 
-    // Sheet 2: Full leads list
     const leadsRows = filteredLeads.map((l) => ({
       Тип: l.kind === "b2b" ? "B2B" : "B2C",
       Клиент: l.clientName,
@@ -146,8 +164,8 @@ export function MarketingLeadsReport() {
     ]
     XLSX.utils.book_append_sheet(wb, leadsSheet, "Лиды")
 
-    const periodStr = `${dateFrom}_${dateTo}`
-    XLSX.writeFile(wb, `Сводка_по_рекламе_${periodStr}.xlsx`)
+    const periodStr = dateFrom && dateTo ? `_${dateFrom}_${dateTo}` : "_все_время"
+    XLSX.writeFile(wb, `Сводка_по_рекламе${periodStr}.xlsx`)
   }
 
   return (
@@ -198,15 +216,33 @@ export function MarketingLeadsReport() {
             ))}
           </select>
 
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as any)}
-            className="h-8 px-2 text-xs bg-background border border-border rounded outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="all">B2B + B2C</option>
-            <option value="b2c">Только B2C (игры)</option>
-            <option value="b2b">Только B2B (франшиза)</option>
-          </select>
+          {isUK && (
+            <>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as any)}
+                className="h-8 px-2 text-xs bg-background border border-border rounded outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="all">B2B + B2C</option>
+                <option value="b2c">Только B2C (игры)</option>
+                <option value="b2b">Только B2B (франшиза)</option>
+              </select>
+
+              <select
+                value={franchiseeId}
+                onChange={(e) => setFranchiseeId(e.target.value)}
+                className="h-8 px-2 text-xs bg-background border border-border rounded outline-none focus:ring-2 focus:ring-primary max-w-[200px]"
+              >
+                <option value="all">Все франчайзи</option>
+                {franchisees.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                    {f.city ? ` — ${f.city}` : ""}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
           <select
             value={status}
@@ -233,6 +269,15 @@ export function MarketingLeadsReport() {
               onChange={(e) => setDateTo(e.target.value)}
               className="h-8 px-2 text-xs bg-background border border-border rounded outline-none focus:ring-2 focus:ring-primary"
             />
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(""); setDateTo("") }}
+                className="text-xs text-muted-foreground hover:text-foreground px-1"
+                title="Сбросить даты"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -328,10 +373,11 @@ export function MarketingLeadsReport() {
           <table className="w-full text-xs">
             <thead className="bg-muted/30">
               <tr>
-                <th className="text-left px-3 py-2 font-medium">Тип</th>
+                {isUK && <th className="text-left px-3 py-2 font-medium">Тип</th>}
                 <th className="text-left px-3 py-2 font-medium">Клиент</th>
                 <th className="text-left px-3 py-2 font-medium">Телефон</th>
                 <th className="text-left px-3 py-2 font-medium">Источник</th>
+                {isUK && <th className="text-left px-3 py-2 font-medium">Франчайзи</th>}
                 <th className="text-left px-3 py-2 font-medium">Создан</th>
                 <th className="text-left px-3 py-2 font-medium">Этап</th>
                 <th className="text-left px-3 py-2 font-medium">Статус</th>
@@ -342,33 +388,36 @@ export function MarketingLeadsReport() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <td colSpan={isUK ? 10 : 8} className="text-center py-8 text-muted-foreground">
                     Загрузка...
                   </td>
                 </tr>
               ) : filteredLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <td colSpan={isUK ? 10 : 8} className="text-center py-8 text-muted-foreground">
                     Нет лидов за выбранный период
                   </td>
                 </tr>
               ) : (
                 filteredLeads.map((l) => (
                   <tr key={`${l.kind}-${l.id}`} className="border-t border-border hover:bg-muted/20">
-                    <td className="px-3 py-2">
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                          l.kind === "b2b"
-                            ? "text-purple-500 bg-purple-500/10 border-purple-500/20"
-                            : "text-cyan-500 bg-cyan-500/10 border-cyan-500/20"
-                        }`}
-                      >
-                        {l.kind === "b2b" ? "B2B" : "B2C"}
-                      </span>
-                    </td>
+                    {isUK && (
+                      <td className="px-3 py-2">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                            l.kind === "b2b"
+                              ? "text-purple-500 bg-purple-500/10 border-purple-500/20"
+                              : "text-cyan-500 bg-cyan-500/10 border-cyan-500/20"
+                          }`}
+                        >
+                          {l.kind === "b2b" ? "B2B" : "B2C"}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-3 py-2 font-medium">{l.clientName}</td>
                     <td className="px-3 py-2 text-muted-foreground">{l.clientPhone || "—"}</td>
                     <td className="px-3 py-2">{l.source || "—"}</td>
+                    {isUK && <td className="px-3 py-2 text-muted-foreground">{l.franchiseeName || "—"}</td>}
                     <td className="px-3 py-2 text-muted-foreground">
                       {new Date(l.createdAt).toLocaleDateString("ru-RU")}
                     </td>
