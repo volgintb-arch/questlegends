@@ -238,6 +238,8 @@ model Deal {
   pipelineId      String?
   stageId         String?
 
+  cancellationReason String?
+
   responsibleId   String?
   responsible     User?     @relation("DealResponsible", fields: [responsibleId], references: [id])
 
@@ -724,6 +726,8 @@ model GameLead {
   extras          String?
   extrasAmount    Int      @default(0)
   paymentMethod   String?
+
+  cancellationReason String?
 
   responsibleId   String?
   pipelineId      String

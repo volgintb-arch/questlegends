@@ -339,13 +339,35 @@ export function PipelineSettings({ onPipelineCreated }: PipelineSettingsProps) {
       {selectedPipeline && (
         <Card>
           <CardHeader className="py-2 px-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xs font-medium">Этапы: {selectedPipeline.name}</CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground shrink-0">Название:</span>
+              <Input
+                value={selectedPipeline.name}
+                onChange={(e) => setSelectedPipeline({ ...selectedPipeline, name: e.target.value })}
+                onBlur={async (e) => {
+                  const trimmed = e.target.value.trim()
+                  if (!trimmed || trimmed === pipelines.find((p) => p.id === selectedPipeline.id)?.name) return
+                  try {
+                    const res = await fetch(`/api/pipelines/${selectedPipeline.id}`, {
+                      method: "PATCH",
+                      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+                      body: JSON.stringify({ name: trimmed }),
+                    })
+                    if (res.ok) {
+                      setPipelines((prev) => prev.map((p) => (p.id === selectedPipeline.id ? { ...p, name: trimmed } : p)))
+                    }
+                  } catch (err) {
+                    console.error("Error renaming pipeline:", err)
+                  }
+                }}
+                disabled={!canManage}
+                className="h-7 text-xs flex-1"
+              />
               {canManage && !selectedPipeline.isDefault && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0 text-destructive"
+                  className="h-6 w-6 p-0 text-destructive shrink-0"
                   onClick={() => deletePipeline(selectedPipeline.id)}
                 >
                   <Trash2 className="h-3 w-3" />

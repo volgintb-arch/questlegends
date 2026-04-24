@@ -83,6 +83,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       "djRate",
       "extras",
       "extrasAmount",
+      "cancellationReason",
     ]
 
     const oldPrepayment =
@@ -230,6 +231,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           await sql`UPDATE "GameLead" SET "djsCount" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "djRate") {
           await sql`UPDATE "GameLead" SET "djRate" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "cancellationReason") {
+          await sql`UPDATE "GameLead" SET "cancellationReason" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
         }
       }
     }

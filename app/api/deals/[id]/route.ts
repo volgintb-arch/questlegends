@@ -231,6 +231,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       await sql`UPDATE "Deal" SET "pipelineId" = ${body.pipelineId}, "updatedAt" = NOW() WHERE id = ${id}`
       changedFields.push("pipelineId")
     }
+    if (body.cancellationReason !== undefined) {
+      await sql`UPDATE "Deal" SET "cancellationReason" = ${body.cancellationReason || null}, "updatedAt" = NOW() WHERE id = ${id}`
+      changedFields.push("cancellationReason")
+    }
 
     // Log field changes if any
     if (changedFields.length > 0) {

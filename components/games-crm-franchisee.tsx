@@ -13,6 +13,7 @@ import { GameCardFranchisee } from "@/components/game-card-franchisee"
 import { GameCreateModal } from "@/components/game-create-modal"
 import { GamePipelineSettings } from "@/components/game-pipeline-settings"
 import { GameLogsModal } from "@/components/game-logs-modal"
+import { CancellationReasonModal } from "@/components/cancellation-reason-modal"
 
 interface Pipeline {
   id: string
@@ -278,16 +279,21 @@ export function GamesCRMFranchisee() {
     }
   }
 
-  const handleLeadMove = async (leadId: string, newStageId: string) => {
+  const [pendingCancellation, setPendingCancellation] = useState<{ leadId: string; stageId: string; clientName: string } | null>(null)
+
+  const performLeadMove = async (leadId: string, newStageId: string, cancellationReason?: string) => {
     const headers = getAuthHeaders()
 
     setLeads((prev) => prev.map((lead) => (lead.id === leadId ? { ...lead, stageId: newStageId } : lead)))
 
     try {
+      const body: Record<string, any> = { stageId: newStageId }
+      if (cancellationReason !== undefined) body.cancellationReason = cancellationReason
+
       const response = await fetch(`/api/game-leads/${leadId}`, {
         method: "PATCH",
         headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ stageId: newStageId }),
+        body: JSON.stringify(body),
       })
 
       if (response.ok) {
@@ -300,6 +306,16 @@ export function GamesCRMFranchisee() {
       console.error("[v0] CRM: Error moving lead:", error)
       await loadData()
     }
+  }
+
+  const handleLeadMove = async (leadId: string, newStageId: string) => {
+    const stage = stages.find((s) => s.id === newStageId)
+    if (stage?.stageType === "cancelled") {
+      const lead = leads.find((l) => l.id === leadId)
+      setPendingCancellation({ leadId, stageId: newStageId, clientName: lead?.clientName || "" })
+      return
+    }
+    await performLeadMove(leadId, newStageId)
   }
 
   const handleCreateLead = async () => {
@@ -669,6 +685,20 @@ export function GamesCRMFranchisee() {
       </Dialog>
 
       <GameLogsModal isOpen={isLogsOpen} onClose={() => setIsLogsOpen(false)} />
+
+      <CancellationReasonModal
+        open={!!pendingCancellation}
+        clientName={pendingCancellation?.clientName}
+        onConfirm={async (reason) => {
+          if (!pendingCancellation) return
+          await performLeadMove(pendingCancellation.leadId, pendingCancellation.stageId, reason)
+          setPendingCancellation(null)
+        }}
+        onCancel={() => {
+          setPendingCancellation(null)
+          loadData()
+        }}
+      />
     </div>
   )
 }

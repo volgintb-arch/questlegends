@@ -121,6 +121,7 @@ interface GameData {
   extras?: string
   extrasAmount?: number
   paymentMethod?: string
+  cancellationReason?: string
 }
 
 interface PipelineStage {
@@ -187,6 +188,7 @@ export function GameCardFranchisee({
     extras: safeGame.extras || "",
     extrasAmount: safeGame.extrasAmount ?? 0,
     paymentMethod: safeGame.paymentMethod || "cash",
+    cancellationReason: safeGame.cancellationReason || "",
   })
   const [events, setEvents] = useState<FeedEvent[]>([])
   const [tasks, setTasks] = useState<GameTask[]>([])
@@ -241,6 +243,7 @@ export function GameCardFranchisee({
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
+        cancellationReason: game.cancellationReason || "",
       })
       // Renamed loadGameDetails to loadGameData to match the updates
       loadGameData()
@@ -281,6 +284,7 @@ export function GameCardFranchisee({
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
+        cancellationReason: game.cancellationReason || "",
       })
     }
   }, [game])
@@ -321,6 +325,7 @@ export function GameCardFranchisee({
             extras: data.data.extras || "",
             extrasAmount: data.data.extrasAmount ?? 0,
             paymentMethod: data.data.paymentMethod || "cash",
+            cancellationReason: data.data.cancellationReason || "",
           })
         }
       }
@@ -1183,6 +1188,25 @@ export function GameCardFranchisee({
                 className="text-xs min-h-[60px]"
               />
             </div>
+
+            {/* Cancellation reason */}
+            {(() => {
+              const currentStage = stages.find((s) => s.id === gameData.stageId)
+              const isCancelled = currentStage?.stageType === "cancelled"
+              if (!isCancelled && !gameData.cancellationReason) return null
+              return (
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-red-500 uppercase">Причина отказа</label>
+                  <Textarea
+                    value={gameData.cancellationReason || ""}
+                    onChange={(e) => setGameData({ ...gameData, cancellationReason: e.target.value })}
+                    onBlur={(e) => handleSaveField("cancellationReason", e.target.value)}
+                    placeholder="Почему отказ — для отчётности по источникам..."
+                    className="text-xs min-h-[50px] border-red-500/30"
+                  />
+                </div>
+              )
+            })()}
           </div>
 
           {/* Resizer */}

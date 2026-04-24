@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import type { DealData, Employee } from "./types"
+import type { DealData, Employee, PipelineStage } from "./types"
 
 interface FinancialInfoProps {
   dealData: DealData
@@ -17,6 +17,7 @@ interface FinancialInfoProps {
   employees: Employee[]
   responsibleUsers: string[]
   toggleResponsibleUser: (userId: string) => void
+  stages?: PipelineStage[]
 }
 
 function EditableNumberField({
@@ -87,7 +88,10 @@ export function FinancialInfo({
   employees,
   responsibleUsers,
   toggleResponsibleUser,
+  stages = [],
 }: FinancialInfoProps) {
+  const currentStage = stages.find((s) => s.id === dealData.stageId)
+  const isCancelled = currentStage?.stageType === "cancelled"
   const numFieldProps = { dealData, setDealData, editingField, setEditingField, saveDeal }
 
   return (
@@ -175,6 +179,34 @@ export function FinancialInfo({
             </div>
           )}
         </div>
+
+        {/* Cancellation Reason */}
+        {(isCancelled || dealData.cancellationReason) && (
+          <div className="space-y-1">
+            <label className="text-[10px] font-medium text-red-500">Причина отказа</label>
+            {editingField === "cancellationReason" ? (
+              <Textarea
+                className="text-xs min-h-[50px] border-red-500/30"
+                value={dealData.cancellationReason || ""}
+                onChange={(e) => setDealData({ ...dealData, cancellationReason: e.target.value })}
+                onBlur={() => {
+                  setEditingField(null)
+                  saveDeal({ cancellationReason: dealData.cancellationReason })
+                }}
+                autoFocus
+              />
+            ) : (
+              <div
+                className="p-1.5 bg-red-500/5 border border-red-500/20 rounded cursor-pointer hover:bg-red-500/10 transition-colors text-xs min-h-[40px]"
+                onClick={() => setEditingField("cancellationReason")}
+              >
+                <span className={dealData.cancellationReason ? "text-foreground" : "text-muted-foreground"}>
+                  {dealData.cancellationReason || "Укажите причину отказа..."}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

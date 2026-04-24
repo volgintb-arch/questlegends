@@ -397,6 +397,7 @@ export function DealCardAmoCRM({ deal, isOpen, onClose, onUpdate, stages = [] }:
                 employees={employees}
                 responsibleUsers={responsibleUsers}
                 toggleResponsibleUser={toggleResponsibleUser}
+                stages={stages}
               />
               <TasksSection
                 tasks={tasks}

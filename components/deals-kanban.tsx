@@ -8,6 +8,7 @@ import { DealCardAmoCRM } from "./deals/DealCard"
 import { DealCreateModal } from "./deal-create-modal"
 import { PipelineSettings } from "./pipeline-settings"
 import { CrmLogsModal } from "./crm-logs-modal"
+import { CancellationReasonModal } from "./cancellation-reason-modal"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -242,6 +243,56 @@ export function DealsKanban({ role }: DealsKanbanProps) {
     }
   }, [searchParams, user])
 
+  const [pendingDealCancellation, setPendingDealCancellation] = useState<{
+    sourceId: string
+    destId: string
+    dealId: string
+    destIndex: number
+    clientName: string
+  } | null>(null)
+
+  const performDealMove = async (
+    sourceId: string,
+    destId: string,
+    dealId: string,
+    destIndex: number,
+    cancellationReason?: string,
+  ) => {
+    if (!selectedPipeline) return
+
+    const newBoardData = { ...boardData }
+    const srcList = newBoardData[sourceId] || []
+    const idx = srcList.findIndex((d) => d.id === dealId)
+    if (idx >= 0) {
+      const [movedDeal] = srcList.splice(idx, 1)
+      movedDeal.stageId = destId
+      if (!newBoardData[destId]) newBoardData[destId] = []
+      newBoardData[destId].splice(destIndex, 0, movedDeal)
+      setBoardData(newBoardData)
+    }
+
+    try {
+      const body: Record<string, any> = {
+        stageId: destId,
+        stage: selectedPipeline.stages.find((s) => s.id === destId)?.name,
+      }
+      if (cancellationReason !== undefined) body.cancellationReason = cancellationReason
+
+      await fetch(`/api/deals/${dealId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(body),
+      })
+
+      fetchCrmStats(selectedPipeline.id)
+    } catch (error) {
+      console.error("Error updating deal stage:", error)
+    }
+  }
+
   const handleDragEnd = async (
     sourceId: string,
     destId: string,
@@ -251,29 +302,20 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   ) => {
     if (!selectedPipeline) return
 
-    const newBoardData = { ...boardData }
-    const [movedDeal] = newBoardData[sourceId].splice(sourceIndex, 1)
-    movedDeal.stageId = destId
-    newBoardData[destId].splice(destIndex, 0, movedDeal)
-    setBoardData(newBoardData)
-
-    try {
-      await fetch(`/api/deals/${dealId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-        body: JSON.stringify({
-          stageId: destId,
-          stage: selectedPipeline.stages.find((s) => s.id === destId)?.name,
-        }),
+    const destStage = selectedPipeline.stages.find((s) => s.id === destId)
+    if (destStage?.stageType === "cancelled") {
+      const deal = boardData[sourceId]?.find((d) => d.id === dealId)
+      setPendingDealCancellation({
+        sourceId,
+        destId,
+        dealId,
+        destIndex,
+        clientName: deal?.title || deal?.clientName || "",
       })
-
-      fetchCrmStats(selectedPipeline.id)
-    } catch (error) {
-      console.error("Error updating deal stage:", error)
+      return
     }
+
+    await performDealMove(sourceId, destId, dealId, destIndex)
   }
 
   const handleViewDeal = async (dealId: string) => {
@@ -754,6 +796,22 @@ export function DealsKanban({ role }: DealsKanbanProps) {
       )}
 
       {showLogsModal && <CrmLogsModal isOpen={showLogsModal} onClose={() => setShowLogsModal(false)} />}
+
+      <CancellationReasonModal
+        open={!!pendingDealCancellation}
+        clientName={pendingDealCancellation?.clientName}
+        onConfirm={async (reason) => {
+          if (!pendingDealCancellation) return
+          const p = pendingDealCancellation
+          setPendingDealCancellation(null)
+          await performDealMove(p.sourceId, p.destId, p.dealId, p.destIndex, reason)
+        }}
+        onCancel={() => {
+          setPendingDealCancellation(null)
+          // Trigger re-fetch by toggling selectedPipeline reference
+          if (selectedPipeline) setSelectedPipeline({ ...selectedPipeline })
+        }}
+      />
     </div>
   )
 }

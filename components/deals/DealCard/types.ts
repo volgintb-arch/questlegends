@@ -54,6 +54,7 @@ export interface DealData {
   investmentAmount?: number
   leadSource?: string
   additionalComment?: string
+  cancellationReason?: string
 }
 
 export interface PipelineStage {
@@ -61,6 +62,7 @@ export interface PipelineStage {
   name: string
   color: string
   order: number
+  stageType?: string
 }
 
 export interface DealCardAmoCRMProps {
