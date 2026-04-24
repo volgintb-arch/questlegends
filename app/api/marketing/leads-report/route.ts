@@ -54,8 +54,21 @@ export async function GET(req: NextRequest) {
 
     const rows: Row[] = []
 
+    // Check if cancellationReason column exists (may be missing if migration wasn't applied)
+    const hasGameCancelCol = await sql`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'GameLead' AND column_name = 'cancellationReason'
+      LIMIT 1
+    `
+    const hasDealCancelCol = await sql`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'Deal' AND column_name = 'cancellationReason'
+      LIMIT 1
+    `
+
     // B2C — GameLead
     if (type === "all" || type === "b2c") {
+      const cancelSelect = hasGameCancelCol.length > 0 ? `gl."cancellationReason"` : `NULL`
       const leads = await sql`
         SELECT
           gl.id,
@@ -64,7 +77,7 @@ export async function GET(req: NextRequest) {
           gl.source AS source,
           gl."createdAt" AS "createdAt",
           gl."totalAmount" AS amount,
-          gl."cancellationReason" AS "cancellationReason",
+          ${sql.unsafe(cancelSelect)} AS "cancellationReason",
           s.name AS "stageName",
           s."stageType" AS "stageType",
           f.name AS "franchiseeName"
@@ -100,6 +113,7 @@ export async function GET(req: NextRequest) {
 
     // B2B — Deal
     if (type === "all" || type === "b2b") {
+      const cancelSelect = hasDealCancelCol.length > 0 ? `d."cancellationReason"` : `NULL`
       const deals = await sql`
         SELECT
           d.id,
@@ -108,7 +122,7 @@ export async function GET(req: NextRequest) {
           COALESCE(d."leadSource", d.source) AS source,
           d."createdAt" AS "createdAt",
           COALESCE(d.budget, 0) AS amount,
-          d."cancellationReason" AS "cancellationReason",
+          ${sql.unsafe(cancelSelect)} AS "cancellationReason",
           s.name AS "stageName",
           s."stageType" AS "stageType",
           f.name AS "franchiseeName"
