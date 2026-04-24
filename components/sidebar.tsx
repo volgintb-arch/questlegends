@@ -18,6 +18,7 @@ import {
   Building2,
   ScrollText,
   Phone,
+  Megaphone,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -54,6 +55,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         label: "Интеграции",
         icon: Share2,
         path: "/social-integrations",
+        module: "canViewDashboard" as const,
+      },
+      {
+        id: "marketing",
+        label: "Маркетинг",
+        icon: Megaphone,
+        path: "/marketing",
         module: "canViewDashboard" as const,
       },
       {
@@ -108,6 +116,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewDashboard" as const,
       },
       {
+        id: "marketing",
+        label: "Маркетинг",
+        icon: Megaphone,
+        path: "/marketing",
+        module: "canViewDashboard" as const,
+      },
+      {
         id: "telephony",
         label: "Телефония",
         icon: Phone,
@@ -148,6 +163,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         label: "Интеграции",
         icon: Share2,
         path: "/social-integrations",
+        module: "canViewDashboard" as const,
+      },
+      {
+        id: "marketing",
+        label: "Маркетинг",
+        icon: Megaphone,
+        path: "/marketing",
         module: "canViewDashboard" as const,
       },
       {
@@ -192,6 +214,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         label: "Интеграции",
         icon: Share2,
         path: "/social-integrations",
+        module: "canViewDashboard" as const,
+      },
+      {
+        id: "marketing",
+        label: "Маркетинг",
+        icon: Megaphone,
+        path: "/marketing",
         module: "canViewDashboard" as const,
       },
       {
