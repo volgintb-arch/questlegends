@@ -195,10 +195,20 @@ export async function getLogStats(days = 7) {
  * Удалить старые логи (старше N дней)
  */
 export async function cleanOldLogs(daysToKeep = 30): Promise<number> {
+  // daysToKeep === 0 — wipe ALL logs
+  if (daysToKeep <= 0) {
+    const result = await sql`DELETE FROM "AppLog" RETURNING id`
+    return result.length
+  }
   const result = await sql`
     DELETE FROM "AppLog"
     WHERE "createdAt" < NOW() - ${daysToKeep + ' days'}::interval
     RETURNING id
   `
   return result.length
+}
+
+export async function deleteAppLog(id: string): Promise<boolean> {
+  const result = await sql`DELETE FROM "AppLog" WHERE id = ${id} RETURNING id`
+  return result.length > 0
 }

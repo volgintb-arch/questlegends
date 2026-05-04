@@ -6,7 +6,7 @@
 
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
-import { getAppLogs, getLogStats, logApp, cleanOldLogs, type LogLevel, type LogSource } from "@/lib/app-logger"
+import { getAppLogs, getLogStats, logApp, cleanOldLogs, deleteAppLog, type LogLevel, type LogSource } from "@/lib/app-logger"
 
 export async function GET(request: NextRequest) {
   try {
@@ -68,6 +68,24 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("[AppLogs API] Error:", error)
     return NextResponse.json({ error: "Failed to fetch logs" }, { status: 500 })
+  }
+}
+
+// DELETE — удалить одну запись лога (super_admin/uk only)
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await verifyRequest(request)
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (user.role !== "super_admin" && user.role !== "uk") {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 })
+    }
+    const id = request.nextUrl.searchParams.get("id")
+    if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 })
+    const ok = await deleteAppLog(id)
+    return NextResponse.json({ success: ok })
+  } catch (error) {
+    console.error("[AppLogs API] DELETE error:", error)
+    return NextResponse.json({ error: "Failed to delete log" }, { status: 500 })
   }
 }
 

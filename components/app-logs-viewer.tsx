@@ -151,13 +151,29 @@ export function AppLogsViewer() {
   }, [tab, fetchLogs, fetchStats, fetchAuditLogs])
 
   const handleCleanLogs = async () => {
-    if (!confirm("Удалить логи старше 30 дней?")) return
+    const choice = window.prompt(
+      "Что удалить?\n\n1 — все логи\n2 — старше 30 дней\n\nВведите 1 или 2:",
+      "2",
+    )
+    if (choice !== "1" && choice !== "2") return
+    const days = choice === "1" ? 0 : 30
     try {
-      const res = await fetch("/api/app-logs?action=clean&days=30", { headers: getAuthHeaders() })
+      const res = await fetch(`/api/app-logs?action=clean&days=${days}`, { headers: getAuthHeaders() })
       if (res.ok) {
         const data = await res.json()
         alert(`Удалено ${data.deleted} записей`)
         fetchLogs()
+        fetchStats()
+      }
+    } catch {}
+  }
+
+  const handleDeleteLog = async (id: string) => {
+    if (!confirm("Удалить эту запись?")) return
+    try {
+      const res = await fetch(`/api/app-logs?id=${id}`, { method: "DELETE", headers: getAuthHeaders() })
+      if (res.ok) {
+        setLogs((prev) => prev.filter((l) => l.id !== id))
         fetchStats()
       }
     } catch {}
@@ -382,6 +398,16 @@ export function AppLogsViewer() {
                         {(log.stack || log.metadata) && (
                           isExpanded ? <ChevronUp size={14} className="text-muted-foreground flex-shrink-0" /> : <ChevronDown size={14} className="text-muted-foreground flex-shrink-0" />
                         )}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteLog(log.id) }}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); handleDeleteLog(log.id) } }}
+                          className="text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 p-1 cursor-pointer"
+                          title="Удалить запись"
+                        >
+                          <Trash2 size={14} />
+                        </span>
                       </div>
                     </button>
 
