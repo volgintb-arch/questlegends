@@ -136,7 +136,10 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         const data = await res.json()
         if (data.data && data.data.length > 0) {
           setPipelines(data.data)
-          const defaultPipeline = data.data.find((p: Pipeline) => p.isDefault) || data.data[0]
+          // URL pipelineId takes priority (e.g. navigating from marketing report)
+          const pipelineIdFromUrl = searchParams.get("pipelineId")
+          const matched = pipelineIdFromUrl ? data.data.find((p: Pipeline) => p.id === pipelineIdFromUrl) : null
+          const defaultPipeline = matched || data.data.find((p: Pipeline) => p.isDefault) || data.data[0]
           setSelectedPipeline(defaultPipeline)
         } else {
           setLoading(false)

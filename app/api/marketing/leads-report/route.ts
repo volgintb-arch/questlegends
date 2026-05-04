@@ -5,13 +5,14 @@ import { logApiError } from "@/lib/app-logger"
 
 /**
  * Unified marketing report: B2B deals + B2C game leads grouped by source.
- * Returns status (confirmed/in_progress/cancelled), cancellation reason, revenue.
+ * Returns status (new/in_progress/approved/completed/cancelled).
  *
  * Query params:
- *   source     — filter by source (marquiz, avito, etc.) or "all"
+ *   source     — filter by source (Marquiz, Сайт, etc.) or "all"
  *   dateFrom   — filter created date >= (YYYY-MM-DD)
  *   dateTo     — filter created date <= (YYYY-MM-DD)
  *   type       — "b2b" | "b2c" | "all" (default "all")
+ *   franchiseeId — UK only: filter by specific franchisee
  */
 export async function GET(req: NextRequest) {
   try {
@@ -28,7 +29,6 @@ export async function GET(req: NextRequest) {
 
     const isUK = ["uk", "super_admin", "uk_employee"].includes(user.role)
     const franchiseeParam = sp.get("franchiseeId")
-    // UK can filter by specific franchisee via query param; others forced to their own
     const franchiseeFilter = isUK
       ? (franchiseeParam && franchiseeParam !== "all" ? franchiseeParam : null)
       : user.franchiseeId || null
@@ -36,6 +36,25 @@ export async function GET(req: NextRequest) {
     const srcFilter = source === "all" ? null : source
     const df = dateFrom ? new Date(dateFrom) : null
     const dt = dateTo ? new Date(dateTo + "T23:59:59.999Z") : null
+
+    // Normalize stage to one of 5 statuses based on stageType and name
+    function normalizeStatus(
+      stType: string | null,
+      stName: string | null,
+    ): "new" | "in_progress" | "approved" | "completed" | "cancelled" {
+      if (stType === "cancelled" || stType === "lost") return "cancelled"
+      if (stType === "completed" || stType === "won") return "completed"
+      if (stType === "scheduled") return "approved"
+      if (stType === "new") return "new"
+      if (stType === "in_progress") return "in_progress"
+      // Fallback by name
+      const n = (stName || "").toLowerCase()
+      if (n.includes("отказ") || n.includes("отмен")) return "cancelled"
+      if (n.includes("заверш") || n.includes("успе") || n.includes("выполн")) return "completed"
+      if (n.includes("согласов")) return "approved"
+      if (n.includes("нов")) return "new"
+      return "in_progress"
+    }
 
     type Row = {
       id: string
@@ -46,10 +65,11 @@ export async function GET(req: NextRequest) {
       createdAt: string
       currentStage: string | null
       stageType: string | null
-      status: "confirmed" | "in_progress" | "cancelled"
+      status: "new" | "in_progress" | "approved" | "completed" | "cancelled"
       cancellationReason: string | null
       amount: number
       franchiseeName: string | null
+      pipelineId: string | null
     }
 
     const rows: Row[] = []
@@ -77,6 +97,7 @@ export async function GET(req: NextRequest) {
           gl.source AS source,
           gl."createdAt" AS "createdAt",
           gl."totalAmount" AS amount,
+          gl."pipelineId" AS "pipelineId",
           ${sql.unsafe(cancelSelect)} AS "cancellationReason",
           s.name AS "stageName",
           s."stageType" AS "stageType",
@@ -92,8 +113,6 @@ export async function GET(req: NextRequest) {
         LIMIT 5000
       `
       for (const l of leads as any[]) {
-        const stType = l.stageType as string | null
-        const status: Row["status"] = stType === "completed" ? "confirmed" : stType === "cancelled" ? "cancelled" : "in_progress"
         rows.push({
           id: l.id,
           kind: "b2c",
@@ -102,11 +121,12 @@ export async function GET(req: NextRequest) {
           source: l.source || null,
           createdAt: l.createdAt,
           currentStage: l.stageName || null,
-          stageType: stType,
-          status,
+          stageType: l.stageType || null,
+          status: normalizeStatus(l.stageType, l.stageName),
           cancellationReason: l.cancellationReason || null,
           amount: Number(l.amount) || 0,
           franchiseeName: l.franchiseeName || null,
+          pipelineId: l.pipelineId || null,
         })
       }
     }
@@ -122,6 +142,7 @@ export async function GET(req: NextRequest) {
           COALESCE(d."leadSource", d.source) AS source,
           d."createdAt" AS "createdAt",
           COALESCE(d.budget, 0) AS amount,
+          d."pipelineId" AS "pipelineId",
           ${sql.unsafe(cancelSelect)} AS "cancellationReason",
           s.name AS "stageName",
           s."stageType" AS "stageType",
@@ -137,8 +158,6 @@ export async function GET(req: NextRequest) {
         LIMIT 5000
       `
       for (const d of deals as any[]) {
-        const stType = d.stageType as string | null
-        const status: Row["status"] = stType === "completed" ? "confirmed" : stType === "cancelled" ? "cancelled" : "in_progress"
         rows.push({
           id: d.id,
           kind: "b2b",
@@ -147,37 +166,69 @@ export async function GET(req: NextRequest) {
           source: d.source || null,
           createdAt: d.createdAt,
           currentStage: d.stageName || null,
-          stageType: stType,
-          status,
+          stageType: d.stageType || null,
+          status: normalizeStatus(d.stageType, d.stageName),
           cancellationReason: d.cancellationReason || null,
           amount: Number(d.amount) || 0,
           franchiseeName: d.franchiseeName || null,
+          pipelineId: d.pipelineId || null,
         })
       }
     }
 
     // Summary by source
-    const summary: Record<string, { total: number; confirmed: number; inProgress: number; cancelled: number; revenue: number }> = {}
+    const summary: Record<
+      string,
+      {
+        total: number
+        new: number
+        inProgress: number
+        approved: number
+        completed: number
+        cancelled: number
+        revenue: number
+      }
+    > = {}
     for (const r of rows) {
       const key = r.source || "(не указан)"
-      if (!summary[key]) summary[key] = { total: 0, confirmed: 0, inProgress: 0, cancelled: 0, revenue: 0 }
+      if (!summary[key]) summary[key] = { total: 0, new: 0, inProgress: 0, approved: 0, completed: 0, cancelled: 0, revenue: 0 }
       summary[key].total++
-      if (r.status === "confirmed") {
-        summary[key].confirmed++
+      if (r.status === "new") summary[key].new++
+      else if (r.status === "in_progress") summary[key].inProgress++
+      else if (r.status === "approved") summary[key].approved++
+      else if (r.status === "completed") {
+        summary[key].completed++
         summary[key].revenue += r.amount
       } else if (r.status === "cancelled") summary[key].cancelled++
-      else summary[key].inProgress++
     }
 
-    // Distinct sources for filter dropdown
-    const sources = Array.from(new Set(rows.map((r) => r.source).filter(Boolean))) as string[]
+    // Distinct sources — separate query, NOT constrained by current source filter
+    // so user sees full list of options.
+    const glSources = await sql`
+      SELECT DISTINCT gl.source AS src FROM "GameLead" gl
+      WHERE gl.source IS NOT NULL
+        AND (${df}::timestamptz IS NULL OR gl."createdAt" >= ${df})
+        AND (${dt}::timestamptz IS NULL OR gl."createdAt" <= ${dt})
+        AND (${franchiseeFilter}::text IS NULL OR gl."franchiseeId" = ${franchiseeFilter})
+    `
+    const dSources = await sql`
+      SELECT DISTINCT COALESCE(d."leadSource", d.source) AS src FROM "Deal" d
+      WHERE COALESCE(d."leadSource", d.source) IS NOT NULL
+        AND (${df}::timestamptz IS NULL OR d."createdAt" >= ${df})
+        AND (${dt}::timestamptz IS NULL OR d."createdAt" <= ${dt})
+        AND (${franchiseeFilter}::text IS NULL OR d."franchiseeId" = ${franchiseeFilter})
+    `
+    const sourceSet = new Set<string>()
+    for (const s of glSources as any[]) if (s.src) sourceSet.add(s.src)
+    for (const s of dSources as any[]) if (s.src) sourceSet.add(s.src)
+    const sources = Array.from(sourceSet).sort()
 
     return NextResponse.json({
       success: true,
       data: {
         leads: rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
         summary,
-        sources: sources.sort(),
+        sources,
       },
     })
   } catch (error) {

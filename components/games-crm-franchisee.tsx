@@ -65,6 +65,7 @@ export function GamesCRMFranchisee() {
   const searchParams = useSearchParams()
   const dealIdFromUrl = searchParams.get("dealId") || searchParams.get("leadId")
   const taskIdFromUrl = searchParams.get("taskId")
+  const pipelineIdFromUrl = searchParams.get("pipelineId")
 
   const isUKUser = ["uk", "super_admin", "uk_employee"].includes(user?.role || "")
 
@@ -148,13 +149,18 @@ export function GamesCRMFranchisee() {
 
   useEffect(() => {
     if (activeFranchiseeId) {
+      // URL pipelineId takes priority (e.g., navigating from marketing report)
+      if (pipelineIdFromUrl) {
+        setSelectedPipelineId(pipelineIdFromUrl)
+        return
+      }
       const storageKey = `crm_last_pipeline_${activeFranchiseeId}`
       const savedPipelineId = localStorage.getItem(storageKey)
       if (savedPipelineId) {
         setSelectedPipelineId(savedPipelineId)
       }
     }
-  }, [activeFranchiseeId])
+  }, [activeFranchiseeId, pipelineIdFromUrl])
 
   const handlePipelineChange = (pipelineId: string) => {
     setSelectedPipelineId(pipelineId)
