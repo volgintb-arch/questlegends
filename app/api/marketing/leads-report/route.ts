@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import { verifyRequest } from "@/lib/simple-auth"
 import { logApiError } from "@/lib/app-logger"
+import { normalizeSource } from "@/lib/lead-sources"
 
 /**
  * Unified marketing report: B2B deals + B2C game leads grouped by source.
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
       LIMIT 1
     `
 
-    // B2C — GameLead
+    // B2C — GameLead (source filter applied in JS via normalization)
     if (type === "all" || type === "b2c") {
       const cancelSelect = hasGameCancelCol.length > 0 ? `gl."cancellationReason"` : `NULL`
       const leads = await sql`
@@ -105,8 +106,7 @@ export async function GET(req: NextRequest) {
         FROM "GameLead" gl
         LEFT JOIN "GamePipelineStage" s ON gl."stageId" = s.id
         LEFT JOIN "Franchisee" f ON gl."franchiseeId" = f.id
-        WHERE (${srcFilter}::text IS NULL OR gl.source = ${srcFilter})
-          AND (${df}::timestamptz IS NULL OR gl."createdAt" >= ${df})
+        WHERE (${df}::timestamptz IS NULL OR gl."createdAt" >= ${df})
           AND (${dt}::timestamptz IS NULL OR gl."createdAt" <= ${dt})
           AND (${franchiseeFilter}::text IS NULL OR gl."franchiseeId" = ${franchiseeFilter})
         ORDER BY gl."createdAt" DESC
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // B2B — Deal
+    // B2B — Deal (source filter applied in JS via normalization)
     if (type === "all" || type === "b2b") {
       const cancelSelect = hasDealCancelCol.length > 0 ? `d."cancellationReason"` : `NULL`
       const deals = await sql`
@@ -150,8 +150,7 @@ export async function GET(req: NextRequest) {
         FROM "Deal" d
         LEFT JOIN "PipelineStage" s ON d."stageId" = s.id
         LEFT JOIN "Franchisee" f ON d."franchiseeId" = f.id
-        WHERE (${srcFilter}::text IS NULL OR COALESCE(d."leadSource", d.source) = ${srcFilter})
-          AND (${df}::timestamptz IS NULL OR d."createdAt" >= ${df})
+        WHERE (${df}::timestamptz IS NULL OR d."createdAt" >= ${df})
           AND (${dt}::timestamptz IS NULL OR d."createdAt" <= ${dt})
           AND (${franchiseeFilter}::text IS NULL OR d."franchiseeId" = ${franchiseeFilter})
         ORDER BY d."createdAt" DESC
@@ -176,7 +175,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Summary by source
+    // Apply source filter on normalized values
+    const filteredRows = srcFilter
+      ? rows.filter((r) => normalizeSource(r.source) === srcFilter)
+      : rows
+
+    // Summary by NORMALIZED source — collapses dupes like "2 ГИС" / "2ГИС" / "2Гис"
     const summary: Record<
       string,
       {
@@ -189,8 +193,8 @@ export async function GET(req: NextRequest) {
         revenue: number
       }
     > = {}
-    for (const r of rows) {
-      const key = r.source || "(не указан)"
+    for (const r of filteredRows) {
+      const key = normalizeSource(r.source)
       if (!summary[key]) summary[key] = { total: 0, new: 0, inProgress: 0, approved: 0, completed: 0, cancelled: 0, revenue: 0 }
       summary[key].total++
       if (r.status === "new") summary[key].new++
@@ -202,31 +206,16 @@ export async function GET(req: NextRequest) {
       } else if (r.status === "cancelled") summary[key].cancelled++
     }
 
-    // Distinct sources — separate query, NOT constrained by current source filter
-    // so user sees full list of options.
-    const glSources = await sql`
-      SELECT DISTINCT gl.source AS src FROM "GameLead" gl
-      WHERE gl.source IS NOT NULL
-        AND (${df}::timestamptz IS NULL OR gl."createdAt" >= ${df})
-        AND (${dt}::timestamptz IS NULL OR gl."createdAt" <= ${dt})
-        AND (${franchiseeFilter}::text IS NULL OR gl."franchiseeId" = ${franchiseeFilter})
-    `
-    const dSources = await sql`
-      SELECT DISTINCT COALESCE(d."leadSource", d.source) AS src FROM "Deal" d
-      WHERE COALESCE(d."leadSource", d.source) IS NOT NULL
-        AND (${df}::timestamptz IS NULL OR d."createdAt" >= ${df})
-        AND (${dt}::timestamptz IS NULL OR d."createdAt" <= ${dt})
-        AND (${franchiseeFilter}::text IS NULL OR d."franchiseeId" = ${franchiseeFilter})
-    `
+    // Distinct normalized sources from full data set (not constrained by current filter)
     const sourceSet = new Set<string>()
-    for (const s of glSources as any[]) if (s.src) sourceSet.add(s.src)
-    for (const s of dSources as any[]) if (s.src) sourceSet.add(s.src)
+    for (const r of rows) sourceSet.add(normalizeSource(r.source))
+    sourceSet.delete("(не указан)")
     const sources = Array.from(sourceSet).sort()
 
     return NextResponse.json({
       success: true,
       data: {
-        leads: rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+        leads: filteredRows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
         summary,
         sources,
       },
