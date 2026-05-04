@@ -1191,7 +1191,7 @@ export function GameCardFranchisee({
 
             {/* Cancellation reason */}
             {(() => {
-              const currentStage = stages.find((s) => s.id === gameData.stageId)
+              const currentStage = (stages || []).find((s) => s.id === gameData.stageId)
               const isCancelled = currentStage?.stageType === "cancelled"
               if (!isCancelled && !gameData.cancellationReason) return null
               return (

@@ -305,7 +305,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
   ) => {
     if (!selectedPipeline) return
 
-    const destStage = selectedPipeline.stages.find((s) => s.id === destId)
+    const destStage = (selectedPipeline.stages || []).find((s) => s.id === destId)
     if (destStage?.stageType === "cancelled") {
       const deal = boardData[sourceId]?.find((d) => d.id === dealId)
       setPendingDealCancellation({
@@ -313,7 +313,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
         destId,
         dealId,
         destIndex,
-        clientName: deal?.title || deal?.clientName || "",
+        clientName: deal?.title || (deal as any)?.clientName || "",
       })
       return
     }
