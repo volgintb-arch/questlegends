@@ -149,6 +149,14 @@ export async function POST(req: NextRequest) {
       extras,
       extrasAmount = 0,
       paymentMethod,
+      yclid,
+      gclid,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      utmContent,
+      utmTerm,
+      referrer,
     } = body
 
     // Validate gameDate: not earlier than 3 months ago
@@ -178,6 +186,7 @@ export async function POST(req: NextRequest) {
         "notes", "source", "responsibleId", "pipelineId", "stageId", "franchiseeId",
         "animatorsCount", "animatorRate", "hostsCount", "hostRate", "djsCount", "djRate",
         "extras", "extrasAmount", "paymentMethod",
+        "yclid", "gclid", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "referrer",
         "createdAt", "updatedAt"
       )
       VALUES (
@@ -188,6 +197,7 @@ export async function POST(req: NextRequest) {
         ${pipelineId}, ${stageId}, ${franchiseeId},
         ${animatorsCount}, ${animatorRate}, ${hostsCount}, ${hostRate}, ${djsCount}, ${djRate},
         ${extras || null}, ${extrasAmount}, ${paymentMethod || "cash"},
+        ${yclid || null}, ${gclid || null}, ${utmSource || null}, ${utmMedium || null}, ${utmCampaign || null}, ${utmContent || null}, ${utmTerm || null}, ${referrer || null},
         NOW(), NOW()
       )
       RETURNING *

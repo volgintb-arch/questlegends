@@ -240,6 +240,21 @@ model Deal {
 
   cancellationReason String?
 
+  // Ad tracking (filled from form URL params or webhook payload)
+  yclid           String?
+  gclid           String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmContent      String?
+  utmTerm         String?
+  referrer        String?
+  payloadLogId    String?
+
+  scheduledAt     DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+
   responsibleId   String?
   responsible     User?     @relation("DealResponsible", fields: [responsibleId], references: [id])
 
@@ -264,6 +279,8 @@ model Deal {
   @@index([gameDate])
   @@index([responsibleId])
   @@index([pipelineId])
+  @@index([yclid])
+  @@index([gclid])
 }
 
 model Transaction {
@@ -729,6 +746,21 @@ model GameLead {
 
   cancellationReason String?
 
+  // Ad tracking (filled from form URL params or webhook payload)
+  yclid           String?
+  gclid           String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmContent      String?
+  utmTerm         String?
+  referrer        String?
+  payloadLogId    String?
+
+  scheduledAt     DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+
   responsibleId   String?
   pipelineId      String
   pipeline        GamePipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
@@ -750,6 +782,19 @@ model GameLead {
   @@index([stageId])
   @@index([franchiseeId])
   @@index([responsibleId])
+  @@index([yclid])
+  @@index([gclid])
+}
+
+model IncomingPayloadLog {
+  id            String   @id @default(cuid())
+  channel       String
+  integrationId String?
+  payload       Json
+  createdAt     DateTime @default(now())
+
+  @@index([channel])
+  @@index([createdAt])
 }
 
 model GameLeadLog {

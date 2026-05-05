@@ -32,6 +32,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     console.log(`[v0] Webhook ${channel}: payload keys=${Object.keys(payload).join(",")}`, ["tilda", "marquiz", "max"].includes(channel) ? payload : "")
 
+    // Сохранить сырой payload в IncomingPayloadLog ДО парсинга и создания лида —
+    // если что-то упадёт ниже, тело уцелеет и можно будет дебажить.
+    let payloadLogId: string | null = null
+    try {
+      const { sql } = await import("@/lib/db")
+      const logRows = await sql`
+        INSERT INTO "IncomingPayloadLog" (id, channel, "integrationId", payload, "createdAt")
+        VALUES (gen_random_uuid()::text, ${channel}, ${integrationId}, ${JSON.stringify(payload)}::jsonb, NOW())
+        RETURNING id
+      `
+      payloadLogId = logRows[0]?.id || null
+    } catch (logErr) {
+      console.error("[v0] Failed to log incoming payload:", logErr)
+    }
+
     // Tilda отправляет тестовый запрос с полем test=test — отвечаем 200
     if (channel === "tilda" && payload.test === "test") {
       return NextResponse.json({ ok: true })
@@ -105,7 +120,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // 4. Создать лид если нужно
     if (routing.shouldCreateLead) {
       console.log(`[v0] Webhook ${channel}: Step 4 — creating lead, type=${routing.leadType}`)
-      const leadResult = await LeadCreator.createLead(message, routing, integrationId)
+      const leadResult = await LeadCreator.createLead(message, routing, integrationId, { payloadLogId })
       if (leadResult.success) {
         console.log(`[v0] Webhook ${channel}: Step 4 OK — lead created, id=${leadResult.leadId}`)
       } else {

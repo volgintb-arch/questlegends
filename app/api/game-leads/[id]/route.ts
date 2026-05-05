@@ -237,6 +237,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
+    // Stamp lifecycle timestamps when stage changes (для трекинга конверсий по yclid)
+    if (body.stageId && body.stageId !== currentGame.stageId) {
+      const [newStage] = await sql`SELECT "stageType" FROM "GamePipelineStage" WHERE id = ${body.stageId}`
+      const stType = newStage?.stageType
+      if (stType === "scheduled") {
+        await sql`UPDATE "GameLead" SET "scheduledAt" = COALESCE("scheduledAt", NOW()) WHERE id = ${id}`
+      } else if (stType === "completed") {
+        await sql`UPDATE "GameLead" SET "completedAt" = COALESCE("completedAt", NOW()) WHERE id = ${id}`
+      } else if (stType === "cancelled") {
+        await sql`UPDATE "GameLead" SET "cancelledAt" = COALESCE("cancelledAt", NOW()) WHERE id = ${id}`
+      }
+    }
+
     // Recalculate total if players or price changed
     if (body.playersCount !== undefined || body.pricePerPerson !== undefined) {
       const [current] = await sql`SELECT "playersCount", "pricePerPerson" FROM "GameLead" WHERE id = ${id}`

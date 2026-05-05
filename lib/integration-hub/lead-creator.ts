@@ -4,6 +4,7 @@ import { sendPushToUsers } from "@/lib/push"
 import type { NormalizedMessage } from "./message-normalizer"
 import type { RoutingDecision } from "./routing-engine"
 import { saveDeduplicationRecord } from "./deduplication-record-saver" // Import the saveDeduplicationRecord function
+import { extractTracking } from "./extract-tracking"
 
 export class LeadCreator {
   // Создать лид в соответствующей CRM
@@ -11,6 +12,7 @@ export class LeadCreator {
     message: NormalizedMessage,
     routing: RoutingDecision,
     integrationId: string,
+    opts?: { payloadLogId?: string | null },
   ): Promise<{ success: boolean; leadId?: string; error?: string }> {
     try {
       console.log("[v0] LeadCreator: Creating lead", { leadType: routing.leadType, integrationId })
@@ -18,9 +20,9 @@ export class LeadCreator {
       let leadId: string
 
       if (routing.leadType === "b2b") {
-        leadId = await this.createB2BDeal(message, integrationId)
+        leadId = await this.createB2BDeal(message, integrationId, opts?.payloadLogId || null)
       } else {
-        leadId = await this.createB2CLead(message, integrationId)
+        leadId = await this.createB2CLead(message, integrationId, opts?.payloadLogId || null)
       }
 
       // Сохранить запись дедупликации
@@ -398,7 +400,7 @@ export class LeadCreator {
   }
 
   // Создать B2B Deal (для УК - продажа франшиз)
-  private static async createB2BDeal(message: NormalizedMessage, integrationId: string): Promise<string> {
+  private static async createB2BDeal(message: NormalizedMessage, integrationId: string, payloadLogId: string | null = null): Promise<string> {
     const assignee = await this.getAssignee(integrationId, "uk")
     const dealId = globalThis.crypto.randomUUID()
     const data = this.extractMessageData(message)
@@ -423,6 +425,9 @@ export class LeadCreator {
     const leadSource = leadSourceMap[message.channel] || "Другое"
     const phone = data.clientPhone || message.phone || null
 
+    const rawPayload = typeof message.raw_payload === "string" ? JSON.parse(message.raw_payload) : message.raw_payload
+    const t = extractTracking(rawPayload)
+
     await sql`
       INSERT INTO "Deal" (
         id, "clientName", "contactName", "clientPhone", "contactPhone", "clientEmail",
@@ -430,6 +435,8 @@ export class LeadCreator {
         "pipelineId", "stageId",
         "clientTelegram", "messengerLink", "city", "gameDate",
         "additionalComment", "responsibleId",
+        "yclid", "gclid", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "referrer",
+        "payloadLogId",
         "createdAt", "updatedAt"
       ) VALUES (
         ${dealId},
@@ -449,6 +456,8 @@ export class LeadCreator {
         ${data.gameDate},
         ${comment},
         ${assignee?.id || null},
+        ${t.yclid}, ${t.gclid}, ${t.utmSource}, ${t.utmMedium}, ${t.utmCampaign}, ${t.utmContent}, ${t.utmTerm}, ${t.referrer},
+        ${payloadLogId},
         NOW(), NOW()
       )
     `
@@ -466,7 +475,7 @@ export class LeadCreator {
   }
 
   // Создать B2C Lead (для франчайзи - продажа игр)
-  private static async createB2CLead(message: NormalizedMessage, integrationId: string): Promise<string> {
+  private static async createB2CLead(message: NormalizedMessage, integrationId: string, payloadLogId: string | null = null): Promise<string> {
     const assignee = await this.getAssignee(integrationId, "franchisee")
     const franchiseeId = message.owner_id
 
@@ -485,11 +494,16 @@ export class LeadCreator {
     const phone = data.clientPhone || message.phone || null
     const playersCount = data.playersCount || 1
 
+    const rawPayload = typeof message.raw_payload === "string" ? JSON.parse(message.raw_payload) : message.raw_payload
+    const t = extractTracking(rawPayload)
+
     await sql`
       INSERT INTO "GameLead" (
         id, "clientName", "clientPhone", "clientEmail", source, notes,
         "gameDate", "gameTime", "playersCount",
         "responsibleId", "pipelineId", "stageId", "franchiseeId",
+        "yclid", "gclid", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "referrer",
+        "payloadLogId",
         "createdAt", "updatedAt"
       ) VALUES (
         ${leadId},
@@ -505,6 +519,8 @@ export class LeadCreator {
         ${pipeline.pipeline_id},
         ${pipeline.stage_id},
         ${franchiseeId},
+        ${t.yclid}, ${t.gclid}, ${t.utmSource}, ${t.utmMedium}, ${t.utmCampaign}, ${t.utmContent}, ${t.utmTerm}, ${t.referrer},
+        ${payloadLogId},
         NOW(), NOW()
       )
     `

@@ -202,6 +202,7 @@ export async function POST(request: Request) {
         stage,
         "stageId",
         "pipelineId",
+        "yclid", "gclid", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "referrer",
         "createdAt",
         "updatedAt"
       ) VALUES (
@@ -220,6 +221,7 @@ export async function POST(request: Request) {
         ${body.stage || "Новый"},
         ${body.stageId || null},
         ${body.pipelineId || null},
+        ${body.yclid || null}, ${body.gclid || null}, ${body.utmSource || null}, ${body.utmMedium || null}, ${body.utmCampaign || null}, ${body.utmContent || null}, ${body.utmTerm || null}, ${body.referrer || null},
         ${now},
         ${now}
       )

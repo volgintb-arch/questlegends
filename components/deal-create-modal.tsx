@@ -6,6 +6,7 @@ import { X, Save, User, MapPin, Phone, FileText, RussianRuble, Link } from "luci
 import { PhoneInput } from "@/components/ui/phone-input"
 import { useAuth } from "@/contexts/auth-context"
 import { RF_CITIES } from "@/lib/constants/rf-cities"
+import { useTrackingParams, trackingForApi } from "@/lib/use-tracking-params"
 
 interface Pipeline {
   id: string
@@ -23,6 +24,7 @@ interface DealCreateModalProps {
 
 export function DealCreateModal({ isOpen, onClose, onCreated, pipeline, role }: DealCreateModalProps) {
   const { user, getAuthHeaders } = useAuth()
+  const tracking = useTrackingParams()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [employees, setEmployees] = useState<any[]>([])
 
@@ -91,6 +93,8 @@ export function DealCreateModal({ isOpen, onClose, onCreated, pipeline, role }: 
         // Legacy fields for compatibility
         clientName: formData.contactName,
         source: formData.leadSource,
+        // Ad tracking (yclid/gclid/utm_*) captured from landing URL
+        ...trackingForApi(tracking),
       }
 
       const response = await fetch("/api/deals", {

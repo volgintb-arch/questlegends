@@ -142,10 +142,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         const [newStage] = await sql`SELECT name FROM "PipelineStage" WHERE id = ${body.stageId}`
 
         await sql`
-          UPDATE "Deal" 
-          SET "stage" = ${body.stage}, "stageId" = ${body.stageId}, "updatedAt" = NOW() 
+          UPDATE "Deal"
+          SET "stage" = ${body.stage}, "stageId" = ${body.stageId}, "updatedAt" = NOW()
           WHERE id = ${id}
         `
+
+        // Stamp lifecycle timestamps when stage changes (для трекинга конверсий по yclid)
+        const [stageMeta] = await sql`SELECT "stageType" FROM "PipelineStage" WHERE id = ${body.stageId}`
+        const stType = stageMeta?.stageType
+        if (stType === "scheduled") {
+          await sql`UPDATE "Deal" SET "scheduledAt" = COALESCE("scheduledAt", NOW()) WHERE id = ${id}`
+        } else if (stType === "completed" || stType === "won") {
+          await sql`UPDATE "Deal" SET "completedAt" = COALESCE("completedAt", NOW()) WHERE id = ${id}`
+        } else if (stType === "cancelled" || stType === "lost") {
+          await sql`UPDATE "Deal" SET "cancelledAt" = COALESCE("cancelledAt", NOW()) WHERE id = ${id}`
+        }
 
         // Log the movement
         await logDealAction(sql, id, "move", user.id, user.name, {

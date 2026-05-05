@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import { X, Save, User, Phone, Calendar, Users, RussianRuble, FileText, Clock, Mic, Music, ShoppingBag, Plus, Trash2 } from "lucide-react"
 import { PhoneInput } from "@/components/ui/phone-input"
 import { useAuth } from "@/contexts/auth-context"
+import { useTrackingParams, trackingForApi } from "@/lib/use-tracking-params"
 
 interface Stage {
   id: string
@@ -34,6 +35,7 @@ export function GameCreateModal({
   pipeline,
 }: GameCreateModalProps) {
   const { user, getAuthHeaders } = useAuth()
+  const tracking = useTrackingParams()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [users, setUsers] = useState<any[]>([])
 
@@ -123,6 +125,8 @@ export function GameCreateModal({
           : undefined,
         extrasAmount: extrasItems.reduce((sum, i) => sum + (Number(i.amount) || 0), 0),
         paymentMethod: formData.paymentMethod,
+        // Ad tracking (yclid/gclid/utm_*) captured from landing URL
+        ...trackingForApi(tracking),
       }
 
       const response = await fetch("/api/game-leads", {
