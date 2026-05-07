@@ -63,6 +63,7 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
   const [sortBy, setSortBy] = useState<"revenue" | "profit">("revenue")
   const [franchiseData, setFranchiseData] = useState<FranchiseFinance[]>([])
   const [allTransactions, setAllTransactions] = useState<RawTransaction[]>([])
+  const [allExpenses, setAllExpenses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const { user, getAuthHeaders } = useAuth()
 
@@ -102,32 +103,52 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
   useEffect(() => {
     if (dateFrom && dateTo && allTransactions.length > 0) {
       const from = new Date(dateFrom)
-      const to = new Date(dateTo)
-      const periodDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      const to = new Date(dateTo + "T23:59:59.999Z")
+      const periodDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24))
       const prevTo = new Date(from)
       prevTo.setDate(prevTo.getDate() - 1)
+      prevTo.setHours(23, 59, 59, 999)
       const prevFrom = new Date(prevTo)
       prevFrom.setDate(prevFrom.getDate() - periodDays + 1)
+      prevFrom.setHours(0, 0, 0, 0)
 
-      const prevTx = allTransactions.filter((t) => {
-        const d = new Date(t.date)
-        const matchFranchise = selectedFranchiseId === "all" || t.franchiseeId === selectedFranchiseId
-        return d >= prevFrom && d <= prevTo && matchFranchise
-      })
+      const inRange = (dateStr: string | null | undefined) => {
+        if (!dateStr) return false
+        const d = new Date(dateStr)
+        return d >= prevFrom && d <= prevTo
+      }
+      const matchesFranchise = (fid: string | null | undefined) =>
+        selectedFranchiseId === "all" || fid === selectedFranchiseId
+
+      const prevTx = allTransactions.filter((t) => inRange(t.date) && matchesFranchise(t.franchiseeId))
+      const prevExp = allExpenses.filter(
+        (e: any) => matchesFranchise(e.franchiseeId) && inRange(e.date || e.expenseDate || e.createdAt),
+      )
 
       const prevRevenue = prevTx.filter((t) => t.type === "income").reduce((s, t) => s + (Number(t.amount) || 0), 0)
-      const prevExpenses = prevTx.filter((t) => t.type === "expense").reduce((s, t) => s + (Number(t.amount) || 0), 0)
-      // Calculate royalty based on actual franchise royalty percentages
+      const prevTxExpenses = prevTx.filter((t) => t.type === "expense").reduce((s, t) => s + (Number(t.amount) || 0), 0)
+      const prevTableExpenses = prevExp.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0)
+      const prevExpenses = prevTxExpenses + prevTableExpenses
+
       let prevRoyalty = 0
       franchiseData.forEach((f) => {
-        const fRevenue = prevTx.filter((t) => t.type === "income" && t.franchiseeId === f.id).reduce((s, t) => s + (Number(t.amount) || 0), 0)
-        prevRoyalty += Math.round(fRevenue * (f.royaltyPercent / 100))
+        if (!matchesFranchise(f.id)) return
+        const fRevenue = prevTx
+          .filter((t) => t.type === "income" && t.franchiseeId === f.id)
+          .reduce((s, t) => s + (Number(t.amount) || 0), 0)
+        prevRoyalty += Math.round(fRevenue * (Number(f.royaltyPercent) || 0) / 100)
       })
-      setPrevPeriodData({ revenue: prevRevenue, royalty: prevRoyalty, expenses: prevExpenses, profit: prevRevenue - prevExpenses - prevRoyalty })
+
+      setPrevPeriodData({
+        revenue: prevRevenue,
+        royalty: prevRoyalty,
+        expenses: prevExpenses,
+        profit: prevRevenue - prevExpenses - prevRoyalty,
+      })
     } else {
       setPrevPeriodData(null)
     }
-  }, [dateFrom, dateTo, allTransactions, selectedFranchiseId])
+  }, [dateFrom, dateTo, allTransactions, allExpenses, franchiseData, selectedFranchiseId])
 
   const loadFranchiseFinancials = async () => {
     try {
@@ -149,6 +170,7 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
 
       const transactions: RawTransaction[] = Array.isArray(transactionsData) ? transactionsData : transactionsData.transactions || []
       setAllTransactions(transactions)
+      setAllExpenses(Array.isArray(expenses) ? expenses : [])
 
       const financialData = franchises.map((f: any) => {
         const franchiseeTransactions = transactions.filter((t: any) => t.franchiseeId === f.id)
@@ -236,9 +258,48 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
     setEditRoyaltyValue(franchisee.royaltyPercent)
   }
 
-  // Filter by franchise and date range
+  // Recalculate per-franchisee values for the selected date range.
+  // Without dateFrom/dateTo we use the all-time values from franchiseData.
+  const periodFranchiseData = useMemo(() => {
+    if (!dateFrom && !dateTo) return franchiseData
+
+    const fromDate = dateFrom ? new Date(dateFrom) : null
+    const toDate = dateTo ? new Date(dateTo + "T23:59:59.999Z") : null
+
+    const inRange = (dateStr: string | null | undefined) => {
+      if (!dateStr) return false
+      const d = new Date(dateStr)
+      if (fromDate && d < fromDate) return false
+      if (toDate && d > toDate) return false
+      return true
+    }
+
+    return franchiseData.map((f) => {
+      const txs = allTransactions.filter((t) => t.franchiseeId === f.id && inRange(t.date))
+      const exps = allExpenses.filter((e: any) => e.franchiseeId === f.id && inRange(e.date || e.expenseDate || e.createdAt))
+
+      const revenue = txs.filter((t) => t.type === "income").reduce((s, t) => s + (Number(t.amount) || 0), 0)
+      const txExpenses = txs.filter((t) => t.type === "expense").reduce((s, t) => s + (Number(t.amount) || 0), 0)
+      const tableExpenses = exps.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0)
+      const expensesTotal = txExpenses + tableExpenses
+
+      const royalty = Math.round(revenue * (Number(f.royaltyPercent) || 0) / 100)
+      const profit = revenue - royalty - expensesTotal
+
+      return {
+        ...f,
+        revenue,
+        royalty,
+        expenses: expensesTotal,
+        profit,
+        avgCheck: f.completedGames > 0 ? Math.round(revenue / f.completedGames) : 0,
+      }
+    })
+  }, [franchiseData, allTransactions, allExpenses, dateFrom, dateTo])
+
+  // Filter by franchise selector + search query
   const filteredFranchises = useMemo(() => {
-    return franchiseData.filter((f) => {
+    return periodFranchiseData.filter((f) => {
       if (selectedFranchiseId !== "all" && f.id !== selectedFranchiseId) return false
       if (!searchTerm) return true
       const searchLower = searchTerm.toLowerCase()
@@ -249,36 +310,21 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
         f.profit.toString().includes(searchTerm)
       )
     })
-  }, [franchiseData, selectedFranchiseId, searchTerm])
+  }, [periodFranchiseData, selectedFranchiseId, searchTerm])
 
-  // Recompute financials based on date filter using raw transactions
+  // Top-row summary based on the same date filter and franchisee selector
+  // Sums up periodFranchiseData rows that are visible after the franchise filter.
   const dateFilteredStats = useMemo(() => {
     if (!dateFrom && !dateTo) return null
-
-    const fromDate = dateFrom ? new Date(dateFrom) : null
-    const toDate = dateTo ? new Date(dateTo) : null
-
-    const filteredTx = allTransactions.filter((t) => {
-      const d = new Date(t.date)
-      if (fromDate && d < fromDate) return false
-      if (toDate && d > toDate) return false
-      const matchFranchise = selectedFranchiseId === "all" || t.franchiseeId === selectedFranchiseId
-      return matchFranchise
-    })
-
-    const revenue = filteredTx.filter((t) => t.type === "income").reduce((s, t) => s + (Number(t.amount) || 0), 0)
-    const expenses = filteredTx.filter((t) => t.type === "expense").reduce((s, t) => s + (Number(t.amount) || 0), 0)
-
-    // Calculate royalty using actual franchise royalty percentages
-    let royalty = 0
-    franchiseData.forEach((f) => {
-      const fRevenue = filteredTx.filter((t) => t.type === "income" && t.franchiseeId === f.id).reduce((s, t) => s + (Number(t.amount) || 0), 0)
-      royalty += Math.round(fRevenue * (f.royaltyPercent / 100))
-    })
-    const profit = revenue - expenses - royalty
-
+    const visible = periodFranchiseData.filter(
+      (f) => selectedFranchiseId === "all" || f.id === selectedFranchiseId,
+    )
+    const revenue = visible.reduce((s, f) => s + (f.revenue || 0), 0)
+    const royalty = visible.reduce((s, f) => s + (f.royalty || 0), 0)
+    const expenses = visible.reduce((s, f) => s + (f.expenses || 0), 0)
+    const profit = visible.reduce((s, f) => s + (f.profit || 0), 0)
     return { revenue, royalty, expenses, profit }
-  }, [allTransactions, dateFrom, dateTo, selectedFranchiseId])
+  }, [periodFranchiseData, dateFrom, dateTo, selectedFranchiseId])
 
   const totalRevenue = dateFilteredStats?.revenue ?? filteredFranchises.reduce((sum, f) => sum + f.revenue, 0)
   const totalRoyalty = dateFilteredStats?.royalty ?? filteredFranchises.reduce((sum, f) => sum + f.royalty, 0)
