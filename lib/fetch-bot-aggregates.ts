@@ -88,11 +88,19 @@ export async function fetchBotAggregates(from: Date, to: Date): Promise<BotFetch
       console.warn(`[bot-aggregates] ${error}`)
       return { data: null, error, url }
     }
-    const data = (await res.json()) as Partial<BotAggregatesResponse>
+    const rawBody = await res.text()
+    let data: any
+    try {
+      data = JSON.parse(rawBody)
+    } catch {
+      console.warn(`[bot-aggregates] body is not JSON. Raw response (first 500 chars):\n${rawBody.slice(0, 500)}`)
+      return { data: null, error: "Bot returned non-JSON body", url }
+    }
     if (!data || typeof data !== "object") {
       return { data: null, error: "Bot returned non-object body", url }
     }
-    console.log(`[bot-aggregates] OK: totalCost=${data.totalCost}, byCampaign=${(data.byCampaign as any)?.length ?? 0}`)
+    // Log full body so we can adjust to the bot's actual schema if needed
+    console.log(`[bot-aggregates] OK: keys=[${Object.keys(data).join(",")}]  raw=${JSON.stringify(data).slice(0, 800)}`)
     return {
       data: {
         from: String(data.from || fmt(from)),
