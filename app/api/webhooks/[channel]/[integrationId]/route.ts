@@ -34,12 +34,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Сохранить сырой payload в IncomingPayloadLog ДО парсинга и создания лида —
     // если что-то упадёт ниже, тело уцелеет и можно будет дебажить.
+    // Передаём JSON-строку через ::jsonb-cast, чтобы postgres сохранил структуру
+    // как объект (а не примитив-строку).
     let payloadLogId: string | null = null
     try {
       const { sql } = await import("@/lib/db")
+      const payloadJson = JSON.stringify(payload)
       const logRows = await sql`
         INSERT INTO "IncomingPayloadLog" (id, channel, "integrationId", payload, "createdAt")
-        VALUES (gen_random_uuid()::text, ${channel}, ${integrationId}, ${JSON.stringify(payload)}::jsonb, NOW())
+        VALUES (gen_random_uuid()::text, ${channel}, ${integrationId}, ${payloadJson}::text::jsonb, NOW())
         RETURNING id
       `
       payloadLogId = logRows[0]?.id || null

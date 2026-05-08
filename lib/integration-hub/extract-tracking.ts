@@ -1,11 +1,20 @@
 /**
  * Defensive extraction of ad-tracking parameters (yclid, gclid, utm_*, referrer)
- * from arbitrary webhook payloads — Marquiz, Tilda, Avito, generic forms.
+ * from arbitrary webhook payloads — Marquiz, Tilda, Avito, VK, generic forms,
+ * and any future integrations we add.
  *
- * Webhook payload shapes vary widely and providers occasionally rename or
- * reshape fields, so we try a list of well-known paths for each parameter.
- * If a future payload puts a yclid in an unexpected place, the raw payload
- * gets saved into IncomingPayloadLog so we can extend `paths` based on real data.
+ * Strategy (each step adds candidates, first non-empty wins):
+ *   1. Walk the entire payload tree recursively. For each leaf:
+ *      - if the key matches a tracking name (yclid / utm_source / etc) — collect value
+ *      - if the value looks like a URL — parse it, extract query params
+ *      - if the value looks like cookies ("a=1; b=2") — parse it
+ *      - if the value looks like a query string ("a=1&b=2") — parse it
+ *   2. Special "url-like" fields (href, referer, page url) get their search params
+ *      merged in as a fallback.
+ *
+ * If a future integration puts a yclid in some unexpected place, the raw payload
+ * gets saved into IncomingPayloadLog and we can either rely on the recursive
+ * walk to pick it up automatically, or add an explicit path here.
  */
 
 export interface TrackingData {
@@ -19,187 +28,177 @@ export interface TrackingData {
   referrer: string | null
 }
 
-function getByPath(obj: any, path: string): any {
-  return path.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj)
+const EMPTY_TRACKING: TrackingData = {
+  yclid: null,
+  gclid: null,
+  utmSource: null,
+  utmMedium: null,
+  utmCampaign: null,
+  utmContent: null,
+  utmTerm: null,
+  referrer: null,
 }
 
-function firstNonEmpty(payload: any, paths: string[]): string | null {
-  for (const path of paths) {
-    const val = getByPath(payload, path)
-    if (val !== undefined && val !== null && String(val).trim() !== "") {
-      return String(val).trim()
-    }
+// Map normalized key → field name in TrackingData
+const KEY_MAP: Record<string, keyof TrackingData> = {
+  yclid: "yclid",
+  gclid: "gclid",
+  utm_source: "utmSource",
+  utmsource: "utmSource",
+  utm_medium: "utmMedium",
+  utmmedium: "utmMedium",
+  utm_campaign: "utmCampaign",
+  utmcampaign: "utmCampaign",
+  utm_content: "utmContent",
+  utmcontent: "utmContent",
+  utm_term: "utmTerm",
+  utmterm: "utmTerm",
+  referrer: "referrer",
+  referer: "referrer",
+}
+
+function normalizeKey(k: string): string {
+  return k.toLowerCase().replace(/[\s\-]+/g, "_")
+}
+
+function looksLikeUrl(v: string): boolean {
+  return /^https?:\/\//i.test(v)
+}
+
+function looksLikeCookieString(v: string): boolean {
+  // "a=1; b=2; c=3" — needs at least one ; and =
+  return v.includes(";") && v.includes("=") && !v.includes("\n")
+}
+
+function looksLikeQueryString(v: string): boolean {
+  // "a=1&b=2" — has & and = but doesn't start with http
+  return v.includes("=") && (v.includes("&") || v.startsWith("?")) && !looksLikeUrl(v)
+}
+
+function parseCookieString(v: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const pair of v.split(";")) {
+    const idx = pair.indexOf("=")
+    if (idx <= 0) continue
+    const k = pair.slice(0, idx).trim()
+    const val = pair.slice(idx + 1).trim()
+    if (k && val) out[k] = val
   }
-  return null
+  return out
+}
+
+function parseQs(v: string): Record<string, string> {
+  try {
+    const params = new URLSearchParams(v.startsWith("?") ? v.slice(1) : v)
+    const out: Record<string, string> = {}
+    params.forEach((val, key) => {
+      if (val) out[key] = val
+    })
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function parseUrl(v: string): { searchParams: Record<string, string>; full: string } | null {
+  try {
+    const u = new URL(v)
+    const sp: Record<string, string> = {}
+    u.searchParams.forEach((val, key) => {
+      if (val) sp[key] = val
+    })
+    return { searchParams: sp, full: v }
+  } catch {
+    return null
+  }
 }
 
 /**
- * Some providers pass URL params as a single query-string ("utm_source=..&yclid=..").
- * We try to parse it and probe individual keys.
+ * Walks an object/array recursively, collecting tracking-relevant data:
+ *   - direct key matches (yclid, utm_source, ...)
+ *   - URLs whose search params we extract
+ *   - cookie/qs strings whose pairs we extract
+ *   - candidate referrer values (any URL-looking string)
  */
-function tryParseQueryString(payload: any, paths: string[]): URLSearchParams | null {
-  for (const path of paths) {
-    const val = getByPath(payload, path)
-    if (typeof val === "string" && val.includes("=")) {
-      try {
-        return new URLSearchParams(val.startsWith("?") ? val.slice(1) : val)
-      } catch {
-        // ignore
+function walk(
+  node: any,
+  ctx: { result: TrackingData; referrerCandidates: Set<string>; depth: number },
+) {
+  if (!node || ctx.depth > 8) return
+  if (typeof node === "string") {
+    // Strings can carry URL/cookies/qs payloads — parse those as well
+    if (looksLikeUrl(node)) {
+      ctx.referrerCandidates.add(node)
+      const parsed = parseUrl(node)
+      if (parsed) {
+        for (const [k, v] of Object.entries(parsed.searchParams)) {
+          assignByKey(ctx.result, k, v)
+        }
+      }
+    } else if (looksLikeQueryString(node)) {
+      const pairs = parseQs(node)
+      for (const [k, v] of Object.entries(pairs)) {
+        assignByKey(ctx.result, k, v)
+      }
+    } else if (looksLikeCookieString(node)) {
+      const cookies = parseCookieString(node)
+      for (const [k, v] of Object.entries(cookies)) {
+        assignByKey(ctx.result, k, v)
       }
     }
+    return
   }
-  return null
+  if (typeof node !== "object") return
+
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      walk(item, { ...ctx, depth: ctx.depth + 1 })
+    }
+    return
+  }
+
+  for (const [rawKey, value] of Object.entries(node)) {
+    // Direct key match — assign the value
+    assignByKey(ctx.result, rawKey, value)
+
+    // Recurse into objects/arrays/strings
+    walk(value, { ...ctx, depth: ctx.depth + 1 })
+  }
+}
+
+function assignByKey(result: TrackingData, rawKey: string, value: any) {
+  const norm = normalizeKey(rawKey)
+  const target = KEY_MAP[norm]
+  if (!target) return
+  if (value === null || value === undefined) return
+  const str = typeof value === "string" ? value.trim() : String(value).trim()
+  if (!str) return
+  // First match wins — don't overwrite once set
+  if (result[target]) return
+  result[target] = str
 }
 
 export function extractTracking(payload: any): TrackingData {
-  if (!payload || typeof payload !== "object") {
-    return {
-      yclid: null,
-      gclid: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      utmTerm: null,
-      referrer: null,
-    }
+  if (!payload || typeof payload !== "object") return { ...EMPTY_TRACKING }
+
+  const result: TrackingData = { ...EMPTY_TRACKING }
+  const referrerCandidates = new Set<string>()
+
+  walk(payload, { result, referrerCandidates, depth: 0 })
+
+  // If referrer wasn't picked up by direct match, fall back to any URL we saw
+  if (!result.referrer && referrerCandidates.size > 0) {
+    // Prefer one with utm/yclid in it; otherwise just first
+    const sorted = Array.from(referrerCandidates).sort((a, b) => {
+      const score = (s: string) => (
+        (s.includes("yclid=") ? 4 : 0) +
+        (s.includes("gclid=") ? 4 : 0) +
+        (s.includes("utm_") ? 2 : 0)
+      )
+      return score(b) - score(a)
+    })
+    result.referrer = sorted[0]
   }
 
-  // Try parsing referrer URL — if it contains tracking params they take priority
-  const referrerStr = firstNonEmpty(payload, [
-    "referrer",
-    "referer",
-    "headers.referer",
-    "lead.referrer",
-    "data.referrer",
-    "meta.referrer",
-    "tracking.referrer",
-  ])
-
-  let referrerParams: URLSearchParams | null = null
-  if (referrerStr) {
-    try {
-      referrerParams = new URL(referrerStr).searchParams
-    } catch {
-      // not a valid URL, ignore
-    }
-  }
-
-  // Some webhooks pack everything into a query string field
-  const qs = tryParseQueryString(payload, [
-    "urlParams",
-    "url_params",
-    "queryString",
-    "query_string",
-    "params",
-    "data.params",
-    "lead.urlParams",
-  ])
-
-  function pick(name: string, paths: string[]): string | null {
-    return (
-      firstNonEmpty(payload, paths) ||
-      qs?.get(name) ||
-      referrerParams?.get(name) ||
-      null
-    )
-  }
-
-  return {
-    yclid: pick("yclid", [
-      "yclid",
-      "Yclid",
-      "YCLID",
-      "urlParams.yclid",
-      "url_params.yclid",
-      "data.yclid",
-      "params.yclid",
-      "tracking.yclid",
-      "formData.yclid",
-      "form_data.yclid",
-      "meta.yclid",
-      "lead.yclid",
-      "lead.urlParams.yclid",
-      "lead.tracking.yclid",
-      "utm.yclid",
-      "query.yclid",
-      "fields.yclid",
-      "answers.yclid",
-    ]),
-    gclid: pick("gclid", [
-      "gclid",
-      "Gclid",
-      "GCLID",
-      "urlParams.gclid",
-      "url_params.gclid",
-      "data.gclid",
-      "params.gclid",
-      "tracking.gclid",
-      "formData.gclid",
-      "form_data.gclid",
-      "meta.gclid",
-      "lead.gclid",
-      "lead.urlParams.gclid",
-      "lead.tracking.gclid",
-      "utm.gclid",
-      "query.gclid",
-      "fields.gclid",
-    ]),
-    utmSource: pick("utm_source", [
-      "utm_source",
-      "utmSource",
-      "urlParams.utm_source",
-      "data.utm_source",
-      "params.utm_source",
-      "tracking.utm_source",
-      "tracking.source",
-      "utm.source",
-      "lead.utm_source",
-    ]),
-    utmMedium: pick("utm_medium", [
-      "utm_medium",
-      "utmMedium",
-      "urlParams.utm_medium",
-      "data.utm_medium",
-      "params.utm_medium",
-      "tracking.utm_medium",
-      "tracking.medium",
-      "utm.medium",
-      "lead.utm_medium",
-    ]),
-    utmCampaign: pick("utm_campaign", [
-      "utm_campaign",
-      "utmCampaign",
-      "urlParams.utm_campaign",
-      "data.utm_campaign",
-      "params.utm_campaign",
-      "tracking.utm_campaign",
-      "tracking.campaign",
-      "utm.campaign",
-      "lead.utm_campaign",
-    ]),
-    utmContent: pick("utm_content", [
-      "utm_content",
-      "utmContent",
-      "urlParams.utm_content",
-      "data.utm_content",
-      "params.utm_content",
-      "tracking.utm_content",
-      "tracking.content",
-      "utm.content",
-      "lead.utm_content",
-    ]),
-    utmTerm: pick("utm_term", [
-      "utm_term",
-      "utmTerm",
-      "urlParams.utm_term",
-      "data.utm_term",
-      "params.utm_term",
-      "tracking.utm_term",
-      "tracking.term",
-      "utm.term",
-      "lead.utm_term",
-    ]),
-    referrer: referrerStr,
-  }
+  return result
 }
