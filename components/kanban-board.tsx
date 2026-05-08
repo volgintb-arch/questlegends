@@ -12,6 +12,7 @@ interface Deal {
   clientName?: string
   clientPhone?: string
   stageId?: string
+  createdAt?: string
 }
 
 interface Stage {

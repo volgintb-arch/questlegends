@@ -54,6 +54,14 @@ export function Header({
             <Edit3 size={12} className="text-muted-foreground" />
           </h2>
         )}
+        {dealData.createdAt && (
+          <span
+            className="text-[10px] text-muted-foreground whitespace-nowrap"
+            title={`Создан: ${new Date(dealData.createdAt).toLocaleString("ru-RU")}`}
+          >
+            Создан {new Date(dealData.createdAt).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+          </span>
+        )}
         {isSaving && <span className="text-[10px] text-muted-foreground">Сохранение...</span>}
       </div>
       <div className="flex items-center gap-2">

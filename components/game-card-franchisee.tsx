@@ -122,6 +122,7 @@ interface GameData {
   extrasAmount?: number
   paymentMethod?: string
   cancellationReason?: string
+  createdAt?: string
 }
 
 interface PipelineStage {
@@ -189,6 +190,7 @@ export function GameCardFranchisee({
     extrasAmount: safeGame.extrasAmount ?? 0,
     paymentMethod: safeGame.paymentMethod || "cash",
     cancellationReason: safeGame.cancellationReason || "",
+    createdAt: (safeGame as any).createdAt || "",
   })
   const [events, setEvents] = useState<FeedEvent[]>([])
   const [tasks, setTasks] = useState<GameTask[]>([])
@@ -244,6 +246,7 @@ export function GameCardFranchisee({
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
         cancellationReason: game.cancellationReason || "",
+        createdAt: (game as any).createdAt || "",
       })
       // Renamed loadGameDetails to loadGameData to match the updates
       loadGameData()
@@ -285,6 +288,7 @@ export function GameCardFranchisee({
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
         cancellationReason: game.cancellationReason || "",
+        createdAt: (game as any).createdAt || "",
       })
     }
   }, [game])
@@ -326,6 +330,7 @@ export function GameCardFranchisee({
             extrasAmount: data.data.extrasAmount ?? 0,
             paymentMethod: data.data.paymentMethod || "cash",
             cancellationReason: data.data.cancellationReason || "",
+            createdAt: data.data.createdAt || "",
           })
         }
       }
@@ -617,6 +622,14 @@ export function GameCardFranchisee({
               <User className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-semibold">{gameData.clientName}</span>
             </div>
+            {gameData.createdAt && (
+              <span
+                className="text-[10px] text-muted-foreground whitespace-nowrap"
+                title={`Создан: ${new Date(gameData.createdAt).toLocaleString("ru-RU")}`}
+              >
+                Создан {new Date(gameData.createdAt).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+              </span>
+            )}
             <Select value={gameData.stageId || ""} onValueChange={handleStageChange}>
               <SelectTrigger className="h-7 w-auto text-xs">
                 <SelectValue placeholder="Этап" />

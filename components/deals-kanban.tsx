@@ -50,6 +50,7 @@ interface Deal {
   taskCount?: number
   completedTaskCount?: number
   overdueTaskCount?: number
+  createdAt?: string
 }
 
 interface Pipeline {
@@ -204,6 +205,7 @@ export function DealsKanban({ role }: DealsKanbanProps) {
               location: deal.city || deal.location || "",
               amount: deal.budget ? `${Number(deal.budget).toLocaleString()} ₽` : "0 ₽",
               daysOpen: Math.floor((Date.now() - new Date(deal.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
+              createdAt: deal.createdAt,
               clientName: deal.clientName,
               clientPhone: deal.clientPhone,
               clientEmail: deal.clientEmail,

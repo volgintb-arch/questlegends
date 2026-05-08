@@ -14,6 +14,7 @@ interface Deal {
   contactName?: string
   city?: string
   responsibleName?: string
+  createdAt?: string
 }
 
 interface DealKanbanCardProps {
@@ -43,7 +44,15 @@ export function DealKanbanCard({ deal }: DealKanbanCardProps) {
           </div>
         )}
 
-        <div className="flex items-center justify-end pt-1">
+        <div className="flex items-center justify-between pt-1">
+          {deal.createdAt ? (
+            <span
+              className="text-[10px] text-muted-foreground whitespace-nowrap"
+              title={`Создан: ${new Date(deal.createdAt).toLocaleString("ru-RU")}`}
+            >
+              {new Date(deal.createdAt).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+            </span>
+          ) : <span />}
           <span className="text-[10px] text-muted-foreground">
             {deal.daysOpen} {deal.daysOpen === 1 ? "день" : deal.daysOpen < 5 ? "дня" : "дней"}
           </span>

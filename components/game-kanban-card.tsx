@@ -14,6 +14,7 @@ interface GameLead {
   prepayment: number
   status: string
   responsibleName?: string
+  createdAt?: string
 }
 
 interface GameKanbanCardProps {
@@ -32,10 +33,17 @@ export function GameKanbanCard({ game }: GameKanbanCardProps) {
   return (
     <div className="bg-background border rounded-lg p-2 hover:shadow-md transition-shadow">
       <div className="space-y-1.5">
-        {/* Client name */}
-        <div className="flex items-center gap-1">
-          <User className="h-3 w-3 text-muted-foreground" />
-          <span className="text-xs font-medium truncate">{game.clientName}</span>
+        {/* Client name + created date */}
+        <div className="flex items-start justify-between gap-1">
+          <div className="flex items-center gap-1 min-w-0">
+            <User className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-xs font-medium truncate">{game.clientName}</span>
+          </div>
+          {game.createdAt && (
+            <span className="text-[9px] text-muted-foreground whitespace-nowrap" title={new Date(game.createdAt).toLocaleString("ru-RU")}>
+              {formatDate(game.createdAt)}
+            </span>
+          )}
         </div>
 
         {/* Date and time */}

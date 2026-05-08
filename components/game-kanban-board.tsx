@@ -16,6 +16,7 @@ interface GameLead {
   status?: string
   stageId?: string
   responsibleName?: string
+  createdAt?: string
 }
 
 interface Stage {
