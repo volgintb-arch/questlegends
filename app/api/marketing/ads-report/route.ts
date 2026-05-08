@@ -261,8 +261,15 @@ export async function GET(req: NextRequest) {
     const conversionPct = (b: AggBucket) => (b.total > 0 ? +((b.completed / b.total) * 100).toFixed(1) : 0)
     const avgCheck = (b: AggBucket) => (b.completed > 0 ? Math.round(b.revenue / b.completed) : 0)
 
-    // Fetch ad cost aggregates from the Yandex.Direct ROI bot
-    const botCosts = (df && dt) ? await fetchBotAggregates(df, dt) : null
+    // Fetch ad cost aggregates from the Yandex.Direct ROI bot.
+    // ALWAYS try — if user picked "all time" with no dates, default to last 90 days
+    // so we still get real cost data for the report.
+    const botFrom = df ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+    const botTo = dt ?? new Date()
+    const botResult = await fetchBotAggregates(botFrom, botTo)
+    const botCosts = botResult.data
+    const botError = botResult.error
+    const botUrl = botResult.url
 
     const costByCampaign = new Map<string, number>()
     const costByContent = new Map<string, number>()
@@ -327,6 +334,11 @@ export async function GET(req: NextRequest) {
           .sort((a, b) => b.count - a.count),
         leads: rows,
         costsAvailable: botCosts !== null,
+        botStatus: {
+          url: botUrl,
+          ok: botCosts !== null,
+          error: botError,
+        },
       },
     })
   } catch (error) {

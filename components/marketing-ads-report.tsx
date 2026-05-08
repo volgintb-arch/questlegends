@@ -68,6 +68,11 @@ interface ApiResponse {
     cancellationReasons: Array<{ reason: string; count: number; campaigns: string[] }>
     leads: AdsLead[]
     costsAvailable: boolean
+    botStatus?: {
+      url: string
+      ok: boolean
+      error: string | null
+    }
   }
 }
 
@@ -277,9 +282,18 @@ export function MarketingAdsReport() {
       {!loading && !costsAvailable && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-xs text-yellow-700 dark:text-yellow-400 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            Стоимость рекламы недоступна — бот <code>direct-bot.questlegends.ru</code> не отвечает или ещё не настроен.
-            Конверсии и выручка считаются, CPL/ROI отображаются как «—».
+          <div className="flex-1">
+            <div className="font-medium">Стоимость рекламы недоступна</div>
+            <div className="mt-0.5 opacity-90">
+              CPL/ROI отображаются как «—». Конверсия и выручка считаются по лидам в любом случае.
+            </div>
+            {report?.botStatus?.error && (
+              <div className="mt-1.5 font-mono text-[10px] break-all">
+                <span className="opacity-70">{report.botStatus.url}</span>
+                <br />
+                <span className="text-red-500">→ {report.botStatus.error}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

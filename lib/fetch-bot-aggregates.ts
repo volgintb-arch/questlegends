@@ -42,31 +42,40 @@ export interface BotAggregatesResponse {
 
 const DEFAULT_BOT_URL = "https://direct-bot.questlegends.ru"
 
-export async function fetchBotAggregates(
-  from: Date,
-  to: Date,
-): Promise<BotAggregatesResponse | null> {
+export interface BotFetchResult {
+  data: BotAggregatesResponse | null
+  /** Human-readable reason for failure, null on success. */
+  error: string | null
+  /** URL that was actually called (for debugging). */
+  url: string
+}
+
+export async function fetchBotAggregates(from: Date, to: Date): Promise<BotFetchResult> {
   const apiKey = process.env.INTEGRATION_API_KEY
-  if (!apiKey) {
-    console.warn("[bot-aggregates] INTEGRATION_API_KEY not set — skipping cost fetch")
-    return null
-  }
+  // Support both DIRECT_BOT_URL and BOT_URL env names
+  const baseUrl = (process.env.DIRECT_BOT_URL || process.env.BOT_URL || DEFAULT_BOT_URL).replace(/\/$/, "")
 
-  const baseUrl = (process.env.DIRECT_BOT_URL || DEFAULT_BOT_URL).replace(/\/$/, "")
-
-  // Format as YYYY-MM-DD (bot expects date-only)
   const fmt = (d: Date) => d.toISOString().split("T")[0]
   const url = `${baseUrl}/api/marketing/aggregates?from=${fmt(from)}&to=${fmt(to)}`
 
+  if (!apiKey) {
+    const error = "INTEGRATION_API_KEY is not set in QL OS env"
+    console.warn(`[bot-aggregates] ${error}`)
+    return { data: null, error, url }
+  }
+
+  console.log(`[bot-aggregates] fetching ${url} (key prefix: ${apiKey.slice(0, 6)}…)`)
+
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 10000) // 10s timeout
+    const timeout = setTimeout(() => controller.abort(), 10000)
 
     const res = await fetch(url, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         Accept: "application/json",
+        "User-Agent": "QuestLegends-OS/1.0",
       },
       signal: controller.signal,
       cache: "no-store",
@@ -74,27 +83,34 @@ export async function fetchBotAggregates(
     clearTimeout(timeout)
 
     if (!res.ok) {
-      console.warn(`[bot-aggregates] non-OK response: ${res.status} ${res.statusText}`)
-      return null
+      const body = await res.text().catch(() => "")
+      const error = `Bot returned HTTP ${res.status} ${res.statusText}${body ? `: ${body.slice(0, 200)}` : ""}`
+      console.warn(`[bot-aggregates] ${error}`)
+      return { data: null, error, url }
     }
     const data = (await res.json()) as Partial<BotAggregatesResponse>
     if (!data || typeof data !== "object") {
-      return null
+      return { data: null, error: "Bot returned non-object body", url }
     }
-    // Defensive normalization in case bot sends partial fields
+    console.log(`[bot-aggregates] OK: totalCost=${data.totalCost}, byCampaign=${(data.byCampaign as any)?.length ?? 0}`)
     return {
-      from: String(data.from || fmt(from)),
-      to: String(data.to || fmt(to)),
-      currency: "RUB",
-      totalCost: Number(data.totalCost) || 0,
-      totalImpressions: typeof data.totalImpressions === "number" ? data.totalImpressions : undefined,
-      totalClicks: typeof data.totalClicks === "number" ? data.totalClicks : undefined,
-      byCampaign: Array.isArray(data.byCampaign) ? (data.byCampaign as any) : [],
-      byContent: Array.isArray(data.byContent) ? (data.byContent as any) : [],
-      bySource: Array.isArray(data.bySource) ? (data.bySource as any) : [],
+      data: {
+        from: String(data.from || fmt(from)),
+        to: String(data.to || fmt(to)),
+        currency: "RUB",
+        totalCost: Number(data.totalCost) || 0,
+        totalImpressions: typeof data.totalImpressions === "number" ? data.totalImpressions : undefined,
+        totalClicks: typeof data.totalClicks === "number" ? data.totalClicks : undefined,
+        byCampaign: Array.isArray(data.byCampaign) ? (data.byCampaign as any) : [],
+        byContent: Array.isArray(data.byContent) ? (data.byContent as any) : [],
+        bySource: Array.isArray(data.bySource) ? (data.bySource as any) : [],
+      },
+      error: null,
+      url,
     }
   } catch (e: any) {
-    console.warn("[bot-aggregates] fetch failed:", e?.message || e)
-    return null
+    const error = `fetch failed: ${e?.name === "AbortError" ? "timeout (10s)" : e?.message || String(e)}`
+    console.warn(`[bot-aggregates] ${error}`)
+    return { data: null, error, url }
   }
 }
