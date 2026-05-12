@@ -58,6 +58,12 @@ export interface BotFetchResult {
 }
 
 const DEFAULT_BOT_URL = "https://direct-bot.questlegends.ru"
+const FETCH_TIMEOUT_MS = 30000 // 30s — wide date ranges may take time on bot side
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 min
+
+// Process-level cache to avoid hammering the bot on every page render.
+type CacheEntry = { at: number; result: BotFetchResult }
+const aggregatesCache = new Map<string, CacheEntry>()
 
 export async function fetchBotAggregates(from: Date, to: Date): Promise<BotFetchResult> {
   const apiKey = process.env.INTEGRATION_API_KEY
@@ -65,6 +71,15 @@ export async function fetchBotAggregates(from: Date, to: Date): Promise<BotFetch
 
   const fmt = (d: Date) => d.toISOString().split("T")[0]
   const url = `${baseUrl}/api/marketing/aggregates?from=${fmt(from)}&to=${fmt(to)}`
+  const cacheKey = url
+
+  // Serve cached result if fresh (and the cached result was successful)
+  const cached = aggregatesCache.get(cacheKey)
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS && cached.result.data) {
+    const ageSec = Math.round((Date.now() - cached.at) / 1000)
+    console.log(`[bot-aggregates] CACHE HIT (age ${ageSec}s) for ${url}`)
+    return cached.result
+  }
 
   if (!apiKey) {
     const error = "INTEGRATION_API_KEY is not set in QL OS env"
@@ -72,11 +87,12 @@ export async function fetchBotAggregates(from: Date, to: Date): Promise<BotFetch
     return { data: null, error, url }
   }
 
-  console.log(`[bot-aggregates] fetching ${url} (key prefix: ${apiKey.slice(0, 6)}…)`)
+  const startedAt = Date.now()
+  console.log(`[bot-aggregates] → outbound GET ${url} (key prefix: ${apiKey.slice(0, 6)}…, timeout ${FETCH_TIMEOUT_MS}ms)`)
 
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 10000)
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
     const res = await fetch(url, {
       method: "GET",
@@ -89,6 +105,8 @@ export async function fetchBotAggregates(from: Date, to: Date): Promise<BotFetch
       cache: "no-store",
     })
     clearTimeout(timeout)
+    const elapsedMs = Date.now() - startedAt
+    console.log(`[bot-aggregates] ← response in ${elapsedMs}ms: HTTP ${res.status} ${res.statusText}`)
 
     if (!res.ok) {
       const body = await res.text().catch(() => "")
@@ -148,10 +166,19 @@ export async function fetchBotAggregates(from: Date, to: Date): Promise<BotFetch
     console.log(
       `[bot-aggregates] OK: totalCost=${data.totalCost}, campaigns=${data.campaigns.length}, ads=${data.ads.length}`,
     )
-    return { data, error: null, url }
+    const result: BotFetchResult = { data, error: null, url }
+    aggregatesCache.set(cacheKey, { at: Date.now(), result })
+    return result
   } catch (e: any) {
-    const error = `fetch failed: ${e?.name === "AbortError" ? "timeout (10s)" : e?.message || String(e)}`
+    const elapsedMs = Date.now() - startedAt
+    const error = `fetch failed after ${elapsedMs}ms: ${e?.name === "AbortError" ? `timeout (${FETCH_TIMEOUT_MS / 1000}s)` : e?.message || String(e)}`
     console.warn(`[bot-aggregates] ${error}`)
+    // If we have stale cached data, fall back to it rather than nothing
+    if (cached && cached.result.data) {
+      const ageSec = Math.round((Date.now() - cached.at) / 1000)
+      console.log(`[bot-aggregates] returning STALE cache (age ${ageSec}s) after fetch error`)
+      return cached.result
+    }
     return { data: null, error, url }
   }
 }
