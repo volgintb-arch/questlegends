@@ -271,39 +271,57 @@ export async function GET(req: NextRequest) {
     const botError = botResult.error
     const botUrl = botResult.url
 
-    const costByCampaign = new Map<string, number>()
-    const costByContent = new Map<string, number>()
-    const costBySource = new Map<string, number>()
+    // Match bot costs to our lead buckets:
+    //   • objявления — точно по utm_content == bot.adId
+    //   • кампании — fuzzy by name (utm_campaign содержит slug кампании Я.Директ;
+    //     bot.campaigns[].name — человекочитаемое имя)
+    const normalizeForMatch = (s: string | null | undefined) =>
+      (s || "").toString().trim().toLowerCase().replace(/[\s_\-]+/g, "")
+
+    const costByAdId = new Map<string, number>()
     if (botCosts) {
-      for (const c of botCosts.byCampaign || []) {
-        const key = `${c.utmCampaign || "(без кампании)"}__${c.utmSource || "(без источника)"}`
-        costByCampaign.set(key, (costByCampaign.get(key) || 0) + (Number(c.cost) || 0))
+      for (const ad of botCosts.ads) {
+        const id = String(ad.adId || "")
+        if (id) costByAdId.set(id, (costByAdId.get(id) || 0) + ad.cost)
       }
-      for (const c of botCosts.byContent || []) {
-        const key = `${c.utmContent || "(без объявления)"}__${c.utmCampaign || "(без кампании)"}`
-        costByContent.set(key, (costByContent.get(key) || 0) + (Number(c.cost) || 0))
+    }
+
+    function matchCampaignCost(utmCampaign: string): number {
+      if (!botCosts || !utmCampaign || utmCampaign === "(без кампании)") return 0
+      const target = normalizeForMatch(utmCampaign)
+      let cost = 0
+      for (const c of botCosts.campaigns) {
+        const name = normalizeForMatch(c.name)
+        // exact, contains, или starts-with — самый щадящий мэппинг
+        if (name === target || name.includes(target) || target.includes(name)) {
+          cost += c.cost
+        }
       }
-      for (const c of botCosts.bySource || []) {
-        const key = c.utmSource || "(без источника)"
-        costBySource.set(key, (costBySource.get(key) || 0) + (Number(c.cost) || 0))
-      }
+      return cost
     }
 
     const cpl = (cost: number, leads: number) => (leads > 0 && cost > 0 ? Math.round(cost / leads) : null)
     const roas = (cost: number, revenue: number) => (cost > 0 ? +((revenue / cost) * 100).toFixed(1) : null)
     const roi = (cost: number, revenue: number) => (cost > 0 ? +(((revenue - cost) / cost) * 100).toFixed(1) : null)
 
-    const enrich = <T extends AggBucket>(b: T, costMap: Map<string, number>, key: string) => {
-      const cost = costMap.get(key) || 0
-      return {
-        ...b,
-        conversionPct: conversionPct(b),
-        avgCheck: avgCheck(b),
-        cost,
-        cpl: cpl(cost, b.total),
-        roas: roas(cost, b.revenue),
-        roi: roi(cost, b.revenue),
+    const enrichWithCost = <T extends AggBucket>(b: T, cost: number) => ({
+      ...b,
+      conversionPct: conversionPct(b),
+      avgCheck: avgCheck(b),
+      cost,
+      cpl: cpl(cost, b.total),
+      roas: roas(cost, b.revenue),
+      roi: roi(cost, b.revenue),
+    })
+
+    // Sum of stage breakdown: how many leads sit in each pipeline stage right now
+    const byStage = new Map<string, AggBucket & { stageName: string }>()
+    for (const r of rows) {
+      const key = r.currentStage || "(без этапа)"
+      if (!byStage.has(key)) {
+        byStage.set(key, { ...emptyBucket(), stageName: key })
       }
+      pushTo(byStage.get(key)!, r)
     }
 
     return NextResponse.json({
@@ -320,19 +338,29 @@ export async function GET(req: NextRequest) {
           impressions: botCosts?.totalImpressions ?? null,
           clicks: botCosts?.totalClicks ?? null,
         },
-        byCampaign: Array.from(byCampaign.entries())
-          .map(([key, b]) => enrich(b, costByCampaign, key))
+        byCampaign: Array.from(byCampaign.values())
+          .map((b) => enrichWithCost(b, matchCampaignCost(b.utmCampaign)))
           .sort((a, b) => b.total - a.total),
-        byContent: Array.from(byContent.entries())
-          .map(([key, b]) => enrich(b, costByContent, key))
+        byContent: Array.from(byContent.values())
+          .map((b) => enrichWithCost(b, costByAdId.get(b.utmContent) || 0))
           .sort((a, b) => b.total - a.total),
-        bySource: Array.from(bySource.entries())
-          .map(([key, b]) => enrich(b, costBySource, key))
+        bySource: Array.from(bySource.values())
+          .map((b) => enrichWithCost(b, 0))
+          .sort((a, b) => b.total - a.total),
+        byStage: Array.from(byStage.values())
+          .map((b) => ({
+            ...b,
+            conversionPct: conversionPct(b),
+            avgCheck: avgCheck(b),
+          }))
           .sort((a, b) => b.total - a.total),
         cancellationReasons: Array.from(reasonCounts.values())
           .map((r) => ({ reason: r.reason, count: r.count, campaigns: Array.from(r.campaigns) }))
           .sort((a, b) => b.count - a.count),
         leads: rows,
+        // Raw bot data — campaigns & ads from Я.Директ (даже без сопоставления с лидами)
+        directCampaigns: botCosts?.campaigns || [],
+        directAds: botCosts?.ads || [],
         costsAvailable: botCosts !== null,
         botStatus: {
           url: botUrl,

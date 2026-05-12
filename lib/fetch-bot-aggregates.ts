@@ -5,24 +5,37 @@
  *   GET https://direct-bot.questlegends.ru/api/marketing/aggregates?from=YYYY-MM-DD&to=YYYY-MM-DD
  *   Authorization: Bearer ${INTEGRATION_API_KEY}
  *
- * Expected response (current contract — adjust if bot changes shape):
+ * Bot's actual response schema:
  *   {
- *     from: string,
- *     to: string,
- *     currency: "RUB",
- *     totalCost: number,
- *     totalImpressions?: number,
- *     totalClicks?: number,
- *     byCampaign: [{ utmCampaign, utmSource, cost, impressions?, clicks? }],
- *     byContent:  [{ utmContent, utmCampaign?, cost, impressions?, clicks? }],
- *     bySource:   [{ utmSource, cost, impressions?, clicks? }]
+ *     period: { from, to },
+ *     totals: { cost, impressions, clicks, ctr, avgCpc },
+ *     campaigns: [{ campaignId, name, type, city, state, cost, impressions, clicks, ctr, avgCpc }],
+ *     ads: [{ adId, campaignId, adgroupId, title1, title2, text, url, cost, impressions?, clicks? }]
  *   }
  *
- * Errors are returned softly (resolves with null) so the UI can show the report
- * without costs if the bot is down — instead of 500-ing the whole page.
+ * We normalize this to a flat shape that downstream code can consume by lead
+ * matching keys (campaign name and adId).
  */
 
-export interface BotCostBucket {
+export interface BotCampaign {
+  campaignId: number | string
+  name: string
+  type?: string
+  state?: string
+  cost: number
+  impressions?: number
+  clicks?: number
+  ctr?: number
+  avgCpc?: number
+}
+
+export interface BotAd {
+  adId: number | string
+  campaignId?: number | string
+  title1?: string
+  title2?: string
+  text?: string
+  url?: string
   cost: number
   impressions?: number
   clicks?: number
@@ -31,28 +44,23 @@ export interface BotCostBucket {
 export interface BotAggregatesResponse {
   from: string
   to: string
-  currency: "RUB"
   totalCost: number
   totalImpressions?: number
   totalClicks?: number
-  byCampaign: Array<BotCostBucket & { utmCampaign: string; utmSource?: string }>
-  byContent: Array<BotCostBucket & { utmContent: string; utmCampaign?: string }>
-  bySource: Array<BotCostBucket & { utmSource: string }>
+  campaigns: BotCampaign[]
+  ads: BotAd[]
+}
+
+export interface BotFetchResult {
+  data: BotAggregatesResponse | null
+  error: string | null
+  url: string
 }
 
 const DEFAULT_BOT_URL = "https://direct-bot.questlegends.ru"
 
-export interface BotFetchResult {
-  data: BotAggregatesResponse | null
-  /** Human-readable reason for failure, null on success. */
-  error: string | null
-  /** URL that was actually called (for debugging). */
-  url: string
-}
-
 export async function fetchBotAggregates(from: Date, to: Date): Promise<BotFetchResult> {
   const apiKey = process.env.INTEGRATION_API_KEY
-  // Support both DIRECT_BOT_URL and BOT_URL env names
   const baseUrl = (process.env.DIRECT_BOT_URL || process.env.BOT_URL || DEFAULT_BOT_URL).replace(/\/$/, "")
 
   const fmt = (d: Date) => d.toISOString().split("T")[0]
@@ -88,34 +96,59 @@ export async function fetchBotAggregates(from: Date, to: Date): Promise<BotFetch
       console.warn(`[bot-aggregates] ${error}`)
       return { data: null, error, url }
     }
+
     const rawBody = await res.text()
-    let data: any
+    let raw: any
     try {
-      data = JSON.parse(rawBody)
+      raw = JSON.parse(rawBody)
     } catch {
       console.warn(`[bot-aggregates] body is not JSON. Raw response (first 500 chars):\n${rawBody.slice(0, 500)}`)
       return { data: null, error: "Bot returned non-JSON body", url }
     }
-    if (!data || typeof data !== "object") {
+    if (!raw || typeof raw !== "object") {
       return { data: null, error: "Bot returned non-object body", url }
     }
-    // Log full body so we can adjust to the bot's actual schema if needed
-    console.log(`[bot-aggregates] OK: keys=[${Object.keys(data).join(",")}]  raw=${JSON.stringify(data).slice(0, 800)}`)
-    return {
-      data: {
-        from: String(data.from || fmt(from)),
-        to: String(data.to || fmt(to)),
-        currency: "RUB",
-        totalCost: Number(data.totalCost) || 0,
-        totalImpressions: typeof data.totalImpressions === "number" ? data.totalImpressions : undefined,
-        totalClicks: typeof data.totalClicks === "number" ? data.totalClicks : undefined,
-        byCampaign: Array.isArray(data.byCampaign) ? (data.byCampaign as any) : [],
-        byContent: Array.isArray(data.byContent) ? (data.byContent as any) : [],
-        bySource: Array.isArray(data.bySource) ? (data.bySource as any) : [],
-      },
-      error: null,
-      url,
+
+    // Bot's actual schema: totals.cost / campaigns / ads
+    const totals = raw.totals || {}
+    const period = raw.period || {}
+    const data: BotAggregatesResponse = {
+      from: String(period.from || fmt(from)),
+      to: String(period.to || fmt(to)),
+      totalCost: Number(totals.cost) || 0,
+      totalImpressions: typeof totals.impressions === "number" ? totals.impressions : undefined,
+      totalClicks: typeof totals.clicks === "number" ? totals.clicks : undefined,
+      campaigns: Array.isArray(raw.campaigns)
+        ? raw.campaigns.map((c: any) => ({
+            campaignId: c.campaignId ?? c.id ?? "",
+            name: String(c.name || ""),
+            type: c.type,
+            state: c.state,
+            cost: Number(c.cost) || 0,
+            impressions: typeof c.impressions === "number" ? c.impressions : undefined,
+            clicks: typeof c.clicks === "number" ? c.clicks : undefined,
+            ctr: typeof c.ctr === "number" ? c.ctr : undefined,
+            avgCpc: typeof c.avgCpc === "number" ? c.avgCpc : undefined,
+          }))
+        : [],
+      ads: Array.isArray(raw.ads)
+        ? raw.ads.map((a: any) => ({
+            adId: a.adId ?? a.id ?? "",
+            campaignId: a.campaignId,
+            title1: a.title1,
+            title2: a.title2,
+            text: a.text,
+            url: a.url,
+            cost: Number(a.cost) || 0,
+            impressions: typeof a.impressions === "number" ? a.impressions : undefined,
+            clicks: typeof a.clicks === "number" ? a.clicks : undefined,
+          }))
+        : [],
     }
+    console.log(
+      `[bot-aggregates] OK: totalCost=${data.totalCost}, campaigns=${data.campaigns.length}, ads=${data.ads.length}`,
+    )
+    return { data, error: null, url }
   } catch (e: any) {
     const error = `fetch failed: ${e?.name === "AbortError" ? "timeout (10s)" : e?.message || String(e)}`
     console.warn(`[bot-aggregates] ${error}`)

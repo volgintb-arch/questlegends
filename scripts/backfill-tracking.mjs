@@ -84,10 +84,12 @@ function extractFromNotes(notes) {
 
 async function backfillTable(table) {
   console.log(`\n=== ${table} ===`)
+  // Deal stores comment in additionalComment, GameLead in notes
+  const textCol = table === "Deal" ? "additionalComment" : "notes"
   const rows = await sql.unsafe(`
-    SELECT id, notes, "yclid", "gclid", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "referrer"
+    SELECT id, "${textCol}" AS notes, "yclid", "gclid", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "referrer"
     FROM "${table}"
-    WHERE notes IS NOT NULL
+    WHERE "${textCol}" IS NOT NULL
       AND ("yclid" IS NULL AND "gclid" IS NULL AND "utmSource" IS NULL)
     LIMIT 5000
   `)

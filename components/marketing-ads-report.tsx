@@ -58,6 +58,43 @@ interface Bucket {
   roi: number | null
 }
 
+interface DirectCampaign {
+  campaignId: number | string
+  name: string
+  type?: string
+  state?: string
+  cost: number
+  impressions?: number
+  clicks?: number
+  ctr?: number
+  avgCpc?: number
+}
+
+interface DirectAd {
+  adId: number | string
+  campaignId?: number | string
+  title1?: string
+  title2?: string
+  text?: string
+  url?: string
+  cost: number
+  impressions?: number
+  clicks?: number
+}
+
+interface StageBucket {
+  stageName: string
+  total: number
+  new: number
+  inProgress: number
+  approved: number
+  completed: number
+  cancelled: number
+  revenue: number
+  conversionPct: number
+  avgCheck: number
+}
+
 interface ApiResponse {
   success: boolean
   data: {
@@ -65,8 +102,11 @@ interface ApiResponse {
     byCampaign: Array<Bucket & { utmCampaign: string; utmSource: string }>
     byContent: Array<Bucket & { utmContent: string; utmCampaign: string }>
     bySource: Array<Bucket & { utmSource: string }>
+    byStage: StageBucket[]
     cancellationReasons: Array<{ reason: string; count: number; campaigns: string[] }>
     leads: AdsLead[]
+    directCampaigns: DirectCampaign[]
+    directAds: DirectAd[]
     costsAvailable: boolean
     botStatus?: {
       url: string
@@ -369,7 +409,7 @@ export function MarketingAdsReport() {
       </div>
 
       {/* KPI top row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <div className="bg-card border border-border rounded-lg p-3">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp className="w-4 h-4 text-primary" />
@@ -383,6 +423,13 @@ export function MarketingAdsReport() {
             <span className="text-xs text-muted-foreground">Завершено</span>
           </div>
           <p className="text-xl font-bold text-green-500">{fmt(totals?.completed)}</p>
+        </div>
+        <div className="bg-card border border-border rounded-lg p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="w-4 h-4 text-blue-500" />
+            <span className="text-xs text-muted-foreground">В работе</span>
+          </div>
+          <p className="text-xl font-bold text-blue-500">{fmt((totals?.new || 0) + (totals?.inProgress || 0))}</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-3">
           <div className="flex items-center gap-2 mb-1">
@@ -524,6 +571,92 @@ export function MarketingAdsReport() {
         </div>
       )}
 
+      {/* By Stage — детально, какие лиды на каком этапе сейчас */}
+      {report && report.byStage && report.byStage.length > 0 && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="p-3 border-b border-border">
+            <h2 className="text-sm font-semibold">По этапам воронки</h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Распределение всех рекламных лидов по текущим этапам CRM — видно где они "застревают"
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium">Этап</th>
+                  <th className="text-right px-3 py-2 font-medium">Лидов</th>
+                  <th className="text-right px-3 py-2 font-medium">% от всех</th>
+                  <th className="text-right px-3 py-2 font-medium">Конверсия в продажу</th>
+                  <th className="text-right px-3 py-2 font-medium">Выручка</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byStage.map((s, i) => {
+                  const totalLeads = report.totals?.total || 0
+                  const sharePct = totalLeads > 0 ? ((s.total / totalLeads) * 100).toFixed(1) : "0"
+                  return (
+                    <tr key={i} className="border-t border-border">
+                      <td className="px-3 py-2 font-medium">{s.stageName}</td>
+                      <td className="px-3 py-2 text-right">{s.total}</td>
+                      <td className="px-3 py-2 text-right text-muted-foreground">{sharePct}%</td>
+                      <td className="px-3 py-2 text-right">{fmtPct(s.conversionPct)}</td>
+                      <td className="px-3 py-2 text-right">{fmt(s.revenue)} ₽</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Direct campaigns — все кампании Я.Директ от бота, даже без лидов */}
+      {report && report.directCampaigns && report.directCampaigns.length > 0 && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="p-3 border-b border-border">
+            <h2 className="text-sm font-semibold">Кампании Я.Директ (от бота)</h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Сырые данные расхода/показов/кликов по каждой кампании из Я.Директ
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium">Название</th>
+                  <th className="text-left px-3 py-2 font-medium">Тип</th>
+                  <th className="text-left px-3 py-2 font-medium">Статус</th>
+                  <th className="text-right px-3 py-2 font-medium">Показы</th>
+                  <th className="text-right px-3 py-2 font-medium">Клики</th>
+                  <th className="text-right px-3 py-2 font-medium">CTR</th>
+                  <th className="text-right px-3 py-2 font-medium">Ср. CPC</th>
+                  <th className="text-right px-3 py-2 font-medium">Расход</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.directCampaigns.map((c) => (
+                  <tr key={String(c.campaignId)} className="border-t border-border">
+                    <td className="px-3 py-2 font-medium">{c.name}</td>
+                    <td className="px-3 py-2 text-muted-foreground text-[10px]">{c.type || "—"}</td>
+                    <td className="px-3 py-2 text-[10px]">
+                      <span className={c.state === "ON" ? "text-green-500" : "text-muted-foreground"}>
+                        {c.state || "—"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right">{fmt(c.impressions)}</td>
+                    <td className="px-3 py-2 text-right">{fmt(c.clicks)}</td>
+                    <td className="px-3 py-2 text-right">{c.ctr != null ? `${c.ctr}%` : "—"}</td>
+                    <td className="px-3 py-2 text-right">{c.avgCpc != null ? `${fmt(c.avgCpc)} ₽` : "—"}</td>
+                    <td className="px-3 py-2 text-right font-medium">{fmt(c.cost)} ₽</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* By Source + Cancellation reasons side-by-side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {report && report.bySource.length > 0 && (
@@ -592,6 +725,42 @@ export function MarketingAdsReport() {
         )}
       </div>
 
+      {/* По этапам воронки */}
+      {report && report.byStage && report.byStage.length > 0 && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="p-3 border-b border-border">
+            <h2 className="text-sm font-semibold">По этапам воронки</h2>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Где сейчас находятся рекламные лиды
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium">Этап</th>
+                  <th className="text-right px-3 py-2 font-medium">Лидов</th>
+                  <th className="text-right px-3 py-2 font-medium">Конверсия</th>
+                  <th className="text-right px-3 py-2 font-medium">Выручка</th>
+                  <th className="text-right px-3 py-2 font-medium">Ср. чек</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byStage.map((s) => (
+                  <tr key={s.stageName} className="border-t border-border">
+                    <td className="px-3 py-2 font-medium">{s.stageName}</td>
+                    <td className="px-3 py-2 text-right">{fmt(s.total)}</td>
+                    <td className="px-3 py-2 text-right">{fmtPct(s.conversionPct)}</td>
+                    <td className="px-3 py-2 text-right">{fmt(s.revenue)} ₽</td>
+                    <td className="px-3 py-2 text-right">{fmt(s.avgCheck)} ₽</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Leads list */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <div className="p-3 border-b border-border flex items-center justify-between">
@@ -608,6 +777,7 @@ export function MarketingAdsReport() {
                 <th className="text-left px-3 py-2 font-medium">Объявление</th>
                 <th className="text-left px-3 py-2 font-medium">yclid/gclid</th>
                 <th className="text-left px-3 py-2 font-medium">Создан</th>
+                <th className="text-left px-3 py-2 font-medium">Этап</th>
                 <th className="text-left px-3 py-2 font-medium">Статус</th>
                 <th className="text-left px-3 py-2 font-medium">Причина отказа</th>
                 <th className="text-right px-3 py-2 font-medium">Сумма</th>
@@ -616,13 +786,13 @@ export function MarketingAdsReport() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={isUK ? 9 : 8} className="text-center py-8 text-muted-foreground">
+                  <td colSpan={isUK ? 10 : 9} className="text-center py-8 text-muted-foreground">
                     Загрузка...
                   </td>
                 </tr>
               ) : !report || report.leads.length === 0 ? (
                 <tr>
-                  <td colSpan={isUK ? 9 : 8} className="text-center py-8 text-muted-foreground">
+                  <td colSpan={isUK ? 10 : 9} className="text-center py-8 text-muted-foreground">
                     Нет рекламных лидов за выбранный период
                   </td>
                 </tr>
@@ -655,6 +825,7 @@ export function MarketingAdsReport() {
                     <td className="px-3 py-2 text-muted-foreground">
                       {new Date(l.createdAt).toLocaleDateString("ru-RU")}
                     </td>
+                    <td className="px-3 py-2 text-muted-foreground">{l.currentStage || "—"}</td>
                     <td className="px-3 py-2">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded border ${STATUS_COLOR[l.status]}`}>
                         {STATUS_LABEL[l.status]}
