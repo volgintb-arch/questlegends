@@ -92,7 +92,9 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error: any) {
-    console.error("[login] Login error occurred")
+    console.error("[login] Login failed:", error?.message || error)
+    if (error?.stack) console.error(error.stack)
+    if (error?.code) console.error("[login] PG code:", error.code, "detail:", error?.detail)
     await logApiError(error, request).catch(() => {})
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
