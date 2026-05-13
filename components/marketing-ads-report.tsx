@@ -68,6 +68,13 @@ interface DirectCampaign {
   clicks?: number
   ctr?: number
   avgCpc?: number
+  // Enriched server-side by matching utm_campaign on leads
+  leads?: number
+  completed?: number
+  revenue?: number
+  cpl?: number | null
+  roas?: number | null
+  roi?: number | null
 }
 
 interface DirectAd {
@@ -107,6 +114,8 @@ interface ApiResponse {
     leads: AdsLead[]
     directCampaigns: DirectCampaign[]
     directAds: DirectAd[]
+    availableDirectCampaigns?: Array<{ campaignId: number | string; name: string }>
+    appliedFilters?: { directCampaign: string | null }
     costsAvailable: boolean
     botStatus?: {
       url: string
@@ -162,6 +171,8 @@ export function MarketingAdsReport() {
   const [franchiseeId, setFranchiseeId] = useState<string>("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  // Filter by a specific Я.Директ campaign (matched fuzzy by name)
+  const [directCampaign, setDirectCampaign] = useState<string>("all")
 
   useEffect(() => {
     if (!isUK) return
@@ -187,6 +198,7 @@ export function MarketingAdsReport() {
       if (type !== "all") params.set("type", type)
       if (strict) params.set("strict", "1")
       if (isUK && franchiseeId !== "all") params.set("franchiseeId", franchiseeId)
+      if (directCampaign !== "all") params.set("directCampaign", directCampaign)
 
       const res = await fetch(`/api/marketing/ads-report?${params}`, { headers: getAuthHeaders() })
       if (res.ok) {
@@ -203,7 +215,7 @@ export function MarketingAdsReport() {
   useEffect(() => {
     loadReport()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, strict, dateFrom, dateTo, franchiseeId])
+  }, [type, strict, dateFrom, dateTo, franchiseeId, directCampaign])
 
   const totals = report?.totals
   const costsAvailable = report?.costsAvailable ?? false
@@ -368,6 +380,20 @@ export function MarketingAdsReport() {
               </select>
             </>
           )}
+
+          <select
+            value={directCampaign}
+            onChange={(e) => setDirectCampaign(e.target.value)}
+            className="h-8 px-2 text-xs bg-background border border-border rounded outline-none focus:ring-2 focus:ring-primary max-w-[260px]"
+            title="Фильтр по рекламной кампании Я.Директ"
+          >
+            <option value="all">Все кампании Я.Директ</option>
+            {(report?.availableDirectCampaigns || []).map((c) => (
+              <option key={String(c.campaignId)} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
 
           <label className="flex items-center gap-1.5 text-xs cursor-pointer">
             <input
@@ -632,11 +658,22 @@ export function MarketingAdsReport() {
                   <th className="text-right px-3 py-2 font-medium">CTR</th>
                   <th className="text-right px-3 py-2 font-medium">Ср. CPC</th>
                   <th className="text-right px-3 py-2 font-medium">Расход</th>
+                  <th className="text-right px-3 py-2 font-medium">Лидов</th>
+                  <th className="text-right px-3 py-2 font-medium">CPL</th>
+                  <th className="text-right px-3 py-2 font-medium">Выручка</th>
+                  <th className="text-right px-3 py-2 font-medium">ROI</th>
                 </tr>
               </thead>
               <tbody>
                 {report.directCampaigns.map((c) => (
-                  <tr key={String(c.campaignId)} className="border-t border-border">
+                  <tr
+                    key={String(c.campaignId)}
+                    onClick={() => setDirectCampaign(directCampaign === c.name ? "all" : c.name)}
+                    className={`border-t border-border cursor-pointer hover:bg-muted/40 transition-colors ${
+                      directCampaign === c.name ? "bg-primary/5" : ""
+                    }`}
+                    title="Нажмите чтобы отфильтровать страницу по этой кампании"
+                  >
                     <td className="px-3 py-2 font-medium">{c.name}</td>
                     <td className="px-3 py-2 text-muted-foreground text-[10px]">{c.type || "—"}</td>
                     <td className="px-3 py-2 text-[10px]">
@@ -649,6 +686,18 @@ export function MarketingAdsReport() {
                     <td className="px-3 py-2 text-right">{c.ctr != null ? `${c.ctr}%` : "—"}</td>
                     <td className="px-3 py-2 text-right">{c.avgCpc != null ? `${fmt(c.avgCpc)} ₽` : "—"}</td>
                     <td className="px-3 py-2 text-right font-medium">{fmt(c.cost)} ₽</td>
+                    <td className="px-3 py-2 text-right">{fmt(c.leads ?? 0)}</td>
+                    <td className="px-3 py-2 text-right font-medium">
+                      {c.cpl != null ? `${fmt(c.cpl)} ₽` : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right">{fmt(c.revenue ?? 0)} ₽</td>
+                    <td
+                      className={`px-3 py-2 text-right font-medium ${
+                        c.roi == null ? "" : c.roi >= 0 ? "text-green-500" : "text-red-500"
+                      }`}
+                    >
+                      {c.roi != null ? `${c.roi}%` : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -28,6 +28,10 @@ export async function GET(req: NextRequest) {
     const dateTo = sp.get("dateTo")
     const type = sp.get("type") || "all"
     const strict = sp.get("strict") === "1"
+    // Optional filter: only leads belonging to a specific Я.Директ campaign.
+    // Accepts the canonical campaign name from bot data (e.g. "Квест Поиск")
+    // — we fuzzy-match it against utm_campaign on leads.
+    const directCampaignName = sp.get("directCampaign") || null
 
     const isUK = ["uk", "super_admin", "uk_employee"].includes(user.role)
     const franchiseeParam = sp.get("franchiseeId")
@@ -223,7 +227,24 @@ export async function GET(req: NextRequest) {
       } else if (r.status === "cancelled") bucket.cancelled++
     }
 
-    for (const r of rows) {
+    // Fuzzy match helper — used both for filtering by directCampaign and for
+    // matching bot campaigns to lead utm_campaign values.
+    const normalizeForMatch = (s: string | null | undefined) =>
+      (s || "").toString().trim().toLowerCase().replace(/[\s_\-]+/g, "")
+
+    function leadMatchesCampaign(lead: Row, campaignName: string): boolean {
+      const target = normalizeForMatch(campaignName)
+      const lc = normalizeForMatch(lead.utmCampaign)
+      if (!target || !lc) return false
+      return lc === target || lc.includes(target) || target.includes(lc)
+    }
+
+    // Apply campaign filter BEFORE aggregation if user picked one
+    const filteredRows = directCampaignName
+      ? rows.filter((r) => leadMatchesCampaign(r, directCampaignName))
+      : rows
+
+    for (const r of filteredRows) {
       pushTo(totals, r)
 
       const campaignKey = r.utmCampaign || "(без кампании)"
@@ -275,9 +296,6 @@ export async function GET(req: NextRequest) {
     //   • objявления — точно по utm_content == bot.adId
     //   • кампании — fuzzy by name (utm_campaign содержит slug кампании Я.Директ;
     //     bot.campaigns[].name — человекочитаемое имя)
-    const normalizeForMatch = (s: string | null | undefined) =>
-      (s || "").toString().trim().toLowerCase().replace(/[\s_\-]+/g, "")
-
     const costByAdId = new Map<string, number>()
     if (botCosts) {
       for (const ad of botCosts.ads) {
@@ -316,13 +334,34 @@ export async function GET(req: NextRequest) {
 
     // Sum of stage breakdown: how many leads sit in each pipeline stage right now
     const byStage = new Map<string, AggBucket & { stageName: string }>()
-    for (const r of rows) {
+    for (const r of filteredRows) {
       const key = r.currentStage || "(без этапа)"
       if (!byStage.has(key)) {
         byStage.set(key, { ...emptyBucket(), stageName: key })
       }
       pushTo(byStage.get(key)!, r)
     }
+
+    // Per-campaign CPL for raw bot campaigns table:
+    //   for each bot campaign, count how many of OUR leads match it by name,
+    //   then CPL = campaign.cost / matched_leads_count
+    const directCampaignsEnriched = (botCosts?.campaigns || []).map((c) => {
+      const matchedLeads = rows.filter((r) => leadMatchesCampaign(r, c.name))
+      const leadsCount = matchedLeads.length
+      const completedCount = matchedLeads.filter((r) => r.status === "completed").length
+      const revenueSum = matchedLeads
+        .filter((r) => r.status === "completed")
+        .reduce((s, r) => s + r.amount, 0)
+      return {
+        ...c,
+        leads: leadsCount,
+        completed: completedCount,
+        revenue: revenueSum,
+        cpl: cpl(c.cost, leadsCount),
+        roas: roas(c.cost, revenueSum),
+        roi: roi(c.cost, revenueSum),
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -357,10 +396,17 @@ export async function GET(req: NextRequest) {
         cancellationReasons: Array.from(reasonCounts.values())
           .map((r) => ({ reason: r.reason, count: r.count, campaigns: Array.from(r.campaigns) }))
           .sort((a, b) => b.count - a.count),
-        leads: rows,
-        // Raw bot data — campaigns & ads from Я.Директ (даже без сопоставления с лидами)
-        directCampaigns: botCosts?.campaigns || [],
+        leads: filteredRows,
+        // Raw bot data — campaigns enriched with our CPL/ROI (matched by name);
+        // ads also raw (CPL для них уже посчитан в byContent через adId).
+        directCampaigns: directCampaignsEnriched,
         directAds: botCosts?.ads || [],
+        // Список всех бот-кампаний (для дропдауна-фильтра)
+        availableDirectCampaigns: (botCosts?.campaigns || []).map((c) => ({
+          campaignId: c.campaignId,
+          name: c.name,
+        })),
+        appliedFilters: { directCampaign: directCampaignName },
         costsAvailable: botCosts !== null,
         botStatus: {
           url: botUrl,
