@@ -55,11 +55,16 @@ export function GameScheduleGrid() {
   const { user, getAuthHeaders } = useAuth()
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [viewMode, setViewMode] = useState<"week" | "month">("week")
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const now = new Date()
     const day = now.getDay()
     const diff = now.getDate() - day + (day === 0 ? -6 : 1)
     return new Date(now.setDate(diff))
+  })
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
   })
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null)
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false)
@@ -93,10 +98,27 @@ export function GameScheduleGrid() {
 
     try {
       setLoading(true)
-      const startDate = currentWeekStart.toISOString().split("T")[0]
-      const endDate = new Date(currentWeekStart)
-      endDate.setDate(endDate.getDate() + 6)
-      const endDateStr = endDate.toISOString().split("T")[0]
+      let startDate: string
+      let endDateStr: string
+
+      if (viewMode === "month") {
+        // Month grid: start on Monday before/on day 1, end on Sunday after/on last day
+        const firstOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
+        const startWeekday = (firstOfMonth.getDay() + 6) % 7 // 0=Monday
+        const start = new Date(firstOfMonth)
+        start.setDate(start.getDate() - startWeekday)
+        const lastOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0)
+        const endWeekday = (lastOfMonth.getDay() + 6) % 7
+        const end = new Date(lastOfMonth)
+        end.setDate(end.getDate() + (6 - endWeekday))
+        startDate = start.toISOString().split("T")[0]
+        endDateStr = end.toISOString().split("T")[0]
+      } else {
+        startDate = currentWeekStart.toISOString().split("T")[0]
+        const endDate = new Date(currentWeekStart)
+        endDate.setDate(endDate.getDate() + 6)
+        endDateStr = endDate.toISOString().split("T")[0]
+      }
 
       console.log("[v0] Fetching schedule for:", startDate, "to", endDateStr)
 
@@ -114,7 +136,7 @@ export function GameScheduleGrid() {
     } finally {
       setLoading(false)
     }
-  }, [user?.franchiseeId, currentWeekStart]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.franchiseeId, currentWeekStart, currentMonth, viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const normalizeDate = (dateStr: string | Date | null | undefined): string => {
     if (!dateStr) return ""
@@ -334,6 +356,31 @@ export function GameScheduleGrid() {
     setCurrentWeekStart(newDate)
   }
 
+  const prevMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
+  }
+
+  const nextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
+  }
+
+  // Build month grid (rows of 7 days, starting Monday)
+  const monthGrid = (() => {
+    const firstOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
+    const startWeekday = (firstOfMonth.getDay() + 6) % 7
+    const start = new Date(firstOfMonth)
+    start.setDate(start.getDate() - startWeekday)
+    const days: Date[] = []
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start)
+      d.setDate(d.getDate() + i)
+      days.push(d)
+    }
+    return days
+  })()
+
+  const monthLabel = currentMonth.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
+
   const isFirstSlot = (item: ScheduleItem, time: string) => {
     const itemTimeSlot = getTimeSlotHour(item.gameTime)
     return itemTimeSlot === time
@@ -367,25 +414,126 @@ export function GameScheduleGrid() {
           <Calendar className="h-5 w-5" />
           График игр
         </h2>
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+          {/* View mode toggle */}
+          <div className="inline-flex rounded-md border border-border overflow-hidden">
+            <button
+              onClick={() => setViewMode("week")}
+              className={cn(
+                "px-3 py-1 text-xs sm:text-sm transition-colors",
+                viewMode === "week" ? "bg-primary text-white" : "bg-transparent hover:bg-muted",
+              )}
+            >
+              Неделя
+            </button>
+            <button
+              onClick={() => setViewMode("month")}
+              className={cn(
+                "px-3 py-1 text-xs sm:text-sm transition-colors border-l border-border",
+                viewMode === "month" ? "bg-primary text-white" : "bg-transparent hover:bg-muted",
+              )}
+            >
+              Месяц
+            </button>
+          </div>
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleRefresh} title="Обновить">
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={prevWeek}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={viewMode === "week" ? prevWeek : prevMonth}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-xs sm:text-sm font-medium px-1 sm:px-2">
-            {currentWeekStart.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} -{" "}
-            {weekDays[6].toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}
+          <span className="text-xs sm:text-sm font-medium px-1 sm:px-2 capitalize">
+            {viewMode === "week"
+              ? `${currentWeekStart.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} - ${weekDays[6].toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}`
+              : monthLabel}
           </span>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={nextWeek}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={viewMode === "week" ? nextWeek : nextMonth}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Mobile: list view */}
-      <div className="md:hidden space-y-3">
+      {/* Month grid */}
+      {viewMode === "month" && (
+        <div className="border border-border rounded-lg overflow-hidden">
+          <div className="grid grid-cols-7 bg-muted/30 border-b border-border">
+            {["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map((d) => (
+              <div key={d} className="px-2 py-1.5 text-xs font-semibold text-center text-muted-foreground uppercase">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {monthGrid.map((day, idx) => {
+              const dateStr = normalizeDate(day)
+              const isCurrentMonth = day.getMonth() === currentMonth.getMonth()
+              const isToday = dateStr === normalizeDate(new Date())
+              const dayItems = scheduleItems
+                .filter((item) => normalizeDate(item.gameDate) === dateStr)
+                .sort((a, b) => (a.gameTime || "").localeCompare(b.gameTime || ""))
+              return (
+                <div
+                  key={idx}
+                  className={cn(
+                    "min-h-[110px] border-b border-r border-border p-1.5 last:border-r-0",
+                    !isCurrentMonth && "bg-muted/20 text-muted-foreground",
+                    isToday && "bg-primary/5",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "text-xs font-medium mb-1 flex items-center justify-between",
+                      isToday && "text-primary",
+                    )}
+                  >
+                    <span>{day.getDate()}</span>
+                    {dayItems.length > 0 && (
+                      <span className="text-[9px] bg-muted px-1 rounded">{dayItems.length}</span>
+                    )}
+                  </div>
+                  <div className="space-y-0.5">
+                    {dayItems.slice(0, 4).map((item) => {
+                      const staffComplete = isStaffComplete(item)
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => openStaffModal(item)}
+                          className={cn(
+                            "px-1 py-0.5 rounded text-[10px] cursor-pointer truncate border-l-2",
+                            staffComplete
+                              ? "border-green-500 bg-green-500/10 hover:bg-green-500/20"
+                              : "border-red-500 bg-red-500/10 hover:bg-red-500/20",
+                          )}
+                          title={`${item.gameTime?.slice(0, 5) || ""} ${item.clientName} · ${item.playersCount} чел.`}
+                        >
+                          <span className="font-medium">{item.gameTime?.slice(0, 5) || ""}</span>{" "}
+                          <span className="truncate">{item.clientName}</span>
+                        </div>
+                      )
+                    })}
+                    {dayItems.length > 4 && (
+                      <div className="text-[9px] text-muted-foreground px-1">+ ещё {dayItems.length - 4}</div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile: list view (week mode only) */}
+      <div className={cn("md:hidden space-y-3", viewMode === "month" && "hidden")}>
         <div className="flex items-center gap-2">
           <div className="text-sm font-medium">Персонал ({personnel.length})</div>
           <div className="flex gap-1">
@@ -476,8 +624,8 @@ export function GameScheduleGrid() {
         )}
       </div>
 
-      {/* Desktop: Personnel sidebar + Grid */}
-      <div className="hidden md:flex gap-4">
+      {/* Desktop: Personnel sidebar + Grid (week mode only) */}
+      <div className={cn("hidden md:flex gap-4", viewMode === "month" && "md:hidden")}>
         {/* Personnel list */}
         <div className="w-48 flex-shrink-0 space-y-2">
           <div className="text-sm font-medium mb-2">Персонал ({personnel.length})</div>
