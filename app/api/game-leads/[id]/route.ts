@@ -231,6 +231,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           await sql`UPDATE "GameLead" SET "djsCount" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "djRate") {
           await sql`UPDATE "GameLead" SET "djRate" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "extras") {
+          await sql`UPDATE "GameLead" SET "extras" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "extrasAmount") {
+          await sql`UPDATE "GameLead" SET "extrasAmount" = ${value || 0}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "cancellationReason") {
           await sql`UPDATE "GameLead" SET "cancellationReason" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
         }
