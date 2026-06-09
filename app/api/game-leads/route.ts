@@ -146,6 +146,8 @@ export async function POST(req: NextRequest) {
       hostRate = 2000,
       djsCount = 0,
       djRate = 2500,
+      extraStaffCount = 0,
+      extraStaffRate = 0,
       extras,
       extrasAmount = 0,
       paymentMethod,
@@ -185,6 +187,7 @@ export async function POST(req: NextRequest) {
         "playersCount", "pricePerPerson", "totalAmount", "prepayment",
         "notes", "source", "responsibleId", "pipelineId", "stageId", "franchiseeId",
         "animatorsCount", "animatorRate", "hostsCount", "hostRate", "djsCount", "djRate",
+        "extraStaffCount", "extraStaffRate",
         "extras", "extrasAmount", "paymentMethod",
         "yclid", "gclid", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "referrer",
         "createdAt", "updatedAt"
@@ -196,6 +199,7 @@ export async function POST(req: NextRequest) {
         ${notes || null}, ${source || null}, ${responsibleId || null},
         ${pipelineId}, ${stageId}, ${franchiseeId},
         ${animatorsCount}, ${animatorRate}, ${hostsCount}, ${hostRate}, ${djsCount}, ${djRate},
+        ${extraStaffCount}, ${extraStaffRate},
         ${extras || null}, ${extrasAmount}, ${paymentMethod || "cash"},
         ${yclid || null}, ${gclid || null}, ${utmSource || null}, ${utmMedium || null}, ${utmCampaign || null}, ${utmContent || null}, ${utmTerm || null}, ${referrer || null},
         NOW(), NOW()

@@ -118,6 +118,8 @@ interface GameData {
   hostRate: number
   djsCount: number
   djRate: number
+  extraStaffCount?: number
+  extraStaffRate?: number
   extras?: string
   extrasAmount?: number
   paymentMethod?: string
@@ -186,6 +188,8 @@ export function GameCardFranchisee({
     hostRate: safeGame.hostRate ?? 0,
     djsCount: safeGame.djsCount ?? 0, // Fixed: use safeGame
     djRate: safeGame.djRate ?? 0, // Fixed: use safeGame
+    extraStaffCount: safeGame.extraStaffCount ?? 0,
+    extraStaffRate: safeGame.extraStaffRate ?? 0,
     extras: safeGame.extras || "",
     extrasAmount: safeGame.extrasAmount ?? 0,
     paymentMethod: safeGame.paymentMethod || "cash",
@@ -242,6 +246,8 @@ export function GameCardFranchisee({
         hostRate: game.hostRate ?? 0,
         djsCount: game.djsCount ?? 0,
         djRate: game.djRate ?? 0,
+        extraStaffCount: game.extraStaffCount ?? 0,
+        extraStaffRate: game.extraStaffRate ?? 0,
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
@@ -284,6 +290,8 @@ export function GameCardFranchisee({
         hostRate: game.hostRate ?? 0,
         djsCount: game.djsCount ?? 0,
         djRate: game.djRate ?? 0,
+        extraStaffCount: game.extraStaffCount ?? 0,
+        extraStaffRate: game.extraStaffRate ?? 0,
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
@@ -326,6 +334,8 @@ export function GameCardFranchisee({
             hostRate: data.data.hostRate ?? 0,
             djsCount: data.data.djsCount ?? 0,
             djRate: data.data.djRate ?? 0,
+            extraStaffCount: data.data.extraStaffCount ?? 0,
+            extraStaffRate: data.data.extraStaffRate ?? 0,
             extras: data.data.extras || "",
             extrasAmount: data.data.extrasAmount ?? 0,
             paymentMethod: data.data.paymentMethod || "cash",
@@ -596,7 +606,8 @@ export function GameCardFranchisee({
   const plannedStaffCost =
     (gameData.animatorsCount ?? 0) * (gameData.animatorRate ?? 0) +
     (gameData.hostsCount ?? 0) * (gameData.hostRate ?? 0) +
-    (gameData.djsCount ?? 0) * (gameData.djRate ?? 0)
+    (gameData.djsCount ?? 0) * (gameData.djRate ?? 0) +
+    (gameData.extraStaffCount ?? 0) * (gameData.extraStaffRate ?? 0)
   const staffCost =
     staffAssignments.length > 0 ? staffAssignments.reduce((sum, s) => sum + Number(s.rate), 0) : plannedStaffCost
   const profit = totalAmount - staffCost
@@ -921,6 +932,60 @@ export function GameCardFranchisee({
                       <span className="text-sm">₽</span>
                     </div>
                   </div>
+
+                  {/* Extra staff (optional) */}
+                  {(gameData.extraStaffCount ?? 0) === 0 && (gameData.extraStaffRate ?? 0) === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGameData({ ...gameData, extraStaffCount: 1 })
+                        handleSaveField("extraStaffCount", 1)
+                      }}
+                      className="flex items-center gap-1 text-[10px] text-orange-500 hover:text-orange-400"
+                    >
+                      <Plus size={12} /> Добавить доп персонал
+                    </button>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-blue-500" />
+                        <span className="text-sm">Доп:</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={gameData.extraStaffCount ?? 0}
+                          onChange={(e) => setGameData({ ...gameData, extraStaffCount: Number(e.target.value) })}
+                          onBlur={(e) => handleSaveField("extraStaffCount", Number(e.target.value))}
+                          className="h-8 w-16 text-sm text-center"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">Ставка:</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={gameData.extraStaffRate || ""}
+                          placeholder="0"
+                          onChange={(e) => setGameData({ ...gameData, extraStaffRate: Number(e.target.value) })}
+                          onBlur={(e) => handleSaveField("extraStaffRate", Number(e.target.value))}
+                          className="h-8 w-24 text-sm text-right"
+                        />
+                        <span className="text-sm">₽</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGameData({ ...gameData, extraStaffCount: 0, extraStaffRate: 0 })
+                            handleSaveField("extraStaffCount", 0)
+                            handleSaveField("extraStaffRate", 0)
+                          }}
+                          className="text-destructive hover:text-destructive/80"
+                          title="Убрать доп персонал"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Staff cost summary */}
@@ -994,6 +1059,18 @@ export function GameCardFranchisee({
                       <button
                         type="button"
                         onClick={() => {
+                          const { extras, extrasAmount } = serializeExtras(parseExtras(gameData.extras))
+                          handleSaveField("extras", extras)
+                          handleSaveField("extrasAmount", extrasAmount)
+                        }}
+                        className="text-green-600 hover:text-green-500"
+                        title="Сохранить"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
                           const items = parseExtras(gameData.extras)
                           items.splice(idx, 1)
                           const { extras, extrasAmount } = serializeExtras(items)
@@ -1002,6 +1079,7 @@ export function GameCardFranchisee({
                           handleSaveField("extrasAmount", extrasAmount)
                         }}
                         className="text-destructive hover:text-destructive/80"
+                        title="Удалить"
                       >
                         <Trash2 size={12} />
                       </button>

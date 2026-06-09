@@ -81,6 +81,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       "hostRate",
       "djsCount",
       "djRate",
+      "extraStaffCount",
+      "extraStaffRate",
       "extras",
       "extrasAmount",
       "cancellationReason",
@@ -231,6 +233,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           await sql`UPDATE "GameLead" SET "djsCount" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "djRate") {
           await sql`UPDATE "GameLead" SET "djRate" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "extraStaffCount") {
+          await sql`UPDATE "GameLead" SET "extraStaffCount" = ${value || 0}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "extraStaffRate") {
+          await sql`UPDATE "GameLead" SET "extraStaffRate" = ${value || 0}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "extras") {
           await sql`UPDATE "GameLead" SET "extras" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "extrasAmount") {
@@ -383,7 +389,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const animatorsCost = (Number.parseInt(game.animatorsCount) || 0) * (Number.parseFloat(game.animatorRate) || 0)
         const hostsCost = (Number.parseInt(game.hostsCount) || 0) * (Number.parseFloat(game.hostRate) || 0)
         const djsCost = (Number.parseInt(game.djsCount) || 0) * (Number.parseFloat(game.djRate) || 0)
-        const totalStaffCost = animatorsCost + hostsCost + djsCost
+        const extraStaffCost = (Number.parseInt(game.extraStaffCount) || 0) * (Number.parseFloat(game.extraStaffRate) || 0)
+        const totalStaffCost = animatorsCost + hostsCost + djsCost + extraStaffCost
 
         const gameDate = game.gameDate || new Date().toISOString().split("T")[0]
 
@@ -447,7 +454,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
               'expense',
               ${totalStaffCost},
               'fot',
-              ${"ФОТ за игру: " + game.clientName + " (Аним: " + (game.animatorsCount || 0) + ", Вед: " + (game.hostsCount || 0) + ", DJ: " + (game.djsCount || 0) + ")"},
+              ${"ФОТ за игру: " + game.clientName + " (Аним: " + (game.animatorsCount || 0) + ", Вед: " + (game.hostsCount || 0) + ", DJ: " + (game.djsCount || 0) + (Number(game.extraStaffCount) > 0 ? ", Доп: " + game.extraStaffCount : "") + ")"},
               ${game.franchiseeId},
               ${id},
               ${gameDate},
@@ -474,6 +481,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const financialFieldsChanged = body.playersCount !== undefined || body.pricePerPerson !== undefined ||
       body.prepayment !== undefined || body.animatorsCount !== undefined || body.animatorRate !== undefined ||
       body.hostsCount !== undefined || body.hostRate !== undefined || body.djsCount !== undefined || body.djRate !== undefined ||
+      body.extraStaffCount !== undefined || body.extraStaffRate !== undefined ||
       body.extras !== undefined || body.extrasAmount !== undefined
 
     if (financialFieldsChanged && !body.stageId) {
@@ -535,7 +543,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const animatorsCost = (Number.parseInt(game.animatorsCount) || 0) * (Number.parseFloat(game.animatorRate) || 0)
         const hostsCost = (Number.parseInt(game.hostsCount) || 0) * (Number.parseFloat(game.hostRate) || 0)
         const djsCost = (Number.parseInt(game.djsCount) || 0) * (Number.parseFloat(game.djRate) || 0)
-        const totalStaffCost = animatorsCost + hostsCost + djsCost
+        const extraStaffCost = (Number.parseInt(game.extraStaffCount) || 0) * (Number.parseFloat(game.extraStaffRate) || 0)
+        const totalStaffCost = animatorsCost + hostsCost + djsCost + extraStaffCost
 
         const existingFot = await sql`SELECT id FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'fot'`
         if (existingFot.length > 0) {
@@ -543,7 +552,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             await sql`
               UPDATE "Transaction"
               SET amount = ${totalStaffCost},
-                  description = ${"ФОТ за игру: " + game.clientName + " (Аним: " + (game.animatorsCount || 0) + ", Вед: " + (game.hostsCount || 0) + ", DJ: " + (game.djsCount || 0) + ")"}
+                  description = ${"ФОТ за игру: " + game.clientName + " (Аним: " + (game.animatorsCount || 0) + ", Вед: " + (game.hostsCount || 0) + ", DJ: " + (game.djsCount || 0) + (Number(game.extraStaffCount) > 0 ? ", Доп: " + game.extraStaffCount : "") + ")"}
               WHERE "gameLeadId" = ${id} AND category = 'fot'
             `
           } else {
@@ -553,7 +562,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           await sql`
             INSERT INTO "Transaction" (id, type, amount, category, description, "franchiseeId", "gameLeadId", date, "createdAt")
             VALUES (${globalThis.crypto.randomUUID()}, 'expense', ${totalStaffCost}, 'fot',
-              ${"ФОТ за игру: " + game.clientName + " (Аним: " + (game.animatorsCount || 0) + ", Вед: " + (game.hostsCount || 0) + ", DJ: " + (game.djsCount || 0) + ")"},
+              ${"ФОТ за игру: " + game.clientName + " (Аним: " + (game.animatorsCount || 0) + ", Вед: " + (game.hostsCount || 0) + ", DJ: " + (game.djsCount || 0) + (Number(game.extraStaffCount) > 0 ? ", Доп: " + game.extraStaffCount : "") + ")"},
               ${game.franchiseeId}, ${id}, ${game.gameDate || new Date().toISOString().split("T")[0]}, NOW())
           `
         }
