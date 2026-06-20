@@ -89,6 +89,8 @@ export function GamesCRMFranchisee() {
   const [filters, setFilters] = useState({
     dateFrom: "",
     dateTo: "",
+    createdFrom: "",
+    createdTo: "",
     stageId: "",
     source: "",
     responsibleId: "",
@@ -195,7 +197,9 @@ export function GamesCRMFranchisee() {
       let currentPipelineId = selectedPipelineId
 
       if (!currentPipelineId && pipelinesList.length > 0) {
-        if (savedPipelineId && pipelinesList.some((p: Pipeline) => p.id === savedPipelineId)) {
+        if (savedPipelineId === "all") {
+          currentPipelineId = "all"
+        } else if (savedPipelineId && pipelinesList.some((p: Pipeline) => p.id === savedPipelineId)) {
           currentPipelineId = savedPipelineId
         } else {
           currentPipelineId = pipelinesList[0].id
@@ -204,7 +208,7 @@ export function GamesCRMFranchisee() {
         localStorage.setItem(storageKey, currentPipelineId)
       }
 
-      const leadsUrl = currentPipelineId
+      const leadsUrl = currentPipelineId && currentPipelineId !== "all"
         ? `/api/game-leads?pipelineId=${currentPipelineId}`
         : `/api/game-leads?franchiseeId=${activeFranchiseeId}`
 
@@ -239,7 +243,10 @@ export function GamesCRMFranchisee() {
     const fetchLeads = async () => {
       const headers = getAuthHeaders()
       try {
-        const res = await fetch(`/api/game-leads?pipelineId=${selectedPipelineId}`, { headers })
+        const url = selectedPipelineId === "all"
+          ? `/api/game-leads?franchiseeId=${activeFranchiseeId}`
+          : `/api/game-leads?pipelineId=${selectedPipelineId}`
+        const res = await fetch(url, { headers })
         if (res.ok) {
           const data = await res.json()
           setLeads(data.data || [])
@@ -364,6 +371,17 @@ export function GamesCRMFranchisee() {
       })
     }
 
+    if (filters.createdFrom) {
+      const from = new Date(filters.createdFrom)
+      filtered = filtered.filter((lead) => lead.createdAt && new Date(lead.createdAt) >= from)
+    }
+    if (filters.createdTo) {
+      // include the whole "to" day
+      const to = new Date(filters.createdTo)
+      to.setHours(23, 59, 59, 999)
+      filtered = filtered.filter((lead) => lead.createdAt && new Date(lead.createdAt) <= to)
+    }
+
     if (filters.stageId && filters.stageId !== "all") {
       filtered = filtered.filter((lead) => lead.stageId === filters.stageId)
     }
@@ -405,6 +423,8 @@ export function GamesCRMFranchisee() {
     setFilters({
       dateFrom: "",
       dateTo: "",
+      createdFrom: "",
+      createdTo: "",
       stageId: "",
       source: "",
       responsibleId: "",
@@ -466,6 +486,7 @@ export function GamesCRMFranchisee() {
               <SelectValue placeholder="Выберите воронку" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">Все воронки</SelectItem>
               {pipelines.map((pipeline) => (
                 <SelectItem key={pipeline.id} value={pipeline.id}>
                   {pipeline.name}
@@ -485,7 +506,11 @@ export function GamesCRMFranchisee() {
           <Button variant="outline" size="icon" onClick={() => setIsSettingsOpen(true)}>
             <Settings className="h-4 w-4" />
           </Button>
-          <Button onClick={() => setIsCreateModalOpen(true)}>
+          <Button
+            onClick={() => setIsCreateModalOpen(true)}
+            disabled={selectedPipelineId === "all" || !selectedPipelineId}
+            title={selectedPipelineId === "all" ? "Выберите конкретную воронку для создания заявки" : undefined}
+          >
             <Plus className="mr-2 h-4 w-4" />
             <span className="hidden sm:inline">Новая заявка</span>
             <span className="sm:hidden">Новая</span>
@@ -519,7 +544,7 @@ export function GamesCRMFranchisee() {
         {showFilters && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4 border-t border-border">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Дата от</label>
+              <label className="text-sm font-medium">Дата игры от</label>
               <Input
                 type="date"
                 value={filters.dateFrom}
@@ -527,11 +552,27 @@ export function GamesCRMFranchisee() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Дата до</label>
+              <label className="text-sm font-medium">Дата игры до</label>
               <Input
                 type="date"
                 value={filters.dateTo}
                 onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Дата создания от</label>
+              <Input
+                type="date"
+                value={filters.createdFrom}
+                onChange={(e) => setFilters({ ...filters, createdFrom: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Дата создания до</label>
+              <Input
+                type="date"
+                value={filters.createdTo}
+                onChange={(e) => setFilters({ ...filters, createdTo: e.target.value })}
               />
             </div>
             <div className="space-y-2">
@@ -650,6 +691,62 @@ export function GamesCRMFranchisee() {
             <Settings className="mr-2 h-4 w-4" />
             Создать воронку
           </Button>
+        </div>
+      ) : selectedPipelineId === "all" ? (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="text-left px-4 py-2 font-medium">Клиент</th>
+                  <th className="text-left px-4 py-2 font-medium">Воронка</th>
+                  <th className="text-left px-4 py-2 font-medium">Стадия</th>
+                  <th className="text-left px-4 py-2 font-medium">Дата игры</th>
+                  <th className="text-left px-4 py-2 font-medium">Создан</th>
+                  <th className="text-right px-4 py-2 font-medium">Сумма</th>
+                  <th className="text-left px-4 py-2 font-medium">Источник</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLeads.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                      Заявок не найдено
+                    </td>
+                  </tr>
+                ) : (
+                  filteredLeads.map((lead) => {
+                    const pipelineName = pipelines.find((p) => p.id === lead.pipelineId)?.name || "—"
+                    const stageName = (lead as any).stageName || "—"
+                    const created = lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("ru-RU") : "—"
+                    const gameDate = lead.gameDate ? new Date(lead.gameDate).toLocaleDateString("ru-RU") : "—"
+                    return (
+                      <tr
+                        key={lead.id}
+                        onClick={() => handleLeadClick(lead)}
+                        className="border-t border-border hover:bg-muted/40 cursor-pointer"
+                      >
+                        <td className="px-4 py-2">
+                          <div className="font-medium">{lead.clientName || "—"}</div>
+                          {lead.clientPhone && (
+                            <div className="text-xs text-muted-foreground">{lead.clientPhone}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-2">{pipelineName}</td>
+                        <td className="px-4 py-2">{stageName}</td>
+                        <td className="px-4 py-2">{gameDate}</td>
+                        <td className="px-4 py-2">{created}</td>
+                        <td className="px-4 py-2 text-right">
+                          {lead.totalAmount ? `${lead.totalAmount.toLocaleString("ru-RU")} ₽` : "—"}
+                        </td>
+                        <td className="px-4 py-2">{lead.source || "—"}</td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <GameKanbanBoard
