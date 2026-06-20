@@ -165,6 +165,9 @@ export function GamesCRMFranchisee() {
   }, [activeFranchiseeId, pipelineIdFromUrl])
 
   const handlePipelineChange = (pipelineId: string) => {
+    // stageId-фильтр привязан к конкретной воронке (или имени стадии в режиме «Все») —
+    // при смене источника сбрасываем, иначе остаётся «битое» значение, которое ничего не находит.
+    setFilters((f) => ({ ...f, stageId: "" }))
     setSelectedPipelineId(pipelineId)
     if (activeFranchiseeId) {
       const storageKey = `crm_last_pipeline_${activeFranchiseeId}`
@@ -383,7 +386,12 @@ export function GamesCRMFranchisee() {
     }
 
     if (filters.stageId && filters.stageId !== "all") {
-      filtered = filtered.filter((lead) => lead.stageId === filters.stageId)
+      if (selectedPipelineId === "all") {
+        // В режиме «Все воронки» значение фильтра — имя стадии (id у каждой воронки свой)
+        filtered = filtered.filter((lead) => (lead as any).stageName === filters.stageId)
+      } else {
+        filtered = filtered.filter((lead) => lead.stageId === filters.stageId)
+      }
     }
 
     if (filters.source) {
@@ -583,11 +591,17 @@ export function GamesCRMFranchisee() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Все стадии</SelectItem>
-                  {stages.map((stage) => (
-                    <SelectItem key={stage.id} value={stage.id}>
-                      {stage.name}
-                    </SelectItem>
-                  ))}
+                  {selectedPipelineId === "all"
+                    ? Array.from(new Set(pipelines.flatMap((p) => p.stages.map((s) => s.name)))).map((name) => (
+                        <SelectItem key={name} value={name}>
+                          {name}
+                        </SelectItem>
+                      ))
+                    : stages.map((stage) => (
+                        <SelectItem key={stage.id} value={stage.id}>
+                          {stage.name}
+                        </SelectItem>
+                      ))}
                 </SelectContent>
               </Select>
             </div>
