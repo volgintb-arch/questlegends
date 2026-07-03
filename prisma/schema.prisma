@@ -743,6 +743,8 @@ model GameLead {
   extraStaffCount Int      @default(0)
   extraStaffRate  Int      @default(0)
 
+  discount        Int      @default(0)
+
   extras          String?
   extrasAmount    Int      @default(0)
   paymentMethod   String?

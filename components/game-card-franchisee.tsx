@@ -120,6 +120,7 @@ interface GameData {
   djRate: number
   extraStaffCount?: number
   extraStaffRate?: number
+  discount?: number
   extras?: string
   extrasAmount?: number
   paymentMethod?: string
@@ -190,6 +191,7 @@ export function GameCardFranchisee({
     djRate: safeGame.djRate ?? 0, // Fixed: use safeGame
     extraStaffCount: safeGame.extraStaffCount ?? 0,
     extraStaffRate: safeGame.extraStaffRate ?? 0,
+    discount: safeGame.discount ?? 0,
     extras: safeGame.extras || "",
     extrasAmount: safeGame.extrasAmount ?? 0,
     paymentMethod: safeGame.paymentMethod || "cash",
@@ -248,6 +250,7 @@ export function GameCardFranchisee({
         djRate: game.djRate ?? 0,
         extraStaffCount: game.extraStaffCount ?? 0,
         extraStaffRate: game.extraStaffRate ?? 0,
+        discount: game.discount ?? 0,
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
@@ -292,6 +295,7 @@ export function GameCardFranchisee({
         djRate: game.djRate ?? 0,
         extraStaffCount: game.extraStaffCount ?? 0,
         extraStaffRate: game.extraStaffRate ?? 0,
+        discount: game.discount ?? 0,
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
@@ -336,6 +340,7 @@ export function GameCardFranchisee({
             djRate: data.data.djRate ?? 0,
             extraStaffCount: data.data.extraStaffCount ?? 0,
             extraStaffRate: data.data.extraStaffRate ?? 0,
+            discount: data.data.discount ?? 0,
             extras: data.data.extras || "",
             extrasAmount: data.data.extrasAmount ?? 0,
             paymentMethod: data.data.paymentMethod || "cash",
@@ -601,7 +606,9 @@ export function GameCardFranchisee({
     return date.toLocaleDateString("ru-RU")
   }
 
-  const totalAmount = gameData.playersCount * gameData.pricePerPerson
+  const grossAmount = gameData.playersCount * gameData.pricePerPerson
+  const discount = gameData.discount ?? 0
+  const totalAmount = Math.max(0, grossAmount - discount)
   const remaining = totalAmount - gameData.prepayment
   const plannedStaffCost =
     (gameData.animatorsCount ?? 0) * (gameData.animatorRate ?? 0) +
@@ -805,8 +812,31 @@ export function GameCardFranchisee({
                   <span>
                     Итого ({gameData.playersCount} × {(gameData.pricePerPerson ?? 0).toLocaleString()} ₽)
                   </span>
-                  <span className="font-semibold text-green-600 text-base">{totalAmount.toLocaleString()} ₽</span>
+                  <span className={discount > 0 ? "text-sm text-muted-foreground line-through" : "font-semibold text-green-600 text-base"}>
+                    {grossAmount.toLocaleString()} ₽
+                  </span>
                 </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span>Скидка</span>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={gameData.discount || ""}
+                      placeholder="0"
+                      onChange={(e) => setGameData({ ...gameData, discount: Number(e.target.value) })}
+                      onBlur={(e) => handleSaveField("discount", Number(e.target.value))}
+                      className="h-8 w-28 text-sm text-right"
+                    />
+                    <span className="text-sm">₽</span>
+                  </div>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between items-center text-sm border-t pt-2">
+                    <span>К оплате</span>
+                    <span className="font-semibold text-green-600 text-base">{totalAmount.toLocaleString()} ₽</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-sm">
                   <span>Предоплата</span>
                   <Input

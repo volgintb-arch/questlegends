@@ -83,6 +83,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       "djRate",
       "extraStaffCount",
       "extraStaffRate",
+      "discount",
       "extras",
       "extrasAmount",
       "cancellationReason",
@@ -237,6 +238,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           await sql`UPDATE "GameLead" SET "extraStaffCount" = ${value || 0}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "extraStaffRate") {
           await sql`UPDATE "GameLead" SET "extraStaffRate" = ${value || 0}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "discount") {
+          await sql`UPDATE "GameLead" SET "discount" = ${value || 0}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "extras") {
           await sql`UPDATE "GameLead" SET "extras" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "extrasAmount") {
@@ -260,12 +263,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
-    // Recalculate total if players or price changed
-    if (body.playersCount !== undefined || body.pricePerPerson !== undefined) {
-      const [current] = await sql`SELECT "playersCount", "pricePerPerson" FROM "GameLead" WHERE id = ${id}`
+    // Recalculate total if players, price or discount changed
+    if (body.playersCount !== undefined || body.pricePerPerson !== undefined || body.discount !== undefined) {
+      const [current] = await sql`SELECT "playersCount", "pricePerPerson", "discount" FROM "GameLead" WHERE id = ${id}`
       const players = body.playersCount ?? current.playersCount ?? 1
       const price = body.pricePerPerson ?? current.pricePerPerson ?? 0
-      const total = players * price
+      const discount = body.discount ?? current.discount ?? 0
+      const total = Math.max(0, players * price - discount)
       await sql`UPDATE "GameLead" SET "totalAmount" = ${total}, "updatedAt" = NOW() WHERE id = ${id}`
     }
 

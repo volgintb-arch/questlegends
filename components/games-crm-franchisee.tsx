@@ -175,8 +175,8 @@ export function GamesCRMFranchisee() {
     }
   }
 
-  const loadData = useCallback(async () => {
-    if (!activeFranchiseeId) return
+  const loadData = useCallback(async (): Promise<Lead[]> => {
+    if (!activeFranchiseeId) return []
 
     const headers = getAuthHeaders()
 
@@ -184,7 +184,7 @@ export function GamesCRMFranchisee() {
       const pipelinesRes = await fetch(`/api/game-pipelines?franchiseeId=${activeFranchiseeId}`, { headers })
       if (!pipelinesRes.ok) {
         console.error("[v0] CRM: Failed to fetch pipelines")
-        return
+        return []
       }
 
       const pipelinesData = await pipelinesRes.json()
@@ -218,13 +218,17 @@ export function GamesCRMFranchisee() {
       const leadsRes = await fetch(leadsUrl, { headers })
       if (leadsRes.ok) {
         const leadsData = await leadsRes.json()
-        setLeads(leadsData.data || [])
+        const fresh = leadsData.data || []
+        setLeads(fresh)
+        return fresh
       } else {
         console.error("[v0] CRM: Failed to fetch leads, status:", leadsRes.status)
         setLeads([])
+        return []
       }
     } catch (error) {
       console.error("[v0] CRM: Error loading data:", error)
+      return []
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -286,9 +290,12 @@ export function GamesCRMFranchisee() {
   }
 
   const handleLeadUpdate = async () => {
-    await loadData()
+    // ВАЖНО: используем возвращаемое значение loadData, а не state `leads` —
+    // после setLeads локальная переменная `leads` в замыкании остаётся stale,
+    // и `find` находит старую версию → setSelectedLead(stale) откатывает правку в карточке.
+    const fresh = await loadData()
     if (selectedLead) {
-      const updated = leads.find((l) => l.id === selectedLead.id)
+      const updated = fresh.find((l) => l.id === selectedLead.id)
       if (updated) {
         setSelectedLead(updated)
       }

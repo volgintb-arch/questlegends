@@ -148,6 +148,7 @@ export async function POST(req: NextRequest) {
       djRate = 2500,
       extraStaffCount = 0,
       extraStaffRate = 0,
+      discount = 0,
       extras,
       extrasAmount = 0,
       paymentMethod,
@@ -178,7 +179,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden: no access to this franchisee" }, { status: 403 })
     }
 
-    const totalAmount = playersCount * pricePerPerson
+    const totalAmount = Math.max(0, playersCount * pricePerPerson - (discount || 0))
 
     const leadId = globalThis.crypto.randomUUID()
     const [lead] = await sql`
@@ -188,6 +189,7 @@ export async function POST(req: NextRequest) {
         "notes", "source", "responsibleId", "pipelineId", "stageId", "franchiseeId",
         "animatorsCount", "animatorRate", "hostsCount", "hostRate", "djsCount", "djRate",
         "extraStaffCount", "extraStaffRate",
+        "discount",
         "extras", "extrasAmount", "paymentMethod",
         "yclid", "gclid", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "referrer",
         "createdAt", "updatedAt"
@@ -200,6 +202,7 @@ export async function POST(req: NextRequest) {
         ${pipelineId}, ${stageId}, ${franchiseeId},
         ${animatorsCount}, ${animatorRate}, ${hostsCount}, ${hostRate}, ${djsCount}, ${djRate},
         ${extraStaffCount}, ${extraStaffRate},
+        ${discount},
         ${extras || null}, ${extrasAmount}, ${paymentMethod || "cash"},
         ${yclid || null}, ${gclid || null}, ${utmSource || null}, ${utmMedium || null}, ${utmCampaign || null}, ${utmContent || null}, ${utmTerm || null}, ${referrer || null},
         NOW(), NOW()
