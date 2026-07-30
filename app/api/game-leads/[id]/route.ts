@@ -570,6 +570,40 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
               ${game.franchiseeId}, ${id}, ${game.gameDate || new Date().toISOString().split("T")[0]}, NOW())
           `
         }
+
+        // Reconcile extras transactions — delete-and-recreate по текущему состоянию game.extras.
+        // Без этого удалённые/изменённые в карточке допродажи оставались висеть в финансах.
+        await sql`DELETE FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'extras'`
+        const extrasAmt = Number.parseInt(game.extrasAmount) || 0
+        if (extrasAmt > 0 && game.extras) {
+          let extrasItems: { name: string; amount: number }[] = []
+          try {
+            const parsed = JSON.parse(game.extras)
+            if (Array.isArray(parsed)) extrasItems = parsed
+          } catch {
+            extrasItems = [{ name: game.extras, amount: extrasAmt }]
+          }
+          const gameDate = game.gameDate || new Date().toISOString().split("T")[0]
+          for (const item of extrasItems) {
+            if ((item.amount || 0) > 0) {
+              await sql`
+                INSERT INTO "Transaction" (
+                  id, type, amount, category, description, "franchiseeId", "gameLeadId", date, "createdAt"
+                ) VALUES (
+                  ${globalThis.crypto.randomUUID()},
+                  'income',
+                  ${item.amount},
+                  'extras',
+                  ${"Допродажа: " + (item.name || "Доп. услуги") + " — " + game.clientName},
+                  ${game.franchiseeId},
+                  ${id},
+                  ${gameDate},
+                  NOW()
+                )
+              `
+            }
+          }
+        }
       }
     }
 
