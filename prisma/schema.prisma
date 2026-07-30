@@ -27,6 +27,18 @@ enum PersonnelRole {
   staff
 }
 
+enum GroupType {
+  BIRTHDAY
+  CLASS
+  OPEN
+  CORPORATE
+}
+
+enum AttendanceRole {
+  GUEST
+  HOST_PARENT
+}
+
 enum ShiftStatus {
   scheduled
   in_progress
@@ -46,50 +58,50 @@ enum NotificationType {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  phone         String    @unique
-  email         String?
-  passwordHash  String
-  name          String
-  role          Role
-  telegram      String?
-  whatsapp      String?
-  telegramId    String?
-  description   String?
-  avatarUrl     String?
-  isActive      Boolean   @default(true)
-  onboardingCompleted Boolean @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                  String   @id @default(cuid())
+  phone               String   @unique
+  email               String?
+  passwordHash        String
+  name                String
+  role                Role
+  telegram            String?
+  whatsapp            String?
+  telegramId          String?
+  description         String?
+  avatarUrl           String?
+  isActive            Boolean  @default(true)
+  onboardingCompleted Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  franchiseeId  String?
-  franchisee    Franchisee? @relation("UserFranchisee", fields: [franchiseeId], references: [id])
+  franchiseeId String?
+  franchisee   Franchisee? @relation("UserFranchisee", fields: [franchiseeId], references: [id])
 
-  personnel     Personnel?  @relation("UserPersonnel")
+  personnel Personnel? @relation("UserPersonnel")
 
-  permissions   AdminPermission?
-  userPermissions UserPermission? @relation("UserPermissions")
-  deals         Deal[]    @relation("DealResponsible")
-  expenses      Expense[] @relation("ExpenseCreator")
-  gameAssignments GameAssignment[] @relation("AssignmentCreator")
-  refreshTokens RefreshToken[]
-  articles      KnowledgeArticle[] @relation("ArticleAuthor")
+  permissions     AdminPermission?
+  userPermissions UserPermission?    @relation("UserPermissions")
+  deals           Deal[]             @relation("DealResponsible")
+  expenses        Expense[]          @relation("ExpenseCreator")
+  gameAssignments GameAssignment[]   @relation("AssignmentCreator")
+  refreshTokens   RefreshToken[]
+  articles        KnowledgeArticle[] @relation("ArticleAuthor")
 
-  sentNotifications     Notification[]          @relation("NotificationSender")
-  receivedNotifications Notification[]          @relation("NotificationRecipient")
-  notificationComments  NotificationComment[]   @relation("NotificationCommentAuthor")
-  alertComments         AlertComment[]          @relation("AlertCommentAuthor")
+  sentNotifications     Notification[]        @relation("NotificationSender")
+  receivedNotifications Notification[]        @relation("NotificationRecipient")
+  notificationComments  NotificationComment[] @relation("NotificationCommentAuthor")
+  alertComments         AlertComment[]        @relation("AlertCommentAuthor")
 
-  sentMessages          Message[]               @relation("MessageSender")
-  receivedMessages      Message[]               @relation("MessageReceiver")
+  sentMessages     Message[] @relation("MessageSender")
+  receivedMessages Message[] @relation("MessageReceiver")
 
   franchiseeAssignments UserFranchiseeAssignment[]
   pushSubscriptions     PushSubscription[]
 
-  createdPipelines      Pipeline[]              @relation("PipelineCreator")
+  createdPipelines Pipeline[] @relation("PipelineCreator")
 
-  articleReadStatuses   ArticleReadStatus[]     @relation("ArticleReadStatuses")
-  quizAttempts          QuizAttempt[]           @relation("QuizAttempts")
+  articleReadStatuses ArticleReadStatus[] @relation("ArticleReadStatuses")
+  quizAttempts        QuizAttempt[]       @relation("QuizAttempts")
 
   @@index([phone])
   @@index([role])
@@ -97,21 +109,21 @@ model User {
 }
 
 model Personnel {
-  id            String     @id @default(cuid())
-  franchiseeId  String
-  franchisee    Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  id           String     @id @default(cuid())
+  franchiseeId String
+  franchisee   Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
 
-  userId        String?    @unique
-  user          User?      @relation("UserPersonnel", fields: [userId], references: [id], onDelete: SetNull)
+  userId String? @unique
+  user   User?   @relation("UserPersonnel", fields: [userId], references: [id], onDelete: SetNull)
 
-  name          String
-  role          PersonnelRole
-  phone         String?
-  telegram      String?
-  whatsapp      String?
+  name     String
+  role     PersonnelRole
+  phone    String?
+  telegram String?
+  whatsapp String?
 
-  isActive      Boolean    @default(true)
-  createdAt     DateTime   @default(now())
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   assignments   GameAssignment[]
   shifts        Shift[]
@@ -123,23 +135,23 @@ model Personnel {
 }
 
 model Shift {
-  id            String       @id @default(cuid())
-  personnelId   String
-  personnel     Personnel    @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  personnelId String
+  personnel   Personnel @relation(fields: [personnelId], references: [id], onDelete: Cascade)
 
-  franchiseeId  String
-  franchisee    Franchisee   @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  franchiseeId String
+  franchisee   Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
 
-  dealId        String?
-  deal          Deal?        @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
-  startTime     DateTime
-  endTime       DateTime
-  role          PersonnelRole
-  status        ShiftStatus  @default(scheduled)
-  notes         String?
+  startTime DateTime
+  endTime   DateTime
+  role      PersonnelRole
+  status    ShiftStatus   @default(scheduled)
+  notes     String?
 
-  createdAt     DateTime     @default(now())
+  createdAt DateTime @default(now())
 
   @@index([personnelId])
   @@index([franchiseeId])
@@ -149,25 +161,26 @@ model Shift {
 }
 
 model Franchisee {
-  id              String   @id @default(cuid())
-  name            String
-  city            String
-  address         String?
-  phone           String?
-  email           String?
+  id                String   @id @default(cuid())
+  name              String
+  city              String
+  citySlug          String?  @unique
+  address           String?
+  phone             String?
+  email             String?
   royaltyPercent    Int      @default(0)
   royaltyPaymentDay Int?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  users           User[]   @relation("UserFranchisee")
-  deals           Deal[]
-  transactions    Transaction[]
-  expenses        Expense[]
-  personnel       Personnel[]
-  shifts          Shift[]
-  kpis            FranchiseeKPI[]
-  alerts          Alert[]
+  users              User[]                     @relation("UserFranchisee")
+  deals              Deal[]
+  transactions       Transaction[]
+  expenses           Expense[]
+  personnel          Personnel[]
+  shifts             Shift[]
+  kpis               FranchiseeKPI[]
+  alerts             Alert[]
   gamePipelines      GamePipeline[]
   gameLeads          GameLead[]
   gameSchedules      GameSchedule[]
@@ -175,104 +188,105 @@ model Franchisee {
   socialMediaConfigs SocialMediaConfig[]
   userAssignments    UserFranchiseeAssignment[]
   sipuniSettings     SipuniSettings?
+  clients            Client[]
 
   @@index([city])
 }
 
 model FranchiseeKPI {
-  id              String     @id @default(cuid())
-  franchiseeId    String
-  franchisee      Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  id           String     @id @default(cuid())
+  franchiseeId String
+  franchisee   Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
 
-  periodType      String
-  periodNumber    Int
-  periodYear      Int
+  periodType   String
+  periodNumber Int
+  periodYear   Int
 
-  targetRevenue   Int?
-  targetGames     Int?
-  maxExpenses     Int?
+  targetRevenue Int?
+  targetGames   Int?
+  maxExpenses   Int?
 
-  actualRevenue   Int        @default(0)
-  actualGames     Int        @default(0)
-  actualExpenses  Int        @default(0)
+  actualRevenue  Int @default(0)
+  actualGames    Int @default(0)
+  actualExpenses Int @default(0)
 
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([franchiseeId])
   @@index([periodYear, periodType, periodNumber])
 }
 
 model Deal {
-  id              String    @id @default(cuid())
-  title           String?
-  stage           String    @default("NEW")
-  source          String?
-  priority        String?   @default("MEDIUM")
+  id       String  @id @default(cuid())
+  title    String?
+  stage    String  @default("NEW")
+  source   String?
+  priority String? @default("MEDIUM")
 
-  clientName      String?
-  clientPhone     String?
-  clientTelegram  String?
-  clientWhatsapp  String?
-  clientEmail     String?
-  contactName     String?
-  contactPhone    String?
-  messengerLink   String?
-  city            String?
+  clientName     String?
+  clientPhone    String?
+  clientTelegram String?
+  clientWhatsapp String?
+  clientEmail    String?
+  contactName    String?
+  contactPhone   String?
+  messengerLink  String?
+  city           String?
 
-  paushalnyyVznos    Int?
-  investmentAmount   Int?
-  leadSource         String?
-  additionalComment  String?
-  budget             Int?
+  paushalnyyVznos   Int?
+  investmentAmount  Int?
+  leadSource        String?
+  additionalComment String?
+  budget            Int?
 
-  participants    Int       @default(0)
-  checkPerPerson  Int       @default(0)
-  gameDate        DateTime?
+  participants   Int       @default(0)
+  checkPerPerson Int       @default(0)
+  gameDate       DateTime?
 
-  animatorsCount  Int       @default(0)
-  animatorRate    Int       @default(0)
-  hostRate        Int       @default(0)
-  djRate          Int       @default(0)
+  animatorsCount Int @default(0)
+  animatorRate   Int @default(0)
+  hostRate       Int @default(0)
+  djRate         Int @default(0)
 
-  pipelineId      String?
-  stageId         String?
+  pipelineId String?
+  stageId    String?
 
   cancellationReason String?
 
   // Ad tracking (filled from form URL params or webhook payload)
-  yclid           String?
-  gclid           String?
-  utmSource       String?
-  utmMedium       String?
-  utmCampaign     String?
-  utmContent      String?
-  utmTerm         String?
-  referrer        String?
-  payloadLogId    String?
+  yclid        String?
+  gclid        String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmContent   String?
+  utmTerm      String?
+  referrer     String?
+  payloadLogId String?
 
-  scheduledAt     DateTime?
-  completedAt     DateTime?
-  cancelledAt     DateTime?
+  scheduledAt DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
 
-  responsibleId   String?
-  responsible     User?     @relation("DealResponsible", fields: [responsibleId], references: [id])
+  responsibleId String?
+  responsible   User?   @relation("DealResponsible", fields: [responsibleId], references: [id])
 
-  franchiseeId    String?
-  franchisee      Franchisee? @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  franchiseeId String?
+  franchisee   Franchisee? @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  assignments     GameAssignment[]
-  transactions    Transaction[]
-  shifts          Shift[]
-  notifications   Notification[]
-  alerts          Alert[]
-  logs            DealLog[]
-  events          DealEvent[]
-  files           DealFile[]
-  tasks           DealTask[]
+  assignments   GameAssignment[]
+  transactions  Transaction[]
+  shifts        Shift[]
+  notifications Notification[]
+  alerts        Alert[]
+  logs          DealLog[]
+  events        DealEvent[]
+  files         DealFile[]
+  tasks         DealTask[]
 
   @@index([stage])
   @@index([franchiseeId])
@@ -284,27 +298,27 @@ model Deal {
 }
 
 model Transaction {
-  id            String     @id @default(cuid())
-  dealId        String?
-  deal          Deal?      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  id     String  @id @default(cuid())
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
-  gameLeadId    String?
-  gameLead      GameLead?  @relation(fields: [gameLeadId], references: [id], onDelete: SetNull)
+  gameLeadId String?
+  gameLead   GameLead? @relation(fields: [gameLeadId], references: [id], onDelete: SetNull)
 
-  franchiseeId  String
-  franchisee    Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  franchiseeId String
+  franchisee   Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
 
-  type          String     @default("income")
+  type          String   @default("income")
   category      String?
   amount        Int
   description   String?
   paymentMethod String?
-  date          DateTime   @default(now())
-  paymentDate   DateTime   @default(now())
-  royaltyAmount Int        @default(0)
+  date          DateTime @default(now())
+  paymentDate   DateTime @default(now())
+  royaltyAmount Int      @default(0)
   notes         String?
 
-  createdAt     DateTime   @default(now())
+  createdAt DateTime @default(now())
 
   @@index([dealId])
   @@index([gameLeadId])
@@ -313,20 +327,20 @@ model Transaction {
 }
 
 model Expense {
-  id            String     @id @default(cuid())
-  franchiseeId  String
-  franchisee    Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  id           String     @id @default(cuid())
+  franchiseeId String
+  franchisee   Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
 
-  createdById   String
-  createdBy     User       @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User   @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: Cascade)
 
   category      String
   amount        Int
   description   String?
   paymentMethod String?
-  expenseDate   DateTime   @default(now())
+  expenseDate   DateTime @default(now())
 
-  createdAt     DateTime   @default(now())
+  createdAt DateTime @default(now())
 
   @@index([franchiseeId])
   @@index([expenseDate])
@@ -334,68 +348,68 @@ model Expense {
 }
 
 model GameAssignment {
-  id            String     @id @default(cuid())
-  dealId        String
-  deal          Deal       @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
-  personnelId   String
-  personnel     Personnel  @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  personnelId String
+  personnel   Personnel @relation(fields: [personnelId], references: [id], onDelete: Cascade)
 
-  createdById   String
-  createdBy     User       @relation("AssignmentCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User   @relation("AssignmentCreator", fields: [createdById], references: [id], onDelete: Cascade)
 
-  assignedAt    DateTime   @default(now())
+  assignedAt DateTime @default(now())
 
   @@index([dealId])
   @@index([personnelId])
 }
 
 model AdminPermission {
-  id                  String   @id @default(cuid())
-  userId              String   @unique
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  canManagePersonnel  Boolean  @default(true)
-  canManageDeals      Boolean  @default(true)
-  canViewFinances     Boolean  @default(true)
-  canManageSchedule   Boolean  @default(true)
+  canManagePersonnel Boolean @default(true)
+  canManageDeals     Boolean @default(true)
+  canViewFinances    Boolean @default(true)
+  canManageSchedule  Boolean @default(true)
 
-  createdAt           DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model UserPermission {
-  id                    String   @id @default(cuid())
-  userId                String   @unique
-  user                  User     @relation("UserPermissions", fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation("UserPermissions", fields: [userId], references: [id], onDelete: Cascade)
 
-  canViewDashboard      Boolean  @default(true)
-  canViewCrm            Boolean  @default(true)
-  canViewErp            Boolean  @default(true)
-  canViewKpi            Boolean  @default(true)
-  canViewDeals          Boolean  @default(false)
-  canEditDeals          Boolean  @default(false)
-  canViewFinances       Boolean  @default(false)
-  canAddExpenses        Boolean  @default(false)
-  canViewMessages       Boolean  @default(true)
-  canViewKnowledgeBase  Boolean  @default(true)
-  canViewUsers          Boolean  @default(false)
-  canViewAccess         Boolean  @default(false)
-  canViewNotifications  Boolean  @default(true)
-  canManagePersonnel    Boolean  @default(false)
-  canManageSchedule     Boolean  @default(false)
-  canManageUsers        Boolean  @default(false)
-  canManageConstants    Boolean  @default(false)
+  canViewDashboard     Boolean @default(true)
+  canViewCrm           Boolean @default(true)
+  canViewErp           Boolean @default(true)
+  canViewKpi           Boolean @default(true)
+  canViewDeals         Boolean @default(false)
+  canEditDeals         Boolean @default(false)
+  canViewFinances      Boolean @default(false)
+  canAddExpenses       Boolean @default(false)
+  canViewMessages      Boolean @default(true)
+  canViewKnowledgeBase Boolean @default(true)
+  canViewUsers         Boolean @default(false)
+  canViewAccess        Boolean @default(false)
+  canViewNotifications Boolean @default(true)
+  canManagePersonnel   Boolean @default(false)
+  canManageSchedule    Boolean @default(false)
+  canManageUsers       Boolean @default(false)
+  canManageConstants   Boolean @default(false)
 
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }
 
 model RefreshToken {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   token     String   @unique
   expiresAt DateTime
@@ -416,7 +430,7 @@ model KnowledgeArticle {
   type        String   @default("article")
   tags        String[]
   videoUrl    String?
-  targetRole  String?  // deprecated — use targetRoles
+  targetRole  String? // deprecated — use targetRoles
   targetRoles String[] @default([]) // uk, franchisee, admin, employee, animator, host, dj
   views       Int      @default(0)
   helpful     Int      @default(0)
@@ -434,27 +448,27 @@ model KnowledgeArticle {
 }
 
 model KnowledgeFile {
-  id          String   @id @default(cuid())
-  articleId   String
-  article     KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  name        String
-  url         String
-  size        String
-  mimeType    String?
-  type        String?
-  uploadedAt  DateTime @default(now())
+  id         String           @id @default(cuid())
+  articleId  String
+  article    KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  name       String
+  url        String
+  size       String
+  mimeType   String?
+  type       String?
+  uploadedAt DateTime         @default(now())
 
   @@index([articleId])
 }
 
 model ArticleReadStatus {
-  id          String    @id @default(cuid())
+  id          String           @id @default(cuid())
   articleId   String
   article     KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
   userId      String
-  user        User     @relation("ArticleReadStatuses", fields: [userId], references: [id], onDelete: Cascade)
-  readAt      DateTime @default(now())
-  isCompleted Boolean  @default(false)
+  user        User             @relation("ArticleReadStatuses", fields: [userId], references: [id], onDelete: Cascade)
+  readAt      DateTime         @default(now())
+  isCompleted Boolean          @default(false)
   completedAt DateTime?
 
   @@unique([articleId, userId])
@@ -463,74 +477,74 @@ model ArticleReadStatus {
 }
 
 model KnowledgeQuiz {
-  id            String   @id @default(cuid())
-  articleId     String   @unique
-  article       KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  title         String
-  passingScore  Int      @default(70)
-  createdById   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String           @id @default(cuid())
+  articleId    String           @unique
+  article      KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  title        String
+  passingScore Int              @default(70)
+  createdById  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  questions     QuizQuestion[]
-  attempts      QuizAttempt[]
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
 
   @@index([articleId])
 }
 
 model QuizQuestion {
-  id           String   @id @default(cuid())
+  id           String        @id @default(cuid())
   quizId       String
   quiz         KnowledgeQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
   text         String
   options      String[]
   correctIndex Int
-  order        Int      @default(0)
-  createdAt    DateTime @default(now())
+  order        Int           @default(0)
+  createdAt    DateTime      @default(now())
 
   @@index([quizId])
 }
 
 model QuizAttempt {
-  id          String   @id @default(cuid())
-  quizId      String
-  quiz        KnowledgeQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User     @relation("QuizAttempts", fields: [userId], references: [id], onDelete: Cascade)
-  answers     Int[]
-  score       Int
-  passed      Boolean
-  createdAt   DateTime @default(now())
+  id        String        @id @default(cuid())
+  quizId    String
+  quiz      KnowledgeQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation("QuizAttempts", fields: [userId], references: [id], onDelete: Cascade)
+  answers   Int[]
+  score     Int
+  passed    Boolean
+  createdAt DateTime      @default(now())
 
   @@index([quizId])
   @@index([userId])
 }
 
 model Notification {
-  id            String             @id @default(cuid())
-  type          NotificationType
-  title         String
-  message       String
-  location      String?
-  dealId        String?
-  deal          Deal?              @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  id       String           @id @default(cuid())
+  type     NotificationType
+  title    String
+  message  String
+  location String?
+  dealId   String?
+  deal     Deal?            @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
   relatedDealId String?
   relatedTaskId String?
 
-  senderId      String?
-  sender        User?              @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+  senderId String?
+  sender   User?   @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
 
-  recipientId   String
-  recipient     User               @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  recipientId String
+  recipient   User   @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
 
-  isRead        Boolean            @default(false)
-  isArchived    Boolean            @default(false)
+  isRead     Boolean @default(false)
+  isArchived Boolean @default(false)
 
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  comments      NotificationComment[]
+  comments NotificationComment[]
 
   @@index([recipientId])
   @@index([isRead])
@@ -538,48 +552,48 @@ model Notification {
 }
 
 model NotificationComment {
-  id              String       @id @default(cuid())
-  notificationId  String
-  notification    Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
 
-  authorId        String
-  author          User         @relation("NotificationCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String
+  author   User   @relation("NotificationCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
-  text            String
-  createdAt       DateTime     @default(now())
+  text      String
+  createdAt DateTime @default(now())
 
   @@index([notificationId])
 }
 
 model Alert {
-  id            String         @id @default(cuid())
-  location      String
-  dealId        String?
-  deal          Deal?          @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  id       String  @id @default(cuid())
+  location String
+  dealId   String?
+  deal     Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
-  message       String
-  franchiseeId  String
-  franchisee    Franchisee     @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  message      String
+  franchiseeId String
+  franchisee   Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
 
-  severity      String
-  isArchived    Boolean        @default(false)
+  severity   String
+  isArchived Boolean @default(false)
 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  comments      AlertComment[]
+  comments AlertComment[]
 
   @@index([franchiseeId])
   @@index([severity])
 }
 
 model AlertComment {
-  id        String   @id @default(cuid())
-  alertId   String
-  alert     Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  alertId String
+  alert   Alert  @relation(fields: [alertId], references: [id], onDelete: Cascade)
 
-  authorId  String
-  author    User     @relation("AlertCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String
+  author   User   @relation("AlertCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   text      String
   createdAt DateTime @default(now())
@@ -592,28 +606,28 @@ model AlertComment {
 // ============================================================
 
 model Pipeline {
-  id           String   @id @default(cuid())
-  name         String
-  description  String?
-  color        String?  @default("#3B82F6")
-  isDefault    Boolean  @default(false)
-  createdById  String?
-  createdBy    User?    @relation("PipelineCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String?  @default("#3B82F6")
+  isDefault   Boolean  @default(false)
+  createdById String?
+  createdBy   User?    @relation("PipelineCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
 
-  stages       PipelineStage[]
+  stages PipelineStage[]
 }
 
 model PipelineStage {
-  id          String   @id @default(cuid())
-  pipelineId  String
-  pipeline    Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  name        String
-  color       String?  @default("#6B7280")
-  order       Int      @default(0)
-  isFixed     Boolean  @default(false)
-  stageType   String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  pipelineId String
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  name       String
+  color      String?  @default("#6B7280")
+  order      Int      @default(0)
+  isFixed    Boolean  @default(false)
+  stageType  String?
+  createdAt  DateTime @default(now())
 
   @@index([pipelineId])
 }
@@ -623,20 +637,20 @@ model PipelineStage {
 // ============================================================
 
 model DealLog {
-  id             String   @id @default(cuid())
-  dealId         String
-  deal           Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  action         String
-  fromStageId    String?
-  toStageId      String?
-  fromStageName  String?
-  toStageName    String?
-  pipelineId     String?
-  pipelineName   String?
-  details        String?
-  userId         String?
-  userName       String?
-  createdAt      DateTime @default(now())
+  id            String   @id @default(cuid())
+  dealId        String
+  deal          Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  action        String
+  fromStageId   String?
+  toStageId     String?
+  fromStageName String?
+  toStageName   String?
+  pipelineId    String?
+  pipelineName  String?
+  details       String?
+  userId        String?
+  userName      String?
+  createdAt     DateTime @default(now())
 
   @@index([dealId])
 }
@@ -690,98 +704,111 @@ model DealTask {
 // ============================================================
 
 model GamePipeline {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   name         String
   franchiseeId String
   franchisee   Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
+  createdAt    DateTime   @default(now())
 
-  stages       GamePipelineStage[]
-  leads        GameLead[]
+  stages GamePipelineStage[]
+  leads  GameLead[]
 
   @@index([franchiseeId])
 }
 
 model GamePipelineStage {
-  id          String       @id @default(cuid())
-  pipelineId  String
-  pipeline    GamePipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  name        String
-  color       String?      @default("#6B7280")
-  order       Int          @default(0)
-  isFixed     Boolean      @default(false)
-  stageType   String?
-  createdAt   DateTime     @default(now())
+  id         String       @id @default(cuid())
+  pipelineId String
+  pipeline   GamePipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  name       String
+  color      String?      @default("#6B7280")
+  order      Int          @default(0)
+  isFixed    Boolean      @default(false)
+  stageType  String?
+  createdAt  DateTime     @default(now())
 
-  leads       GameLead[]
+  leads GameLead[]
 
   @@index([pipelineId])
 }
 
 model GameLead {
-  id              String   @id @default(cuid())
-  clientName      String
-  clientPhone     String?
-  clientEmail     String?
-  gameDate        String?
-  gameTime        String?
-  gameDuration    Int      @default(3)
-  playersCount    Int      @default(1)
-  pricePerPerson  Int      @default(1500)
-  totalAmount     Int      @default(0)
-  prepayment      Int      @default(0)
-  notes           String?
-  source          String?
+  id             String  @id @default(cuid())
+  clientName     String
+  clientPhone    String?
+  clientEmail    String?
+  gameDate       String?
+  gameTime       String?
+  gameDuration   Int     @default(3)
+  playersCount   Int     @default(1)
+  pricePerPerson Int     @default(1500)
+  totalAmount    Int     @default(0)
+  prepayment     Int     @default(0)
+  notes          String?
+  source         String?
 
-  animatorsCount  Int      @default(0)
-  animatorRate    Int      @default(1500)
-  hostsCount      Int      @default(0)
-  hostRate        Int      @default(2000)
-  djsCount        Int      @default(0)
-  djRate          Int      @default(2500)
+  animatorsCount Int @default(0)
+  animatorRate   Int @default(1500)
+  hostsCount     Int @default(0)
+  hostRate       Int @default(2000)
+  djsCount       Int @default(0)
+  djRate         Int @default(2500)
 
-  extraStaffCount Int      @default(0)
-  extraStaffRate  Int      @default(0)
+  extraStaffCount Int @default(0)
+  extraStaffRate  Int @default(0)
 
-  discount        Int      @default(0)
+  discount Int @default(0)
 
-  extras          String?
-  extrasAmount    Int      @default(0)
-  paymentMethod   String?
+  extras        String?
+  extrasAmount  Int     @default(0)
+  paymentMethod String?
 
   cancellationReason String?
 
+  // Seeker-passport integration (см. docs/CRM.md в проекте seeker-passport)
+  groupType         GroupType?
+  birthdayChildName String?
+  schoolName        String?
+  schoolClass       String?
+  venueName         String?
+  hostName          String?
+  adminName         String?
+  reelUrl           String?
+  reelReadyAt       DateTime?
+  refCode           String?    @db.VarChar(16)
+
   // Ad tracking (filled from form URL params or webhook payload)
-  yclid           String?
-  gclid           String?
-  utmSource       String?
-  utmMedium       String?
-  utmCampaign     String?
-  utmContent      String?
-  utmTerm         String?
-  referrer        String?
-  payloadLogId    String?
+  yclid        String?
+  gclid        String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmContent   String?
+  utmTerm      String?
+  referrer     String?
+  payloadLogId String?
 
-  scheduledAt     DateTime?
-  completedAt     DateTime?
-  cancelledAt     DateTime?
+  scheduledAt DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
 
-  responsibleId   String?
-  pipelineId      String
-  pipeline        GamePipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  stageId         String
-  stage           GamePipelineStage @relation(fields: [stageId], references: [id])
-  franchiseeId    String
-  franchisee      Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  responsibleId String?
+  pipelineId    String
+  pipeline      GamePipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stageId       String
+  stage         GamePipelineStage @relation(fields: [stageId], references: [id])
+  franchiseeId  String
+  franchisee    Franchisee        @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  logs            GameLeadLog[]
-  events          GameLeadEvent[]
-  tasks           GameLeadTask[]
-  schedules       GameSchedule[]
-  transactions    Transaction[]
+  logs         GameLeadLog[]
+  events       GameLeadEvent[]
+  tasks        GameLeadTask[]
+  schedules    GameSchedule[]
+  transactions Transaction[]
+  attendances  ClientAttendance[]
 
   @@index([pipelineId])
   @@index([stageId])
@@ -789,6 +816,55 @@ model GameLead {
   @@index([responsibleId])
   @@index([yclid])
   @@index([gclid])
+  @@index([refCode])
+}
+
+// ============================================================
+// Seeker-passport: гости и их посещения
+// (см. docs/CRM.md в проекте seeker-passport для полного контракта)
+// ============================================================
+
+model Client {
+  id             String    @id @default(cuid())
+  phone          String    @unique
+  email          String?
+  childName      String
+  childNameNorm  String
+  childBirthdate DateTime
+  tgUserId       String?   @unique
+  passportNumber String?
+  passportId     String?   @unique
+  refCode        String?
+  consentAt      DateTime?
+  mediaConsentAt DateTime?
+  source         String    @default("seeker_passport")
+  callTaskAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  franchiseeId String?
+  franchisee   Franchisee? @relation(fields: [franchiseeId], references: [id])
+
+  attendances ClientAttendance[]
+
+  @@index([childBirthdate])
+  @@index([callTaskAt])
+  @@index([franchiseeId])
+}
+
+model ClientAttendance {
+  id           String         @id @default(cuid())
+  clientId     String
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  gameLeadId   String
+  gameLead     GameLead       @relation(fields: [gameLeadId], references: [id], onDelete: Cascade)
+  role         AttendanceRole @default(GUEST)
+  confirmed    Boolean        @default(false)
+  activationId String         @unique
+  createdAt    DateTime       @default(now())
+
+  @@unique([clientId, gameLeadId])
+  @@index([gameLeadId])
 }
 
 model IncomingPayloadLog {
@@ -859,18 +935,18 @@ model GameLeadTask {
 // ============================================================
 
 model GameSchedule {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   leadId       String?
-  lead         GameLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead         GameLead?  @relation(fields: [leadId], references: [id], onDelete: SetNull)
   franchiseeId String
   franchisee   Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
   gameDate     DateTime
   gameTime     String?
   clientName   String?
-  playersCount Int      @default(0)
-  createdAt    DateTime @default(now())
+  playersCount Int        @default(0)
+  createdAt    DateTime   @default(now())
 
-  staff        GameScheduleStaff[]
+  staff GameScheduleStaff[]
 
   @@index([franchiseeId])
   @@index([gameDate])
@@ -919,14 +995,14 @@ model Message {
 // ============================================================
 
 model PushSubscription {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  endpoint     String   @unique
-  p256dh       String
-  auth         String
-  userAgent    String?
-  createdAt    DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
 
   @@index([userId])
 }
@@ -953,44 +1029,44 @@ model UserFranchiseeAssignment {
 // ============================================================
 
 model Game {
-  id              String   @id @default(cuid())
-  franchiseeId    String
-  franchisee      Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
-  clientName      String
-  clientPhone     String?
-  gameDate        DateTime?
-  gameStartTime   String?
-  gameEndTime     String?
-  playersCount    Int      @default(0)
-  packageType     String?
-  packagePrice    Int      @default(0)
-  animatorsCount  Int      @default(0)
-  hostsCount      Int      @default(0)
-  djsCount        Int      @default(0)
-  animatorRate    Int      @default(0)
-  hostRate        Int      @default(0)
-  djRate          Int      @default(0)
-  prepayment      Int      @default(0)
-  notes           String?
-  totalAmount     Int      @default(0)
-  status          String   @default("scheduled")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String     @id @default(cuid())
+  franchiseeId   String
+  franchisee     Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  clientName     String
+  clientPhone    String?
+  gameDate       DateTime?
+  gameStartTime  String?
+  gameEndTime    String?
+  playersCount   Int        @default(0)
+  packageType    String?
+  packagePrice   Int        @default(0)
+  animatorsCount Int        @default(0)
+  hostsCount     Int        @default(0)
+  djsCount       Int        @default(0)
+  animatorRate   Int        @default(0)
+  hostRate       Int        @default(0)
+  djRate         Int        @default(0)
+  prepayment     Int        @default(0)
+  notes          String?
+  totalAmount    Int        @default(0)
+  status         String     @default("scheduled")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  staff           GameStaff[]
+  staff GameStaff[]
 
   @@index([franchiseeId])
   @@index([gameDate])
 }
 
 model GameStaff {
-  id           String   @id @default(cuid())
-  gameId       String
-  game         Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  personnelId  String
-  role         String
-  rate         Int      @default(0)
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  gameId      String
+  game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  personnelId String
+  role        String
+  rate        Int      @default(0)
+  createdAt   DateTime @default(now())
 
   @@unique([gameId, personnelId])
   @@index([gameId])
@@ -1001,127 +1077,127 @@ model GameStaff {
 // ============================================================
 
 model SocialMediaConfig {
-  id              String   @id @default(cuid())
-  platform        String
-  name            String?
-  accessToken     String?
-  pageId          String?
-  botToken        String?
-  chatId          String?
-  webhookUrl      String?
-  isActive        Boolean  @default(true)
-  franchiseeId    String?
-  franchisee      Franchisee? @relation(fields: [franchiseeId], references: [id], onDelete: SetNull)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String      @id @default(cuid())
+  platform     String
+  name         String?
+  accessToken  String?
+  pageId       String?
+  botToken     String?
+  chatId       String?
+  webhookUrl   String?
+  isActive     Boolean     @default(true)
+  franchiseeId String?
+  franchisee   Franchisee? @relation(fields: [franchiseeId], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
-  triggers        SocialMediaTrigger[]
+  triggers SocialMediaTrigger[]
 
   @@index([franchiseeId])
   @@index([platform])
 }
 
 model SocialMediaTrigger {
-  id          String   @id @default(cuid())
-  configId    String
-  config      SocialMediaConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
-  event       String
-  template    String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id        String            @id @default(cuid())
+  configId  String
+  config    SocialMediaConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  event     String
+  template  String?
+  isActive  Boolean           @default(true)
+  createdAt DateTime          @default(now())
 
   @@index([configId])
 }
 
 // New integration system (used by integration-wizard & integration-hub)
 model integration {
-  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  owner_type           String    // "uk" | "franchisee"
-  owner_id             String?
-  channel              String    // "telegram" | "whatsapp" | "instagram" | "vk" | "avito"
-  credentials          Json      @default("{}")
-  webhook_url          String?
-  assignment_strategy  String    @default("first_admin")
-  default_assignee_id  String?
-  is_active            Boolean   @default(true)
-  auto_lead_creation   Boolean   @default(true)
-  last_message_at      DateTime?
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @default(now()) @updatedAt
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  owner_type          String // "uk" | "franchisee"
+  owner_id            String?
+  channel             String // "telegram" | "whatsapp" | "instagram" | "vk" | "avito"
+  credentials         Json      @default("{}")
+  webhook_url         String?
+  assignment_strategy String    @default("first_admin")
+  default_assignee_id String?
+  is_active           Boolean   @default(true)
+  auto_lead_creation  Boolean   @default(true)
+  last_message_at     DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @default(now()) @updatedAt
 
-  triggers             triggerrule[]
+  triggers triggerrule[]
 
   @@index([owner_type, owner_id])
   @@index([channel])
 }
 
 model triggerrule {
-  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  integration_id      String    @db.Uuid
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  integration_id      String      @db.Uuid
   integration         integration @relation(fields: [integration_id], references: [id], onDelete: Cascade)
-  trigger_type        String    // "first_message" | "keyword" | "all"
-  keywords            String[]  @default([])
-  keywords_match_type String    @default("any")
-  is_active           Boolean   @default(true)
-  priority            Int       @default(100)
-  created_at          DateTime  @default(now())
+  trigger_type        String // "first_message" | "keyword" | "all"
+  keywords            String[]    @default([])
+  keywords_match_type String      @default("any")
+  is_active           Boolean     @default(true)
+  priority            Int         @default(100)
+  created_at          DateTime    @default(now())
 
   @@index([integration_id])
 }
 
 // Inbound messages from integrations
 model inboundmessage {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  integration_id    String    @db.Uuid
-  channel           String
-  external_user_id  String
-  username          String?
-  phone             String?
-  message_text      String    @default("")
-  attachments       Json?
-  owner_type        String
-  owner_id          String?
-  received_at       DateTime  @default(now())
-  raw_payload       Json?
-  status            String    @default("pending")
-  lead_id           String?
-  lead_type         String?
-  processed_at      DateTime?
-  created_at        DateTime  @default(now())
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  integration_id   String    @db.Uuid
+  channel          String
+  external_user_id String
+  username         String?
+  phone            String?
+  message_text     String    @default("")
+  attachments      Json?
+  owner_type       String
+  owner_id         String?
+  received_at      DateTime  @default(now())
+  raw_payload      Json?
+  status           String    @default("pending")
+  lead_id          String?
+  lead_type        String?
+  processed_at     DateTime?
+  created_at       DateTime  @default(now())
 
-  @@map("inboundmessage")
   @@index([integration_id])
   @@index([channel, external_user_id])
+  @@map("inboundmessage")
 }
 
 // Lead deduplication records
 model leaddeduplication {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  integration_id    String    @db.Uuid
-  channel           String
-  external_user_id  String
-  phone             String?
-  lead_id           String
-  lead_type         String
-  created_at        DateTime  @default(now())
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  integration_id   String   @db.Uuid
+  channel          String
+  external_user_id String
+  phone            String?
+  lead_id          String
+  lead_type        String
+  created_at       DateTime @default(now())
 
-  @@map("leaddeduplication")
   @@unique([channel, external_user_id])
   @@index([phone])
+  @@map("leaddeduplication")
 }
 
 // Integration statistics
 model integrationstats {
-  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  integration_id        String    @db.Uuid
-  date                  DateTime  @db.Date
-  messages_received     Int       @default(0)
-  leads_created         Int       @default(0)
-  duplicates_prevented  Int       @default(0)
-  updated_at            DateTime  @default(now())
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  integration_id       String   @db.Uuid
+  date                 DateTime @db.Date
+  messages_received    Int      @default(0)
+  leads_created        Int      @default(0)
+  duplicates_prevented Int      @default(0)
+  updated_at           DateTime @default(now())
 
-  @@map("integrationstats")
   @@unique([integration_id, date])
+  @@map("integrationstats")
 }
 
 // ============================================================
@@ -1129,39 +1205,39 @@ model integrationstats {
 // ============================================================
 
 model SipuniSettings {
-  id              String   @id @default(cuid())
-  franchiseeId    String?
-  franchisee      Franchisee? @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
-  apiKey          String
-  sipNumbers      String[] @default([])
-  webhookSecret   String?
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String      @id @default(cuid())
+  franchiseeId  String?
+  franchisee    Franchisee? @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  apiKey        String
+  sipNumbers    String[]    @default([])
+  webhookSecret String?
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   @@unique([franchiseeId])
   @@map("sipuni_settings")
 }
 
 model CallLog {
-  id              String   @id @default(cuid())
-  franchiseeId    String?
-  callId          String?
-  direction       String   // "inbound" | "outbound"
-  callerNumber    String
-  calledNumber    String
-  sipNumber       String?
-  status          String   @default("missed") // "answered" | "missed" | "busy" | "voicemail"
-  duration        Int      @default(0)
-  recordUrl       String?
-  answeredBy      String?  // userId
-  answeredByName  String?
-  linkedLeadId    String?
-  linkedLeadType  String?  // "b2b" | "b2c"
-  notes           String?
-  startedAt       DateTime @default(now())
-  endedAt         DateTime?
-  createdAt       DateTime @default(now())
+  id             String    @id @default(cuid())
+  franchiseeId   String?
+  callId         String?
+  direction      String // "inbound" | "outbound"
+  callerNumber   String
+  calledNumber   String
+  sipNumber      String?
+  status         String    @default("missed") // "answered" | "missed" | "busy" | "voicemail"
+  duration       Int       @default(0)
+  recordUrl      String?
+  answeredBy     String? // userId
+  answeredByName String?
+  linkedLeadId   String?
+  linkedLeadType String? // "b2b" | "b2c"
+  notes          String?
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  createdAt      DateTime  @default(now())
 
   @@index([franchiseeId])
   @@index([callerNumber])
