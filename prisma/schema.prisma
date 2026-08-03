@@ -856,8 +856,11 @@ model ClientAttendance {
   id           String         @id @default(cuid())
   clientId     String
   client       Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  gameLeadId   String
-  gameLead     GameLead       @relation(fields: [gameLeadId], references: [id], onDelete: Cascade)
+  // Nullable — GUEST_UNCONFIRMED сегмент от seeker'а (активация без
+  // подтверждённой игры: challenge провален / родитель не опознал).
+  // Дедуп через activationId, привязка к игре может проставиться позже.
+  gameLeadId   String?
+  gameLead     GameLead?      @relation(fields: [gameLeadId], references: [id], onDelete: Cascade)
   role         AttendanceRole @default(GUEST)
   confirmed    Boolean        @default(false)
   activationId String         @unique

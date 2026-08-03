@@ -11,7 +11,9 @@ import { logApp } from "@/lib/app-logger"
 
 type IncomingBody = {
   source?: string
-  gameLeadId: string
+  // Nullable для сегмента GUEST_UNCONFIRMED — активация без опознанной
+  // игры (challenge провален / родитель не смог опознать).
+  gameLeadId: string | null
   passportId?: string
   passportNumber?: string
   citySlug?: string
@@ -85,8 +87,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Валидация обязательных полей — сохраняем контракт из docs/CRM.md.
+  // gameLeadId nullable — для GUEST_UNCONFIRMED сегмента приходит null.
+  const hasGameLeadId = isNonEmptyString(body?.gameLeadId)
   if (
-    !isNonEmptyString(body?.gameLeadId) ||
     !body.client ||
     !isNonEmptyString(body.client.phone) ||
     !isNonEmptyString(body.client.childName) ||
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest) {
     !isNonEmptyString(body.attendance.activationId)
   ) {
     return NextResponse.json(
-      { error: "Missing required fields: gameLeadId, client.{phone,childName,childBirthdate}, attendance.activationId" },
+      { error: "Missing required fields: client.{phone,childName,childBirthdate}, attendance.activationId" },
       { status: 400 },
     )
   }
@@ -114,21 +117,27 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // Проверяем что такая заявка есть — иначе некуда крепить посещение.
-  const [gameLead] = await sql`
-    SELECT id, "franchiseeId" FROM "GameLead" WHERE id = ${body.gameLeadId}
-  `
-  if (!gameLead) {
-    return NextResponse.json(
-      { error: `GameLead not found: ${body.gameLeadId}` },
-      { status: 409 },
-    )
+  // Если gameLeadId передан — проверяем что заявка существует. Если null
+  // (GUEST_UNCONFIRMED) — пропускаем: attendance ляжет с gameLeadId=NULL,
+  // позже seeker может проставить конкретную игру при подтверждении.
+  let gameLeadFranchiseeId: string | null = null
+  if (hasGameLeadId) {
+    const [gameLead] = await sql`
+      SELECT id, "franchiseeId" FROM "GameLead" WHERE id = ${body.gameLeadId}
+    `
+    if (!gameLead) {
+      return NextResponse.json(
+        { error: `GameLead not found: ${body.gameLeadId}` },
+        { status: 409 },
+      )
+    }
+    gameLeadFranchiseeId = gameLead.franchiseeId ?? null
   }
 
-  // franchiseeId по citySlug (fallback — берём franchiseeId самой игры).
-  // Явный маппинг по citySlug важен для будущего, когда seeker будет знать
-  // про несколько франчайзи в одном городе — сейчас же они совпадают.
-  let franchiseeId: string | null = gameLead.franchiseeId ?? null
+  // franchiseeId по citySlug (fallback — берём franchiseeId самой игры,
+  // если игра указана). Явный маппинг по citySlug важен для будущего,
+  // когда seeker будет знать про несколько франчайзи в одном городе.
+  let franchiseeId: string | null = gameLeadFranchiseeId
   if (isNonEmptyString(body.citySlug)) {
     const [byCity] = await sql`
       SELECT id FROM "Franchisee" WHERE "citySlug" = ${body.citySlug} LIMIT 1
@@ -139,8 +148,8 @@ export async function POST(req: NextRequest) {
       await logApp({
         level: "warn",
         source: "webhook",
-        message: `seeker/clients: citySlug '${body.citySlug}' не найден среди Franchisee.citySlug — fallback к franchiseeId игры`,
-        metadata: { citySlug: body.citySlug, gameLeadId: body.gameLeadId },
+        message: `seeker/clients: citySlug '${body.citySlug}' не найден среди Franchisee.citySlug`,
+        metadata: { citySlug: body.citySlug, gameLeadId: body.gameLeadId ?? null },
       })
     }
   }
@@ -190,6 +199,8 @@ export async function POST(req: NextRequest) {
   // Attendance — ON CONFLICT (activationId) для дополнительной защиты
   // от гонки: между SELECT existingAttendance и INSERT кто-то мог успеть
   // вставить с тем же activationId.
+  // gameLeadId нормализуем к null для UNCONFIRMED — в БД колонка nullable.
+  const attendanceGameLeadId = hasGameLeadId ? body.gameLeadId : null
   const attendanceId = crypto.randomUUID()
   let insertedAttendanceId: string
   try {
@@ -199,7 +210,7 @@ export async function POST(req: NextRequest) {
       ) VALUES (
         ${attendanceId},
         ${finalClientId},
-        ${body.gameLeadId},
+        ${attendanceGameLeadId},
         ${body.attendance.role ?? "GUEST"}::"AttendanceRole",
         ${body.attendance.confirmed ?? false},
         ${body.attendance.activationId},
