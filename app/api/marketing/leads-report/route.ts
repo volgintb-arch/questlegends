@@ -35,8 +35,15 @@ export async function GET(req: NextRequest) {
       : user.franchiseeId || null
 
     const srcFilter = source === "all" ? null : source
-    const df = dateFrom ? new Date(dateFrom) : null
-    const dt = dateTo ? new Date(dateTo + "T23:59:59.999Z") : null
+    // Отсекаем невалидные даты — иначе `postgres` при подстановке ${df} упадёт
+    // с RangeError: Invalid time value в момент .toISOString() на Invalid Date.
+    const safeDate = (v: string | null): Date | null => {
+      if (!v) return null
+      const d = new Date(v)
+      return Number.isNaN(d.getTime()) ? null : d
+    }
+    const df = safeDate(dateFrom)
+    const dt = dateTo ? safeDate(dateTo + "T23:59:59.999Z") : null
 
     // Normalize stage to one of 5 statuses based on stageType and name
     function normalizeStatus(
