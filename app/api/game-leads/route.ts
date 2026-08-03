@@ -4,6 +4,7 @@ import { verifyRequest } from "@/lib/simple-auth"
 import { AccessControl } from "@/lib/access-control"
 import { AuditLog } from "@/lib/audit-log"
 import { logApiError } from "@/lib/app-logger"
+import { emitGamesWebhook, emitBookingWebhook } from "@/lib/seeker-webhook-emitter"
 
 export async function GET(req: NextRequest) {
   try {
@@ -149,6 +150,7 @@ export async function POST(req: NextRequest) {
       extraStaffCount = 0,
       extraStaffRate = 0,
       discount = 0,
+      refCode,
       extras,
       extrasAmount = 0,
       paymentMethod,
@@ -190,6 +192,7 @@ export async function POST(req: NextRequest) {
         "animatorsCount", "animatorRate", "hostsCount", "hostRate", "djsCount", "djRate",
         "extraStaffCount", "extraStaffRate",
         "discount",
+        "refCode",
         "extras", "extrasAmount", "paymentMethod",
         "yclid", "gclid", "utmSource", "utmMedium", "utmCampaign", "utmContent", "utmTerm", "referrer",
         "createdAt", "updatedAt"
@@ -203,6 +206,7 @@ export async function POST(req: NextRequest) {
         ${animatorsCount}, ${animatorRate}, ${hostsCount}, ${hostRate}, ${djsCount}, ${djRate},
         ${extraStaffCount}, ${extraStaffRate},
         ${discount},
+        ${refCode || null},
         ${extras || null}, ${extrasAmount}, ${paymentMethod || "cash"},
         ${yclid || null}, ${gclid || null}, ${utmSource || null}, ${utmMedium || null}, ${utmCampaign || null}, ${utmContent || null}, ${utmTerm || null}, ${referrer || null},
         NOW(), NOW()
@@ -259,6 +263,13 @@ export async function POST(req: NextRequest) {
           ${now}
         )
       `
+    }
+
+    // Fire-and-forget вебхуки в seeker-passport. Ошибки логируются внутри
+    // emit-функций в AppLog — seeker fallback-крон подтянет пропущенное.
+    void emitGamesWebhook(lead.id).catch(() => {})
+    if (refCode) {
+      void emitBookingWebhook(lead.id, String(refCode)).catch(() => {})
     }
 
     return NextResponse.json({ success: true, data: lead })

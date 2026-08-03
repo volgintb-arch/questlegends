@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
+import { emitGamesWebhook } from "@/lib/seeker-webhook-emitter"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -87,6 +88,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       "extras",
       "extrasAmount",
       "cancellationReason",
+      // seeker-passport fields (см. docs/CRM.md в seeker-passport)
+      "groupType",
+      "birthdayChildName",
+      "schoolName",
+      "schoolClass",
+      "venueName",
+      "hostName",
+      "adminName",
+      "reelUrl",
+      "reelReadyAt",
+      "refCode",
     ]
 
     const oldPrepayment =
@@ -240,6 +252,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           await sql`UPDATE "GameLead" SET "extraStaffRate" = ${value || 0}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "discount") {
           await sql`UPDATE "GameLead" SET "discount" = ${value || 0}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "groupType") {
+          await sql`UPDATE "GameLead" SET "groupType" = ${value || null}::"GroupType", "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "birthdayChildName") {
+          await sql`UPDATE "GameLead" SET "birthdayChildName" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "schoolName") {
+          await sql`UPDATE "GameLead" SET "schoolName" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "schoolClass") {
+          await sql`UPDATE "GameLead" SET "schoolClass" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "venueName") {
+          await sql`UPDATE "GameLead" SET "venueName" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "hostName") {
+          await sql`UPDATE "GameLead" SET "hostName" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "adminName") {
+          await sql`UPDATE "GameLead" SET "adminName" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "reelUrl") {
+          await sql`UPDATE "GameLead" SET "reelUrl" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "reelReadyAt") {
+          await sql`UPDATE "GameLead" SET "reelReadyAt" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
+        } else if (field === "refCode") {
+          await sql`UPDATE "GameLead" SET "refCode" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "extras") {
           await sql`UPDATE "GameLead" SET "extras" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "extrasAmount") {
@@ -608,6 +640,29 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const [finalGame] = await sql`SELECT * FROM "GameLead" WHERE id = ${id}`
+
+    // Эмитим games-вебхук seeker'у, если менялось что-то из того, что seeker
+    // отображает: график/место/группа/персонал/рилс + переход стадии
+    // (для CONFIRMED↔CANCELLED статуса).
+    const seekerRelevantChanged =
+      body.gameDate !== undefined ||
+      body.gameTime !== undefined ||
+      body.gameDuration !== undefined ||
+      body.playersCount !== undefined ||
+      body.venueName !== undefined ||
+      body.groupType !== undefined ||
+      body.birthdayChildName !== undefined ||
+      body.schoolName !== undefined ||
+      body.schoolClass !== undefined ||
+      body.hostName !== undefined ||
+      body.adminName !== undefined ||
+      body.reelUrl !== undefined ||
+      body.reelReadyAt !== undefined ||
+      body.stageId !== undefined
+    if (seekerRelevantChanged) {
+      void emitGamesWebhook(id).catch(() => {})
+    }
+
     return NextResponse.json({ success: true, data: finalGame })
   } catch (error: any) {
     console.error("[v0] Error updating game:", error)
