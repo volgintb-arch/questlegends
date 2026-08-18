@@ -2,49 +2,22 @@
 
 import { useState } from "react"
 import { Gamepad2, Search, BarChart3, MessageSquare } from "lucide-react"
-import { PassportsTab } from "@/components/passports-tab"
 import { PassportsGames } from "@/components/passports-games"
+import { PassportsMetrics } from "@/components/passports-metrics"
+import { PassportsSearch } from "@/components/passports-search"
+import { PassportsReviews } from "@/components/passports-reviews"
 
 type Tab = "games" | "search" | "metrics" | "reviews"
 
-const TABS: { id: Tab; label: string; icon: any; path: string; description: string }[] = [
-  {
-    id: "games",
-    label: "Игры",
-    icon: Gamepad2,
-    path: "games",
-    description:
-      "Список сыгранных игр из seeker'ской админки — активации по QR-монетам, загрузка ссылки на рилс, статус подтверждения гостями.",
-  },
-  {
-    id: "search",
-    label: "Поиск паспорта",
-    icon: Search,
-    path: "passports",
-    description:
-      "Поиск паспорта искателя по номеру, имени ребёнка или телефону родителя. Отдаёт данные из seeker'ской БД.",
-  },
-  {
-    id: "metrics",
-    label: "Метрики",
-    icon: BarChart3,
-    path: "metrics",
-    description:
-      "activation_rate по площадкам и администраторам, статистика по игре/родителю/ребёнку — прямо из seeker'а.",
-  },
-  {
-    id: "reviews",
-    label: "Отзывы",
-    icon: MessageSquare,
-    path: "reviews",
-    description:
-      "Отзывы родителей, оставленные через паспорт искателя после игры.",
-  },
+const TABS: { id: Tab; label: string; icon: any }[] = [
+  { id: "games", label: "Игры", icon: Gamepad2 },
+  { id: "search", label: "Поиск паспорта", icon: Search },
+  { id: "metrics", label: "Метрики", icon: BarChart3 },
+  { id: "reviews", label: "Отзывы", icon: MessageSquare },
 ]
 
 export default function PassportsPage() {
   const [tab, setTab] = useState<Tab>("games")
-  const activeTab = TABS.find((t) => t.id === tab)!
 
   return (
     <div className="flex flex-col h-full">
@@ -67,7 +40,10 @@ export default function PassportsPage() {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {tab === "games" ? <PassportsGames /> : <PassportsTab tab={activeTab} />}
+        {tab === "games" && <PassportsGames />}
+        {tab === "search" && <PassportsSearch />}
+        {tab === "metrics" && <PassportsMetrics />}
+        {tab === "reviews" && <PassportsReviews />}
       </div>
     </div>
   )

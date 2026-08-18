@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertCircle, Loader2, RefreshCw, Check, X, Film, Pencil } from "lucide-react"
+import { AlertCircle, Loader2, RefreshCw, Check, X, Film, Pencil, ExternalLink } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -212,13 +212,14 @@ export function PassportsGames() {
                     <th className="text-left px-4 py-2 font-medium">Админ</th>
                     <th className="text-right px-4 py-2 font-medium">Дети</th>
                     <th className="text-left px-4 py-2 font-medium">Активации</th>
+                    <th className="text-left px-4 py-2 font-medium">CRM</th>
                     <th className="text-left px-4 py-2 font-medium">Рилс</th>
                   </tr>
                 </thead>
                 <tbody>
                   {state.games.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
                         Игр не найдено
                       </td>
                     </tr>
@@ -274,6 +275,22 @@ export function PassportsGames() {
                               </div>
                             ) : (
                               "—"
+                            )}
+                          </td>
+                          <td className="px-4 py-2">
+                            {g.crmLeadId && !g.crmLeadId.startsWith("seed-") ? (
+                              <a
+                                href={`/crm?leadId=${encodeURIComponent(g.crmLeadId)}`}
+                                className="text-primary hover:underline text-xs inline-flex items-center gap-1"
+                                title={`Открыть карточку ${g.crmLeadId}`}
+                              >
+                                <ExternalLink size={12} />
+                                Открыть
+                              </a>
+                            ) : (
+                              <span className="text-xs text-muted-foreground" title={g.crmLeadId ?? ""}>
+                                {g.crmLeadId?.startsWith("seed-") ? "seed" : "—"}
+                              </span>
                             )}
                           </td>
                           <td className="px-4 py-2 min-w-[200px]">
