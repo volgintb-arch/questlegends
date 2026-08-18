@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Gamepad2, Search, BarChart3, MessageSquare } from "lucide-react"
 import { PassportsTab } from "@/components/passports-tab"
+import { PassportsGames } from "@/components/passports-games"
 
 type Tab = "games" | "search" | "metrics" | "reviews"
 
@@ -66,7 +67,7 @@ export default function PassportsPage() {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <PassportsTab tab={activeTab} />
+        {tab === "games" ? <PassportsGames /> : <PassportsTab tab={activeTab} />}
       </div>
     </div>
   )
