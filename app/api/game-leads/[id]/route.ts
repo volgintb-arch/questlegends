@@ -290,22 +290,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const stType = newStage?.stageType
       if (stType === "scheduled") {
         await sql`UPDATE "GameLead" SET "scheduledAt" = COALESCE("scheduledAt", NOW()) WHERE id = ${id}`
-        // Согласовано → генерим код, если ещё не выдан.
+      } else if (stType === "completed") {
+        await sql`UPDATE "GameLead" SET "completedAt" = COALESCE("completedAt", NOW()) WHERE id = ${id}`
+      } else if (stType === "cancelled") {
+        await sql`UPDATE "GameLead" SET "cancelledAt" = COALESCE("cancelledAt", NOW()) WHERE id = ${id}`
+      }
+
+      // Activation code lifecycle (D-011):
+      // - scheduled ("Согласовано") → выдать код, если ещё нет
+      // - completed ("Завершено")   → сохранить (родитель ещё может активировать; TTL 2 месяца отдельно чистится)
+      // - всё остальное (new/in_progress/cancelled/NULL-типы default-воронки типа "В работе") → зануляем
+      if (stType === "scheduled") {
         if (!currentGame.activationCode) {
           const code = await allocateActivationCode(sql as any)
           await sql`UPDATE "GameLead" SET "activationCode" = ${code} WHERE id = ${id}`
         }
-      } else if (stType === "completed") {
-        await sql`UPDATE "GameLead" SET "completedAt" = COALESCE("completedAt", NOW()) WHERE id = ${id}`
-        // Завершено → код сохраняется (родитель ещё может активировать после игры).
-      } else if (stType === "cancelled") {
-        await sql`UPDATE "GameLead" SET "cancelledAt" = COALESCE("cancelledAt", NOW()) WHERE id = ${id}`
-        // Отмена → код освобождается для повторного использования.
-        if (currentGame.activationCode) {
-          await sql`UPDATE "GameLead" SET "activationCode" = NULL WHERE id = ${id}`
-        }
-      } else if (stType === "new" || stType === "in_progress") {
-        // Откат до "Новый" / "В работе" → зануляем код (спека D-011).
+      } else if (stType !== "completed") {
         if (currentGame.activationCode) {
           await sql`UPDATE "GameLead" SET "activationCode" = NULL WHERE id = ${id}`
         }
