@@ -121,6 +121,7 @@ interface GameData {
   extraStaffCount?: number
   extraStaffRate?: number
   discount?: number
+  activationCode?: string | null
   extras?: string
   extrasAmount?: number
   paymentMethod?: string
@@ -192,6 +193,7 @@ export function GameCardFranchisee({
     extraStaffCount: safeGame.extraStaffCount ?? 0,
     extraStaffRate: safeGame.extraStaffRate ?? 0,
     discount: safeGame.discount ?? 0,
+    activationCode: (safeGame as any).activationCode ?? null,
     extras: safeGame.extras || "",
     extrasAmount: safeGame.extrasAmount ?? 0,
     paymentMethod: safeGame.paymentMethod || "cash",
@@ -251,6 +253,7 @@ export function GameCardFranchisee({
         extraStaffCount: game.extraStaffCount ?? 0,
         extraStaffRate: game.extraStaffRate ?? 0,
         discount: game.discount ?? 0,
+        activationCode: (game as any).activationCode ?? null,
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
@@ -296,6 +299,7 @@ export function GameCardFranchisee({
         extraStaffCount: game.extraStaffCount ?? 0,
         extraStaffRate: game.extraStaffRate ?? 0,
         discount: game.discount ?? 0,
+        activationCode: (game as any).activationCode ?? null,
         extras: game.extras || "",
         extrasAmount: game.extrasAmount ?? 0,
         paymentMethod: game.paymentMethod || "cash",
@@ -341,6 +345,7 @@ export function GameCardFranchisee({
             extraStaffCount: data.data.extraStaffCount ?? 0,
             extraStaffRate: data.data.extraStaffRate ?? 0,
             discount: data.data.discount ?? 0,
+            activationCode: data.data.activationCode ?? null,
             extras: data.data.extras || "",
             extrasAmount: data.data.extrasAmount ?? 0,
             paymentMethod: data.data.paymentMethod || "cash",
@@ -701,6 +706,35 @@ export function GameCardFranchisee({
         <div className="flex-1 flex overflow-hidden">
           {/* Left Panel - Details */}
           <div className="overflow-y-auto p-4 space-y-4" style={{ width: `${leftWidth}%` }}>
+            {/* Activation code (D-011) — родитель вводит его на seeker-passport
+                вместо даты/времени игры. Показываем, только если код выдан
+                (стадия Согласовано или позже). */}
+            {gameData.activationCode && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] uppercase text-muted-foreground font-medium">
+                    Код квеста для родителей
+                  </div>
+                  <div className="font-mono text-2xl font-bold tracking-widest text-primary mt-0.5">
+                    {gameData.activationCode}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (gameData.activationCode) {
+                      void navigator.clipboard.writeText(gameData.activationCode)
+                      toast({ title: "Код скопирован", description: gameData.activationCode })
+                    }
+                  }}
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  Скопировать
+                </Button>
+              </div>
+            )}
+
             {/* Client Info */}
             <div className="space-y-3">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase">Клиент</h3>

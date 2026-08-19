@@ -5,6 +5,7 @@ import { AccessControl } from "@/lib/access-control"
 import { AuditLog } from "@/lib/audit-log"
 import { logApiError } from "@/lib/app-logger"
 import { emitGamesWebhook, emitBookingWebhook } from "@/lib/seeker-webhook-emitter"
+import { allocateActivationCode } from "@/lib/activation-code"
 
 export async function GET(req: NextRequest) {
   try {
@@ -263,6 +264,18 @@ export async function POST(req: NextRequest) {
           ${now}
         )
       `
+    }
+
+    // D-011: если лид создан сразу в стадии Согласовано — выделить код
+    // (обычный сценарий — создание в "Новый", но защищаемся).
+    const [initialStage] = await sql`SELECT "stageType" FROM "GamePipelineStage" WHERE id = ${stageId}`
+    if (initialStage?.stageType === "scheduled") {
+      try {
+        const code = await allocateActivationCode(sql as any)
+        await sql`UPDATE "GameLead" SET "activationCode" = ${code} WHERE id = ${lead.id}`
+      } catch (err) {
+        console.error("[game-leads/POST] activation code alloc failed:", err)
+      }
     }
 
     // Fire-and-forget вебхуки в seeker-passport. Ошибки логируются внутри

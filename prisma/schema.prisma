@@ -776,6 +776,7 @@ model GameLead {
   reelUrl           String?
   reelReadyAt       DateTime?
   refCode           String?    @db.VarChar(16)
+  activationCode    String?    @unique @db.VarChar(4)
 
   // Ad tracking (filled from form URL params or webhook payload)
   yclid        String?

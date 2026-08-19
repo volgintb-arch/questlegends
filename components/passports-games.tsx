@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertCircle, Loader2, RefreshCw, Check, X, Film, Pencil, ExternalLink } from "lucide-react"
+import { AlertCircle, Loader2, RefreshCw, Check, X, Film, Pencil, ExternalLink, Copy } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,6 +36,7 @@ type Game = {
   venue: Venue | null
   activations: Activations | null
   activationRate: number | null
+  activationCode: string | null // D-011
 }
 
 type State =
@@ -211,6 +212,7 @@ export function PassportsGames() {
                     <th className="text-left px-4 py-2 font-medium">Ведущий</th>
                     <th className="text-left px-4 py-2 font-medium">Админ</th>
                     <th className="text-right px-4 py-2 font-medium">Дети</th>
+                    <th className="text-left px-4 py-2 font-medium">Код</th>
                     <th className="text-left px-4 py-2 font-medium">Активации</th>
                     <th className="text-left px-4 py-2 font-medium">CRM</th>
                     <th className="text-left px-4 py-2 font-medium">Рилс</th>
@@ -219,7 +221,7 @@ export function PassportsGames() {
                 <tbody>
                   {state.games.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
                         Игр не найдено
                       </td>
                     </tr>
@@ -263,6 +265,26 @@ export function PassportsGames() {
                           <td className="px-4 py-2">{g.hostName || "—"}</td>
                           <td className="px-4 py-2">{g.adminName || "—"}</td>
                           <td className="px-4 py-2 text-right">{g.kidsCount ?? 0}</td>
+                          <td className="px-4 py-2">
+                            {g.activationCode ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-semibold text-base tracking-wider text-primary">
+                                  {g.activationCode}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    void navigator.clipboard.writeText(g.activationCode!)
+                                  }}
+                                  className="text-muted-foreground hover:text-foreground"
+                                  title="Скопировать код"
+                                >
+                                  <Copy size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
                           <td className="px-4 py-2">
                             {act ? (
                               <div className="flex flex-col text-xs">

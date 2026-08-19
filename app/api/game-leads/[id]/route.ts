@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 import { emitGamesWebhook } from "@/lib/seeker-webhook-emitter"
+import { allocateActivationCode } from "@/lib/activation-code"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -283,15 +284,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // Stamp lifecycle timestamps when stage changes (для трекинга конверсий по yclid)
+    // + D-011: жизненный цикл activationCode.
     if (body.stageId && body.stageId !== currentGame.stageId) {
       const [newStage] = await sql`SELECT "stageType" FROM "GamePipelineStage" WHERE id = ${body.stageId}`
       const stType = newStage?.stageType
       if (stType === "scheduled") {
         await sql`UPDATE "GameLead" SET "scheduledAt" = COALESCE("scheduledAt", NOW()) WHERE id = ${id}`
+        // Согласовано → генерим код, если ещё не выдан.
+        if (!currentGame.activationCode) {
+          const code = await allocateActivationCode(sql as any)
+          await sql`UPDATE "GameLead" SET "activationCode" = ${code} WHERE id = ${id}`
+        }
       } else if (stType === "completed") {
         await sql`UPDATE "GameLead" SET "completedAt" = COALESCE("completedAt", NOW()) WHERE id = ${id}`
+        // Завершено → код сохраняется (родитель ещё может активировать после игры).
       } else if (stType === "cancelled") {
         await sql`UPDATE "GameLead" SET "cancelledAt" = COALESCE("cancelledAt", NOW()) WHERE id = ${id}`
+        // Отмена → код освобождается для повторного использования.
+        if (currentGame.activationCode) {
+          await sql`UPDATE "GameLead" SET "activationCode" = NULL WHERE id = ${id}`
+        }
+      } else if (stType === "new" || stType === "in_progress") {
+        // Откат до "Новый" / "В работе" → зануляем код (спека D-011).
+        if (currentGame.activationCode) {
+          await sql`UPDATE "GameLead" SET "activationCode" = NULL WHERE id = ${id}`
+        }
       }
     }
 

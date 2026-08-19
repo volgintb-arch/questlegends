@@ -54,6 +54,7 @@ export type GameWebhookPayload = {
   reelUrl: string | null
   reelReadyAt: string | null
   status: "CONFIRMED" | "CANCELLED"
+  activationCode: string | null // D-011
 }
 
 export function composeGamesPayload(row: any): GameWebhookPayload {
@@ -86,6 +87,7 @@ export function composeGamesPayload(row: any): GameWebhookPayload {
     reelUrl: row.reelUrl ?? null,
     reelReadyAt: row.reelReadyAt ? new Date(row.reelReadyAt).toISOString() : null,
     status: row.stageType === "cancelled" ? "CANCELLED" : "CONFIRMED",
+    activationCode: row.activationCode ?? null,
   }
 }
 
@@ -97,7 +99,7 @@ export async function fetchLeadForWebhook(leadId: string): Promise<any | null> {
       gl.id, gl."gameDate", gl."gameTime", gl."gameDuration", gl."playersCount",
       gl."venueName", gl."groupType", gl."birthdayChildName",
       gl."schoolName", gl."schoolClass", gl."hostName", gl."adminName",
-      gl."reelUrl", gl."reelReadyAt",
+      gl."reelUrl", gl."reelReadyAt", gl."activationCode",
       s."stageType",
       f."citySlug", f.city AS "franchiseeCity", f.address AS "franchiseeAddress"
     FROM "GameLead" gl
