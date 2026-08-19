@@ -1,11 +1,44 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { AlertCircle, Loader2, RefreshCw, TrendingUp, Users, CheckCircle2, Gamepad2 } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import {
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  TrendingUp,
+  IdCard,
+  Users,
+  Camera,
+  Trophy,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+} from "recharts"
 
-type Totals = { games: number; kids: number; confirmed: number; activationRate: number }
+type Totals = {
+  games: number
+  kids: number
+  confirmed: number
+  activationRate: number
+  // Расширенные поля (добавлены на seeker в /api/admin/metrics)
+  passports?: number
+  parents?: number
+  returningParents?: number
+  returningRate?: number
+  photosUploaded?: number
+  photoRate?: number
+}
 type Bucket = {
   key: string
   label: string
@@ -14,11 +47,17 @@ type Bucket = {
   confirmedTotal: number
   activationRate: number
 }
+type DailyPoint = {
+  day: string // YYYY-MM-DD
+  passportsIssued: number
+  attendances: number
+}
 type Metrics = {
   range: { from: string; to: string }
   totals: Totals
   byVenue: Bucket[]
   byAdmin: Bucket[]
+  daily?: DailyPoint[]
 }
 
 type State =
@@ -28,6 +67,9 @@ type State =
   | { kind: "upstream-down" }
   | { kind: "auth" }
   | { kind: "error"; message: string; status?: number }
+
+type SortKey = "label" | "gamesCount" | "kidsTotal" | "confirmedTotal" | "activationRate"
+type SortDir = "asc" | "desc"
 
 function rateColor(rate: number): string {
   if (rate >= 0.7) return "text-green-600"
@@ -40,6 +82,12 @@ function formatDate(v: string): string {
   const d = new Date(v)
   if (Number.isNaN(d.getTime())) return v
   return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" })
+}
+
+function formatDayShort(v: string): string {
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return v
+  return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })
 }
 
 function StatCard({
@@ -67,8 +115,58 @@ function StatCard({
   )
 }
 
+function pct(rate: number | null | undefined): string {
+  if (rate == null || Number.isNaN(rate)) return "—"
+  return `${Math.round(rate * 1000) / 10}%`
+}
+
+function sortBuckets(rows: Bucket[], sortBy: SortKey, dir: SortDir): Bucket[] {
+  const mult = dir === "asc" ? 1 : -1
+  return [...rows].sort((a, b) => {
+    const va = a[sortBy]
+    const vb = b[sortBy]
+    if (typeof va === "string" && typeof vb === "string") return va.localeCompare(vb) * mult
+    return ((Number(va) || 0) - (Number(vb) || 0)) * mult
+  })
+}
+
 function BucketTable({ title, buckets }: { title: string; buckets: Bucket[] }) {
+  const [sortBy, setSortBy] = useState<SortKey>("kidsTotal")
+  const [dir, setDir] = useState<SortDir>("desc")
+  const sorted = useMemo(() => sortBuckets(buckets, sortBy, dir), [buckets, sortBy, dir])
   const totalKids = buckets.reduce((s, b) => s + b.kidsTotal, 0)
+
+  // Топ-3 по activationRate — независимо от текущей сортировки таблицы.
+  const top3Ids = useMemo(() => {
+    const byRate = [...buckets]
+      .filter((b) => b.gamesCount > 0) // 100% на 1 игре — шум, отсекаем пустые
+      .sort((a, b) => b.activationRate - a.activationRate)
+      .slice(0, 3)
+      .map((b) => b.key)
+    return new Set(byRate)
+  }, [buckets])
+
+  const clickSort = (key: SortKey) => {
+    if (sortBy === key) {
+      setDir((d) => (d === "asc" ? "desc" : "asc"))
+    } else {
+      setSortBy(key)
+      setDir(key === "label" ? "asc" : "desc")
+    }
+  }
+
+  const SortHeader = ({ k, children, align }: { k: SortKey; children: any; align?: "right" }) => (
+    <th className={`px-4 py-2 font-medium ${align === "right" ? "text-right" : "text-left"} select-none`}>
+      <button
+        onClick={() => clickSort(k)}
+        className="inline-flex items-center gap-1 hover:text-foreground uppercase text-xs"
+      >
+        {children}
+        {sortBy === k && (dir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+      </button>
+    </th>
+  )
+
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden">
       <div className="px-4 py-3 border-b border-border">
@@ -78,32 +176,46 @@ function BucketTable({ title, buckets }: { title: string; buckets: Bucket[] }) {
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
             <tr>
-              <th className="text-left px-4 py-2 font-medium">Название</th>
-              <th className="text-right px-4 py-2 font-medium">Игр</th>
-              <th className="text-right px-4 py-2 font-medium">Детей</th>
-              <th className="text-right px-4 py-2 font-medium">Подтв.</th>
-              <th className="text-right px-4 py-2 font-medium">Rate</th>
+              <SortHeader k="label">Название</SortHeader>
+              <SortHeader k="gamesCount" align="right">Игр</SortHeader>
+              <SortHeader k="kidsTotal" align="right">Детей</SortHeader>
+              <SortHeader k="confirmedTotal" align="right">Подтв.</SortHeader>
+              <SortHeader k="activationRate" align="right">Rate</SortHeader>
               <th className="text-right px-4 py-2 font-medium">Доля детей</th>
             </tr>
           </thead>
           <tbody>
-            {buckets.length === 0 ? (
+            {sorted.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
                   Пусто
                 </td>
               </tr>
             ) : (
-              buckets.map((b) => {
+              sorted.map((b) => {
                 const share = totalKids > 0 ? b.kidsTotal / totalKids : 0
+                const isTop = top3Ids.has(b.key)
                 return (
-                  <tr key={b.key} className="border-t border-border">
-                    <td className="px-4 py-2 font-medium">{b.label}</td>
+                  <tr key={b.key} className={`border-t border-border ${isTop ? "bg-amber-500/5" : ""}`}>
+                    <td className="px-4 py-2 font-medium">
+                      <div className="flex items-center gap-2">
+                        {isTop && (
+                          <span
+                            className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5"
+                            title="Топ-3 по activation rate"
+                          >
+                            <Trophy size={10} />
+                            TOP
+                          </span>
+                        )}
+                        <span>{b.label}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-2 text-right">{b.gamesCount}</td>
                     <td className="px-4 py-2 text-right">{b.kidsTotal}</td>
                     <td className="px-4 py-2 text-right">{b.confirmedTotal}</td>
                     <td className={`px-4 py-2 text-right font-semibold ${rateColor(b.activationRate)}`}>
-                      {Math.round(b.activationRate * 1000) / 10}%
+                      {pct(b.activationRate)}
                     </td>
                     <td className="px-4 py-2 text-right">
                       <div className="flex items-center gap-2 justify-end">
@@ -121,6 +233,72 @@ function BucketTable({ title, buckets }: { title: string; buckets: Bucket[] }) {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+function DailyChart({ points }: { points: DailyPoint[] }) {
+  // Дефолт — последние 30 дней. Если seeker вернул меньше — берём что есть.
+  const data = useMemo(() => {
+    const tail = points.slice(-30)
+    return tail.map((p) => ({
+      day: p.day,
+      dayShort: formatDayShort(p.day),
+      Паспорта: p.passportsIssued,
+      Посещения: p.attendances,
+    }))
+  }, [points])
+
+  if (data.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-lg p-6 text-sm text-muted-foreground text-center">
+        Нет данных по дням
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b border-border">
+        <h3 className="text-sm font-semibold">Динамика по дням (последние {data.length})</h3>
+      </div>
+      <div className="p-4" style={{ height: 260 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis dataKey="dayShort" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={30} />
+            <RechartsTooltip
+              contentStyle={{
+                background: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: 6,
+                fontSize: 12,
+              }}
+              labelFormatter={(_v, payload) => payload?.[0]?.payload?.day ?? ""}
+            />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Line
+              type="monotone"
+              dataKey="Паспорта"
+              stroke="#8B5CF6"
+              strokeWidth={2}
+              dot={{ r: 2 }}
+              activeDot={{ r: 5 }}
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="Посещения"
+              stroke="#10B981"
+              strokeWidth={2}
+              dot={{ r: 2 }}
+              activeDot={{ r: 5 }}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )
@@ -212,17 +390,50 @@ export function PassportsMetrics() {
       {state.kind === "ok" && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard icon={Gamepad2} label="Игр" value={state.metrics.totals.games} />
-            <StatCard icon={Users} label="Детей" value={state.metrics.totals.kids} />
-            <StatCard icon={CheckCircle2} label="Подтверждено" value={state.metrics.totals.confirmed} color="text-green-600" />
             <StatCard
               icon={TrendingUp}
-              label="Activation rate"
-              value={`${Math.round(state.metrics.totals.activationRate * 1000) / 10}%`}
+              label="Активации"
+              value={`${state.metrics.totals.confirmed} / ${state.metrics.totals.kids}`}
+              hint={`${pct(state.metrics.totals.activationRate)} от числа детей`}
               color={rateColor(state.metrics.totals.activationRate)}
-              hint="доля детей, чьи родители дошли до активации"
+            />
+            <StatCard
+              icon={IdCard}
+              label="Паспортов выдано"
+              value={state.metrics.totals.passports ?? "—"}
+              hint={
+                state.metrics.totals.parents != null
+                  ? `${state.metrics.totals.parents} родителей`
+                  : undefined
+              }
+            />
+            <StatCard
+              icon={Users}
+              label="Родителей узнали"
+              value={pct(state.metrics.totals.returningRate)}
+              hint={
+                state.metrics.totals.returningParents != null && state.metrics.totals.parents != null
+                  ? `${state.metrics.totals.returningParents} из ${state.metrics.totals.parents}`
+                  : undefined
+              }
+              color={rateColor(state.metrics.totals.returningRate ?? 0)}
+            />
+            <StatCard
+              icon={Camera}
+              label="С фото"
+              value={pct(state.metrics.totals.photoRate)}
+              hint={
+                state.metrics.totals.photosUploaded != null && state.metrics.totals.passports != null
+                  ? `${state.metrics.totals.photosUploaded} из ${state.metrics.totals.passports}`
+                  : undefined
+              }
+              color={rateColor(state.metrics.totals.photoRate ?? 0)}
             />
           </div>
+
+          {state.metrics.daily && state.metrics.daily.length > 0 && (
+            <DailyChart points={state.metrics.daily} />
+          )}
 
           <BucketTable title="По площадкам" buckets={state.metrics.byVenue || []} />
           <BucketTable title="По администраторам" buckets={state.metrics.byAdmin || []} />
