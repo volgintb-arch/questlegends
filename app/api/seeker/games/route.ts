@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
           gl."schoolName", gl."schoolClass", gl."hostName", gl."adminName",
           gl."reelUrl", gl."reelReadyAt",
           s."stageType",
-          f."citySlug", f.city AS "franchiseeCity", f.address AS "franchiseeAddress"
+          f."citySlug", f.name AS "franchiseeName", f.city AS "franchiseeCity", f.address AS "franchiseeAddress"
         FROM "GameLead" gl
         LEFT JOIN "GamePipelineStage" s ON s.id = gl."stageId"
         LEFT JOIN "Franchisee" f ON f.id = gl."franchiseeId"
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
           gl."schoolName", gl."schoolClass", gl."hostName", gl."adminName",
           gl."reelUrl", gl."reelReadyAt",
           s."stageType",
-          f."citySlug", f.city AS "franchiseeCity", f.address AS "franchiseeAddress"
+          f."citySlug", f.name AS "franchiseeName", f.city AS "franchiseeCity", f.address AS "franchiseeAddress"
         FROM "GameLead" gl
         LEFT JOIN "GamePipelineStage" s ON s.id = gl."stageId"
         LEFT JOIN "Franchisee" f ON f.id = gl."franchiseeId"

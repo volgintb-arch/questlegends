@@ -102,7 +102,7 @@ export async function fetchLeadForWebhook(leadId: string): Promise<any | null> {
       gl."schoolName", gl."schoolClass", gl."hostName", gl."adminName",
       gl."reelUrl", gl."reelReadyAt", gl."activationCode",
       s."stageType",
-      f."citySlug", f.city AS "franchiseeCity", f.address AS "franchiseeAddress"
+      f."citySlug", f.name AS "franchiseeName", f.city AS "franchiseeCity", f.address AS "franchiseeAddress"
     FROM "GameLead" gl
     LEFT JOIN "GamePipelineStage" s ON s.id = gl."stageId"
     LEFT JOIN "Franchisee" f ON f.id = gl."franchiseeId"
