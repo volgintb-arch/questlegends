@@ -114,48 +114,76 @@ async function main() {
   }
 
   const targetUrl = `${SEEKER_PASSPORT_URL}/api/crm/games`
+  const BASE_DELAY_MS = 2500 // seeker крутит ~30 req/min → ~2000ms + запас
+  const MAX_429_RETRIES = 3
   let ok = 0
   let failed = 0
   const failures: { leadId: string; status: number | string; snippet: string }[] = []
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     const payload = composeGamesPayload(row)
     const body = JSON.stringify(payload)
     const signature = signWebhook(body, CRM_WEBHOOK_SECRET!)
+    const idx = String(i + 1).padStart(String(rows.length).length, " ")
 
-    try {
-      const res = await fetch(targetUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Signature-256": signature,
-        },
-        body,
-        signal: AbortSignal.timeout(10_000),
-      })
+    let attempts = 0
+    let sent = false
+    let lastStatus: number | string = "no-attempts"
+    let lastSnippet = ""
 
-      const idx = String(i + 1).padStart(String(rows.length).length, " ")
-      if (res.ok) {
-        ok++
-        console.log(
-          `[${idx}/${rows.length}] ✓ ${row.id.slice(0, 8)} venue="${payload.venue ?? "—"}" code=${payload.activationCode ?? "—"} status=${payload.status}`,
-        )
-      } else {
-        failed++
-        const text = (await res.text().catch(() => "")).slice(0, 200)
-        failures.push({ leadId: row.id, status: res.status, snippet: text })
-        console.log(`[${idx}/${rows.length}] ✗ ${row.id.slice(0, 8)} HTTP ${res.status}: ${text}`)
+    while (attempts <= MAX_429_RETRIES && !sent) {
+      attempts++
+      try {
+        const res = await fetch(targetUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Signature-256": signature,
+          },
+          body,
+          signal: AbortSignal.timeout(15_000),
+        })
+
+        if (res.ok) {
+          ok++
+          sent = true
+          console.log(
+            `[${idx}/${rows.length}] ✓ ${row.id.slice(0, 8)} venue="${payload.venue ?? "—"}" code=${payload.activationCode ?? "—"} status=${payload.status}`,
+          )
+        } else if (res.status === 429 && attempts <= MAX_429_RETRIES) {
+          // Парсим "Rate limit exceeded, retry in N seconds"
+          const text = (await res.text().catch(() => "")).slice(0, 300)
+          const m = text.match(/retry in (\d+)\s*seconds?/i)
+          const retryInSec = m ? Math.min(Number(m[1]), 90) : 30
+          const waitMs = (retryInSec + 1) * 1000
+          console.log(
+            `[${idx}/${rows.length}] ⏳ ${row.id.slice(0, 8)} 429, жду ${retryInSec + 1}с (попытка ${attempts}/${MAX_429_RETRIES + 1})`,
+          )
+          await sleep(waitMs)
+          lastStatus = 429
+          lastSnippet = text
+        } else {
+          lastStatus = res.status
+          lastSnippet = (await res.text().catch(() => "")).slice(0, 200)
+          break
+        }
+      } catch (err: any) {
+        lastStatus = "exception"
+        lastSnippet = String(err?.message ?? err)
+        break
       }
-    } catch (err: any) {
-      failed++
-      failures.push({ leadId: row.id, status: "exception", snippet: String(err?.message ?? err) })
-      const idx = String(i + 1).padStart(String(rows.length).length, " ")
-      console.log(`[${idx}/${rows.length}] ✗ ${row.id.slice(0, 8)} EXC: ${err?.message ?? err}`)
     }
 
-    // Разумный rate-limit — не хлопать seeker очередями.
-    await new Promise((r) => setTimeout(r, 100))
+    if (!sent) {
+      failed++
+      failures.push({ leadId: row.id, status: lastStatus, snippet: lastSnippet })
+      console.log(`[${idx}/${rows.length}] ✗ ${row.id.slice(0, 8)} [${lastStatus}] ${lastSnippet}`)
+    }
+
+    // Steady-state pace между разными лидами — под лимит seeker'а.
+    await sleep(BASE_DELAY_MS)
   }
 
   console.log("")
