@@ -208,9 +208,6 @@ export function PassportsGames() {
                     <th className="text-left px-4 py-2 font-medium">Дата/время</th>
                     <th className="text-left px-4 py-2 font-medium">Место</th>
                     <th className="text-left px-4 py-2 font-medium">Тип</th>
-                    <th className="text-left px-4 py-2 font-medium">Кому</th>
-                    <th className="text-left px-4 py-2 font-medium">Ведущий</th>
-                    <th className="text-left px-4 py-2 font-medium">Админ</th>
                     <th className="text-right px-4 py-2 font-medium">Дети</th>
                     <th className="text-left px-4 py-2 font-medium">Код</th>
                     <th className="text-left px-4 py-2 font-medium">Активации</th>
@@ -221,7 +218,7 @@ export function PassportsGames() {
                 <tbody>
                   {state.games.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                         Игр не найдено
                       </td>
                     </tr>
@@ -229,10 +226,6 @@ export function PassportsGames() {
                     state.games.map((g) => {
                       const groupLabel = g.groupType ? GROUP_LABEL[g.groupType] ?? g.groupType : "—"
                       const groupColor = g.groupType ? GROUP_COLOR[g.groupType] ?? "" : ""
-                      const kому =
-                        g.groupType === "CLASS"
-                          ? [g.schoolName, g.schoolClass].filter(Boolean).join(", ") || "—"
-                          : g.birthdayChildName || "—"
                       const act = g.activations
                       const rate = g.activationRate ?? 0
                       const rateColor =
@@ -261,9 +254,6 @@ export function PassportsGames() {
                               "—"
                             )}
                           </td>
-                          <td className="px-4 py-2">{kому}</td>
-                          <td className="px-4 py-2">{g.hostName || "—"}</td>
-                          <td className="px-4 py-2">{g.adminName || "—"}</td>
                           <td className="px-4 py-2 text-right">{g.kidsCount ?? 0}</td>
                           <td className="px-4 py-2">
                             {g.activationCode ? (
