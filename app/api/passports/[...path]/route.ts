@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyRequest } from "@/lib/simple-auth"
 import { signSeekerAdminJWT } from "@/lib/seeker-jwt"
+import { sql } from "@/lib/db"
+
+const UK_ROLES = new Set(["super_admin", "uk", "uk_employee"])
 
 // Catch-all прокси к seeker'ским admin-эндпоинтам.
 //   /api/passports/games              → GET  ${SEEKER}/api/admin/games
@@ -20,6 +23,13 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const user = await verifyRequest(req)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+  // Раздел «Паспорта искателей» — франчайзи-специфичный. УК-роли
+  // (super_admin/uk/uk_employee) сюда не пускаем: у них нет privya к
+  // конкретному городу, а без скоупа seeker вернёт всё вперемешку.
+  if (UK_ROLES.has(user.role)) {
+    return NextResponse.json({ error: "Forbidden for UK roles" }, { status: 403 })
+  }
+
   const baseUrl = process.env.SEEKER_PASSPORT_URL
   if (!baseUrl) {
     return NextResponse.json({ error: "SEEKER_PASSPORT_URL is not set" }, { status: 500 })
@@ -36,11 +46,20 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
 
   const targetUrl = `${baseUrl}/api/admin/${subpath}${req.nextUrl.search || ""}`
 
+  // Ищем citySlug из франчайзи пользователя — этим seeker скоупит своих
+  // Passport/Game/Metrics. Без него получим кросс-город лик (что и было).
+  let citySlug: string | null = null
+  if (user.franchiseeId) {
+    const [f] = await sql`SELECT "citySlug" FROM "Franchisee" WHERE id = ${user.franchiseeId} LIMIT 1`
+    citySlug = f?.citySlug ?? null
+  }
+
   const jwt = signSeekerAdminJWT({
     sub: user.userId,
     name: user.name,
     role: user.role,
     franchiseeId: user.franchiseeId ?? null,
+    citySlug,
   })
 
   const method = req.method.toUpperCase()
