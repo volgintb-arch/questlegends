@@ -298,14 +298,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
       // Activation code lifecycle (D-011):
       // - scheduled ("Согласовано") → выдать код, если ещё нет
-      // - completed ("Завершено")   → сохранить (родитель ещё может активировать; TTL 2 месяца отдельно чистится)
-      // - всё остальное (new/in_progress/cancelled/NULL-типы default-воронки типа "В работе") → зануляем
-      if (stType === "scheduled") {
+      // - completed ("Завершено")   → выдать код, если ещё нет
+      //   (родитель должен иметь возможность активировать паспорт даже
+      //   если лид попал в completed минуя scheduled — например, через
+      //   backwards-flow "Согласовано → В работе → Завершено")
+      // - всё остальное (new/in_progress/cancelled/NULL-типы) → зануляем
+      if (stType === "scheduled" || stType === "completed") {
         if (!currentGame.activationCode) {
           const code = await allocateActivationCode(sql as any)
           await sql`UPDATE "GameLead" SET "activationCode" = ${code} WHERE id = ${id}`
         }
-      } else if (stType !== "completed") {
+      } else {
         if (currentGame.activationCode) {
           await sql`UPDATE "GameLead" SET "activationCode" = NULL WHERE id = ${id}`
         }

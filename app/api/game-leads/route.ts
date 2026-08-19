@@ -266,10 +266,10 @@ export async function POST(req: NextRequest) {
       `
     }
 
-    // D-011: если лид создан сразу в стадии Согласовано — выделить код
-    // (обычный сценарий — создание в "Новый", но защищаемся).
+    // D-011: если лид создан сразу в стадии Согласовано или Завершено — выделить код.
+    // Обычный сценарий — создание в "Новый", но защищаемся от прямого создания в поздней стадии.
     const [initialStage] = await sql`SELECT "stageType" FROM "GamePipelineStage" WHERE id = ${stageId}`
-    if (initialStage?.stageType === "scheduled") {
+    if (initialStage?.stageType === "scheduled" || initialStage?.stageType === "completed") {
       try {
         const code = await allocateActivationCode(sql as any)
         await sql`UPDATE "GameLead" SET "activationCode" = ${code} WHERE id = ${lead.id}`
