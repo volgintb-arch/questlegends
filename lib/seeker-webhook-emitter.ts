@@ -66,10 +66,11 @@ export function composeGamesPayload(row: any): GameWebhookPayload {
     Number(row.gameDuration) || 3,
     offsetMin,
   )
-  const venue: string | null =
-    row.venueName ||
-    [row.franchiseeCity, row.franchiseeAddress].filter(Boolean).join(", ") ||
-    null
+  // venue = franchisee.name. seeker-passport принимает это как единственный
+  // источник имени площадки и на своей стороне автоматически создаёт venue.
+  // GameLead.venueName / franchiseeCity / franchiseeAddress в этом канале
+  // не используются (остаются доступны в БД для других целей).
+  const venue: string | null = row.franchiseeName ?? null
 
   return {
     leadId: row.id,
