@@ -47,11 +47,22 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const targetUrl = `${baseUrl}/api/admin/${subpath}${req.nextUrl.search || ""}`
 
   // Ищем citySlug из франчайзи пользователя — этим seeker скоупит своих
-  // Passport/Game/Metrics. Без него получим кросс-город лик (что и было).
+  // Passport/Game/Metrics. Контракт seeker'а: токен без citySlug =
+  // UK-wide (видит всё). Значит для не-UK ролей citySlug обязателен,
+  // иначе получим кросс-tenant лик.
   let citySlug: string | null = null
   if (user.franchiseeId) {
     const [f] = await sql`SELECT "citySlug" FROM "Franchisee" WHERE id = ${user.franchiseeId} LIMIT 1`
     citySlug = f?.citySlug ?? null
+  }
+  if (!citySlug) {
+    return NextResponse.json(
+      {
+        error:
+          "Ваш аккаунт не привязан к франчайзи с указанным городом. Обратитесь к администратору.",
+      },
+      { status: 403 },
+    )
   }
 
   const jwt = signSeekerAdminJWT({

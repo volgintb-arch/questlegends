@@ -10,7 +10,12 @@ export type SeekerAdminClaims = {
   name?: string
   role: string
   franchiseeId?: string | null
+  // Seeker-контракт для скоупа:
+  //   citySlug = "barnaul"           → фильтр по одному городу
+  //   citySlugs = ["barnaul","omsk"] → мульти-город (одному франчайзи — несколько городов)
+  //   ни того, ни другого / null     → UK-wide (super_admin/uk видят всё)
   citySlug?: string | null
+  citySlugs?: string[] | null
 }
 
 function base64urlEncode(input: string | Buffer): string {
