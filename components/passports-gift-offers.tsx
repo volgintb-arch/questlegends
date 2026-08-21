@@ -166,57 +166,56 @@ function OfferDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{initial.id ? "Редактирование" : "Новая акция"}</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-4">
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Тип</Label>
-                <div className="flex gap-2 mt-1">
-                  <button
-                    type="button"
-                    onClick={() => setDraft({ ...draft, isSelfBrand: true, partner: draft.partner || "QuestLegends" })}
-                    className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${
-                      draft.isSelfBrand
-                        ? "border-orange-500 bg-orange-500/10 text-orange-600"
-                        : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    <Sparkles className="inline w-3 h-3 mr-1" />
-                    Наше промо
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDraft({ ...draft, isSelfBrand: false })}
-                    className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${
-                      !draft.isSelfBrand
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    <Store className="inline w-3 h-3 mr-1" />
-                    Партнёрская
-                  </button>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 lg:gap-6">
+          <div className="space-y-3 min-w-0">
+            <div>
+              <Label className="text-xs">Тип</Label>
+              <div className="flex gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setDraft({ ...draft, isSelfBrand: true, partner: draft.partner || "QuestLegends" })}
+                  className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${
+                    draft.isSelfBrand
+                      ? "border-orange-500 bg-orange-500/10 text-orange-600"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  <Sparkles className="inline w-3 h-3 mr-1" />
+                  Наше промо
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraft({ ...draft, isSelfBrand: false })}
+                  className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${
+                    !draft.isSelfBrand
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  <Store className="inline w-3 h-3 mr-1" />
+                  Партнёрская
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Город</Label>
+              {isUK ? (
+                <Input
+                  className="mt-1"
+                  value={draft.citySlug ?? ""}
+                  placeholder="barnaul, omsk или пусто = все города"
+                  onChange={(e) => setDraft({ ...draft, citySlug: e.target.value.trim() || null })}
+                />
+              ) : (
+                <div className="mt-1 px-3 py-2 bg-muted text-sm rounded border border-border text-muted-foreground truncate">
+                  {userCitySlug ?? "—"} (авто, ваш город)
                 </div>
-              </div>
-              <div>
-                <Label className="text-xs">Город</Label>
-                {isUK ? (
-                  <Input
-                    className="mt-1"
-                    value={draft.citySlug ?? ""}
-                    placeholder="barnaul, omsk или пусто = все города"
-                    onChange={(e) => setDraft({ ...draft, citySlug: e.target.value.trim() || null })}
-                  />
-                ) : (
-                  <div className="mt-1 px-3 py-2 bg-muted text-sm rounded border border-border text-muted-foreground">
-                    {userCitySlug ?? "—"} (авто, ваш город)
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
             <div>
@@ -247,7 +246,7 @@ function OfferDialog({
                 rows={2}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Промо-код</Label>
                 <Input
@@ -276,7 +275,7 @@ function OfferDialog({
                 placeholder="https://storage.yandexcloud.net/…"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Действует с</Label>
                 <Input
@@ -308,15 +307,15 @@ function OfferDialog({
             </div>
           </div>
 
-          <div>
+          <div className="min-w-0">
             <OfferPreview draft={draft} />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>
+        <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+          <Button variant="outline" onClick={onClose} disabled={saving} className="w-full sm:w-auto">
             Отмена
           </Button>
-          <Button onClick={() => onSave(draft, initial.id)} disabled={!canSave || saving}>
+          <Button onClick={() => onSave(draft, initial.id)} disabled={!canSave || saving} className="w-full sm:w-auto">
             {saving && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
             {initial.id ? "Сохранить" : "Создать"}
           </Button>
@@ -431,23 +430,23 @@ export function PassportsGiftOffers() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+    <div className="p-3 sm:p-6 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">Скидки и подарки</h2>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Каталог GiftOffer на паспорте искателя. «Наши» показываются в блоке «Ваши бонусы»,
-            партнёрские — в «Скидки от друзей».
+            Каталог GiftOffer на паспорте искателя. «Наши» — в блоке «Ваши бонусы», партнёрские — в «Скидки от друзей».
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Обновить
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="flex-1 sm:flex-initial">
+            <RefreshCw className={`w-4 h-4 sm:mr-2 ${loading ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">Обновить</span>
           </Button>
-          <Button size="sm" onClick={() => setDialog({ draft: { ...emptyDraft, citySlug: isUK ? null : userCitySlug } })}>
-            <Plus className="w-4 h-4 mr-2" />
-            Добавить
+          <Button size="sm" onClick={() => setDialog({ draft: { ...emptyDraft, citySlug: isUK ? null : userCitySlug } })} className="flex-1 sm:flex-initial">
+            <Plus className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Добавить</span>
+            <span className="sm:hidden">Новая</span>
           </Button>
         </div>
       </div>
@@ -458,7 +457,7 @@ export function PassportsGiftOffers() {
             <button
               key={t}
               onClick={() => setType(t)}
-              className={`px-3 py-1.5 transition-colors ${
+              className={`px-2.5 sm:px-3 py-1.5 transition-colors ${
                 type === t ? "bg-primary text-primary-foreground" : "bg-transparent hover:bg-muted"
               }`}
             >
@@ -471,11 +470,11 @@ export function PassportsGiftOffers() {
             <button
               key={s}
               onClick={() => setStatus(s)}
-              className={`px-3 py-1.5 transition-colors ${
+              className={`px-2.5 sm:px-3 py-1.5 transition-colors ${
                 status === s ? "bg-primary text-primary-foreground" : "bg-transparent hover:bg-muted"
               }`}
             >
-              {s === "active" ? "Только активные" : "Включая скрытые"}
+              {s === "active" ? "Активные" : "Все"}
             </button>
           ))}
         </div>
