@@ -4,6 +4,10 @@ import { signSeekerAdminJWT } from "@/lib/seeker-jwt"
 import { sql } from "@/lib/db"
 
 const UK_ROLES = new Set(["super_admin", "uk", "uk_employee"])
+// Пути, разрешённые UK-ролям — они управляют federation-wide сущностями
+// (например GiftOffer с citySlug=null). Seeker сам применит правило
+// "токен без citySlug = UK-wide" и решит доступность per-city.
+const UK_ALLOWED_PREFIXES = ["gift-offers"]
 
 // Catch-all прокси к seeker'ским admin-эндпоинтам.
 //   /api/passports/games              → GET  ${SEEKER}/api/admin/games
@@ -17,18 +21,11 @@ const UK_ROLES = new Set(["super_admin", "uk", "uk_employee"])
 // Всё что seeker вернёт (включая 404 если endpoint ещё не построен —
 // M5) — пробрасываем к клиенту как есть.
 
-const ALLOWED_METHODS = new Set(["GET", "PUT", "POST", "DELETE"])
+const ALLOWED_METHODS = new Set(["GET", "PUT", "PATCH", "POST", "DELETE"])
 
 async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const user = await verifyRequest(req)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  // Раздел «Паспорта искателей» — франчайзи-специфичный. УК-роли
-  // (super_admin/uk/uk_employee) сюда не пускаем: у них нет privya к
-  // конкретному городу, а без скоупа seeker вернёт всё вперемешку.
-  if (UK_ROLES.has(user.role)) {
-    return NextResponse.json({ error: "Forbidden for UK roles" }, { status: 403 })
-  }
 
   const baseUrl = process.env.SEEKER_PASSPORT_URL
   if (!baseUrl) {
@@ -44,25 +41,35 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
     return NextResponse.json({ error: "Missing subpath" }, { status: 400 })
   }
 
+  const isUK = UK_ROLES.has(user.role)
+  const isUKAllowedPath = UK_ALLOWED_PREFIXES.some((p) => subpath === p || subpath.startsWith(p + "/"))
+
+  // UK-роли попадают только на UK_ALLOWED_PREFIXES (сейчас — gift-offers).
+  // На games/passports/metrics/reviews у них нет города → скоупить нечем.
+  if (isUK && !isUKAllowedPath) {
+    return NextResponse.json({ error: "Forbidden for UK roles on this endpoint" }, { status: 403 })
+  }
+
   const targetUrl = `${baseUrl}/api/admin/${subpath}${req.nextUrl.search || ""}`
 
-  // Ищем citySlug из франчайзи пользователя — этим seeker скоупит своих
-  // Passport/Game/Metrics. Контракт seeker'а: токен без citySlug =
-  // UK-wide (видит всё). Значит для не-UK ролей citySlug обязателен,
-  // иначе получим кросс-tenant лик.
+  // Non-UK — citySlug обязателен, иначе seeker вернёт UK-wide (лик).
+  // UK — citySlug=null, seeker сам вернёт federation-wide вью
+  // (для gift-offers это как раз режим управления промо всех городов).
   let citySlug: string | null = null
-  if (user.franchiseeId) {
-    const [f] = await sql`SELECT "citySlug" FROM "Franchisee" WHERE id = ${user.franchiseeId} LIMIT 1`
-    citySlug = f?.citySlug ?? null
-  }
-  if (!citySlug) {
-    return NextResponse.json(
-      {
-        error:
-          "Ваш аккаунт не привязан к франчайзи с указанным городом. Обратитесь к администратору.",
-      },
-      { status: 403 },
-    )
+  if (!isUK) {
+    if (user.franchiseeId) {
+      const [f] = await sql`SELECT "citySlug" FROM "Franchisee" WHERE id = ${user.franchiseeId} LIMIT 1`
+      citySlug = f?.citySlug ?? null
+    }
+    if (!citySlug) {
+      return NextResponse.json(
+        {
+          error:
+            "Ваш аккаунт не привязан к франчайзи с указанным городом. Обратитесь к администратору.",
+        },
+        { status: 403 },
+      )
+    }
   }
 
   const jwt = signSeekerAdminJWT({
@@ -117,5 +124,6 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
 
 export const GET = handle
 export const PUT = handle
+export const PATCH = handle
 export const POST = handle
 export const DELETE = handle

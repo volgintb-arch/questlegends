@@ -66,6 +66,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewDashboard" as const,
       },
       {
+        id: "passports",
+        label: "Паспорта",
+        icon: IdCard,
+        path: "/passports",
+        module: "canViewDashboard" as const,
+      },
+      {
         id: "telephony",
         label: "Телефония",
         icon: Phone,
@@ -121,6 +128,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         label: "Маркетинг",
         icon: Megaphone,
         path: "/marketing",
+        module: "canViewDashboard" as const,
+      },
+      {
+        id: "passports",
+        label: "Паспорта",
+        icon: IdCard,
+        path: "/passports",
         module: "canViewDashboard" as const,
       },
       {
