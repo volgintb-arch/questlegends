@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       SELECT
         "canViewDashboard", "canViewCrm", "canViewErp", "canViewKpi",
         "canViewMessages", "canViewKnowledgeBase", "canViewUsers",
-        "canViewAccess", "canViewNotifications",
+        "canViewAccess", "canViewNotifications", "canViewPassports",
         "canManageSchedule", "canManagePersonnel", "canManageUsers"
       FROM "UserPermission"
       WHERE "userId" = ${userId}
@@ -62,6 +62,7 @@ export async function GET(request: Request) {
         canViewUsers: isUkLevel ? true : false,
         canViewAccess: isUkLevel,
         canViewNotifications: true,
+        canViewPassports: false,
         canManageUsers: isUkLevel ? true : false,
       }
 
@@ -82,6 +83,7 @@ export async function GET(request: Request) {
         canViewUsers: p.canManagePersonnel ?? false,
         canViewAccess: p.canViewAccess ?? false,
         canViewNotifications: p.canViewNotifications ?? true,
+        canViewPassports: p.canViewPassports ?? false,
       }
       return NextResponse.json({ permissions: mapped })
     }

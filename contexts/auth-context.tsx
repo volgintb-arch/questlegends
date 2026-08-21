@@ -150,6 +150,7 @@ export interface UserPermissions {
   canViewUsers: boolean
   canViewAccess: boolean
   canViewNotifications: boolean
+  canViewPassports: boolean
   canManageUsers: boolean
 }
 
@@ -463,6 +464,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           canViewUsers: false,
           canViewAccess: false,
           canViewNotifications: true,
+          canViewPassports: false,
           canManageUsers: false,
         }
         return ukEmployeeDefaults[module]
@@ -483,6 +485,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           canViewUsers: false,
           canViewAccess: false,
           canViewNotifications: true,
+          canViewPassports: false,
           canManageUsers: false,
         }
         return adminDefaults[module]

@@ -66,13 +66,6 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         module: "canViewDashboard" as const,
       },
       {
-        id: "passports",
-        label: "Паспорта",
-        icon: IdCard,
-        path: "/passports",
-        module: "canViewDashboard" as const,
-      },
-      {
         id: "telephony",
         label: "Телефония",
         icon: Phone,
@@ -128,13 +121,6 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
         label: "Маркетинг",
         icon: Megaphone,
         path: "/marketing",
-        module: "canViewDashboard" as const,
-      },
-      {
-        id: "passports",
-        label: "Паспорта",
-        icon: IdCard,
-        path: "/passports",
         module: "canViewDashboard" as const,
       },
       {
@@ -284,6 +270,13 @@ export function Sidebar({ role, currentPath, isMobileOpen = false, onMobileToggl
       { id: "finances", label: "Финансы", icon: RussianRuble, path: "/finances", module: "canViewErp" as const },
       { id: "schedule", label: "График", icon: Calendar, path: "/personnel", module: "canViewKpi" as const },
       { id: "messages", label: "Чат", icon: MessageSquare, path: "/messages", module: "canViewMessages" as const },
+      {
+        id: "passports",
+        label: "Паспорта",
+        icon: IdCard,
+        path: "/passports",
+        module: "canViewPassports" as const,
+      },
       {
         id: "knowledge",
         label: "База Знаний",

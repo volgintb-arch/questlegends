@@ -4,10 +4,6 @@ import { signSeekerAdminJWT } from "@/lib/seeker-jwt"
 import { sql } from "@/lib/db"
 
 const UK_ROLES = new Set(["super_admin", "uk", "uk_employee"])
-// Пути, разрешённые UK-ролям — они управляют federation-wide сущностями
-// (например GiftOffer с citySlug=null). Seeker сам применит правило
-// "токен без citySlug = UK-wide" и решит доступность per-city.
-const UK_ALLOWED_PREFIXES = ["gift-offers"]
 
 // Catch-all прокси к seeker'ским admin-эндпоинтам.
 //   /api/passports/games              → GET  ${SEEKER}/api/admin/games
@@ -41,35 +37,29 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
     return NextResponse.json({ error: "Missing subpath" }, { status: 400 })
   }
 
-  const isUK = UK_ROLES.has(user.role)
-  const isUKAllowedPath = UK_ALLOWED_PREFIXES.some((p) => subpath === p || subpath.startsWith(p + "/"))
-
-  // UK-роли попадают только на UK_ALLOWED_PREFIXES (сейчас — gift-offers).
-  // На games/passports/metrics/reviews у них нет города → скоупить нечем.
-  if (isUK && !isUKAllowedPath) {
-    return NextResponse.json({ error: "Forbidden for UK roles on this endpoint" }, { status: 403 })
+  // Раздел «Паспорта» — франчайзи-специфичный (city-scoped). UK-роли
+  // сюда не пускаем: у них нет города → скоупить нечем, seeker без
+  // citySlug вернёт всё вперемешку.
+  if (UK_ROLES.has(user.role)) {
+    return NextResponse.json({ error: "Forbidden for UK roles" }, { status: 403 })
   }
 
   const targetUrl = `${baseUrl}/api/admin/${subpath}${req.nextUrl.search || ""}`
 
   // Non-UK — citySlug обязателен, иначе seeker вернёт UK-wide (лик).
-  // UK — citySlug=null, seeker сам вернёт federation-wide вью
-  // (для gift-offers это как раз режим управления промо всех городов).
   let citySlug: string | null = null
-  if (!isUK) {
-    if (user.franchiseeId) {
-      const [f] = await sql`SELECT "citySlug" FROM "Franchisee" WHERE id = ${user.franchiseeId} LIMIT 1`
-      citySlug = f?.citySlug ?? null
-    }
-    if (!citySlug) {
-      return NextResponse.json(
-        {
-          error:
-            "Ваш аккаунт не привязан к франчайзи с указанным городом. Обратитесь к администратору.",
-        },
-        { status: 403 },
-      )
-    }
+  if (user.franchiseeId) {
+    const [f] = await sql`SELECT "citySlug" FROM "Franchisee" WHERE id = ${user.franchiseeId} LIMIT 1`
+    citySlug = f?.citySlug ?? null
+  }
+  if (!citySlug) {
+    return NextResponse.json(
+      {
+        error:
+          "Ваш аккаунт не привязан к франчайзи с указанным городом. Обратитесь к администратору.",
+      },
+      { status: 403 },
+    )
   }
 
   const jwt = signSeekerAdminJWT({

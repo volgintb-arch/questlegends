@@ -43,7 +43,7 @@ export async function GET(request: Request) {
                  u."franchiseeId",
                  up."canViewDashboard", up."canViewCrm", up."canViewErp", up."canViewKpi",
                  up."canViewMessages", up."canViewKnowledgeBase", up."canViewUsers",
-                 up."canViewAccess", up."canViewNotifications",
+                 up."canViewAccess", up."canViewNotifications", up."canViewPassports",
                  up."canManageSchedule", up."canManagePersonnel", up."canManageUsers",
                  f.name as "franchiseeName"
           FROM "User" u
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
                  u."franchiseeId",
                  up."canViewDashboard", up."canViewCrm", up."canViewErp", up."canViewKpi",
                  up."canViewMessages", up."canViewKnowledgeBase", up."canViewUsers",
-                 up."canViewAccess", up."canViewNotifications",
+                 up."canViewAccess", up."canViewNotifications", up."canViewPassports",
                  up."canManageSchedule", up."canManagePersonnel", up."canManageUsers",
                  f.name as "franchiseeName",
                  ARRAY(SELECT ufa."franchiseeId" FROM "UserFranchiseeAssignment" ufa WHERE ufa."userId" = u.id) as "assignedFranchisees"
@@ -125,6 +125,7 @@ export async function GET(request: Request) {
         canViewUsers: u.canViewUsers ?? false,
         canViewAccess: u.canViewAccess ?? false,
         canViewNotifications: u.canViewNotifications ?? true,
+        canViewPassports: u.canViewPassports ?? false,
         canManageSchedule: u.canManageSchedule ?? true,
         canManagePersonnel: u.canManagePersonnel ?? false,
         canManageUsers: u.canManageUsers ?? false,
@@ -189,6 +190,7 @@ export async function PUT(request: Request) {
         if (permissions.canViewAccess !== undefined) updates.canViewAccess = permissions.canViewAccess
         if (permissions.canViewNotifications !== undefined)
           updates.canViewNotifications = permissions.canViewNotifications
+        if (permissions.canViewPassports !== undefined) updates.canViewPassports = permissions.canViewPassports
         if (permissions.canManageSchedule !== undefined) updates.canManageSchedule = permissions.canManageSchedule
         if (permissions.canManagePersonnel !== undefined) updates.canManagePersonnel = permissions.canManagePersonnel
         if (permissions.canManageUsers !== undefined) updates.canManageUsers = permissions.canManageUsers
@@ -205,6 +207,7 @@ export async function PUT(request: Request) {
               "canViewUsers" = COALESCE(${updates.canViewUsers ?? null}, "canViewUsers"),
               "canViewAccess" = COALESCE(${updates.canViewAccess ?? null}, "canViewAccess"),
               "canViewNotifications" = COALESCE(${updates.canViewNotifications ?? null}, "canViewNotifications"),
+              "canViewPassports" = COALESCE(${updates.canViewPassports ?? null}, "canViewPassports"),
               "canManageSchedule" = COALESCE(${updates.canManageSchedule ?? null}, "canManageSchedule"),
               "canManagePersonnel" = COALESCE(${updates.canManagePersonnel ?? null}, "canManagePersonnel"),
               "canManageUsers" = COALESCE(${updates.canManageUsers ?? null}, "canManageUsers"),
@@ -217,7 +220,8 @@ export async function PUT(request: Request) {
           INSERT INTO "UserPermission" (
             id, "userId", "canViewDashboard", "canViewCrm", "canViewErp",
             "canViewMessages", "canViewKnowledgeBase", "canViewUsers", "canViewAccess",
-            "canViewNotifications", "canManageSchedule", "canManagePersonnel", "canManageUsers",
+            "canViewNotifications", "canViewPassports",
+            "canManageSchedule", "canManagePersonnel", "canManageUsers",
             "createdAt", "updatedAt"
           )
           VALUES (
@@ -231,6 +235,7 @@ export async function PUT(request: Request) {
             ${permissions.canViewUsers ?? false},
             ${permissions.canViewAccess ?? false},
             ${permissions.canViewNotifications ?? true},
+            ${permissions.canViewPassports ?? false},
             ${permissions.canManageSchedule ?? true},
             ${permissions.canManagePersonnel ?? false},
             ${permissions.canManageUsers ?? false},

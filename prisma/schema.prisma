@@ -395,6 +395,7 @@ model UserPermission {
   canViewUsers         Boolean @default(false)
   canViewAccess        Boolean @default(false)
   canViewNotifications Boolean @default(true)
+  canViewPassports     Boolean @default(false)
   canManagePersonnel   Boolean @default(false)
   canManageSchedule    Boolean @default(false)
   canManageUsers       Boolean @default(false)

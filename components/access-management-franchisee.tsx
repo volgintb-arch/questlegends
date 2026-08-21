@@ -84,6 +84,12 @@ export function AccessManagementFranchisee() {
               description: "Создание персонала (аниматоры, ведущие, DJ)",
               enabled: u.userPermissions?.canManagePersonnel ?? false,
             },
+            {
+              id: "passports",
+              name: "Паспорта искателей",
+              description: "Игры, паспорта, метрики, скидки в seeker-passport",
+              enabled: u.userPermissions?.canViewPassports ?? false,
+            },
           ],
         }))
 
@@ -109,6 +115,7 @@ export function AccessManagementFranchisee() {
       crm: "canViewCrm",
       schedules: "canManageSchedule",
       users: "canManagePersonnel",
+      passports: "canViewPassports",
     }
 
     try {
