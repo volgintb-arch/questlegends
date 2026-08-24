@@ -5,6 +5,8 @@ import { AlertCircle, Loader2, RefreshCw, Check, X, Film, Pencil, ExternalLink, 
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
 type Reel = { url: string | null; readyAt: string | null }
 type Venue = {
@@ -74,12 +76,23 @@ function formatDateTime(iso: string | null): string {
   })
 }
 
+type EditableFields = {
+  hostName: string | null
+  adminName: string | null
+  birthdayChildName: string | null
+  schoolName: string | null
+  schoolClass: string | null
+}
+
 export function PassportsGames() {
   const { getAuthHeaders } = useAuth()
   const [state, setState] = useState<State>({ kind: "loading" })
   const [editingReelId, setEditingReelId] = useState<string | null>(null)
   const [reelDraft, setReelDraft] = useState("")
   const [savingReel, setSavingReel] = useState(false)
+  const [editGame, setEditGame] = useState<Game | null>(null)
+  const [editDraft, setEditDraft] = useState<EditableFields | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const load = async () => {
     setState({ kind: "loading" })
@@ -213,12 +226,13 @@ export function PassportsGames() {
                     <th className="text-left px-4 py-2 font-medium">Активации</th>
                     <th className="text-left px-4 py-2 font-medium">CRM</th>
                     <th className="text-left px-4 py-2 font-medium">Рилс</th>
+                    <th className="text-right px-4 py-2 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {state.games.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                         Игр не найдено
                       </td>
                     </tr>
@@ -361,6 +375,24 @@ export function PassportsGames() {
                               </button>
                             )}
                           </td>
+                          <td className="px-4 py-2 text-right">
+                            <button
+                              onClick={() => {
+                                setEditGame(g)
+                                setEditDraft({
+                                  hostName: g.hostName,
+                                  adminName: g.adminName,
+                                  birthdayChildName: g.birthdayChildName,
+                                  schoolName: g.schoolName,
+                                  schoolClass: g.schoolClass,
+                                })
+                              }}
+                              className="text-muted-foreground hover:text-foreground"
+                              title="Редактировать (ведущий, админ, имениник, школа)"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          </td>
                         </tr>
                       )
                     })
@@ -370,6 +402,130 @@ export function PassportsGames() {
             </div>
           </div>
         </>
+      )}
+
+      {editGame && editDraft && (
+        <Dialog open onOpenChange={(o) => { if (!o) { setEditGame(null); setEditDraft(null) } }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+            <DialogHeader>
+              <DialogTitle>Редактирование игры</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Правится только seeker-часть игры (5 полей). Остальное — venue, дата, kidsCount,
+                статус — идут из CRM и меняются там же.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Ведущий</Label>
+                  <Input
+                    className="mt-1"
+                    maxLength={120}
+                    value={editDraft.hostName ?? ""}
+                    onChange={(e) => setEditDraft({ ...editDraft, hostName: e.target.value || null })}
+                    placeholder="Дмитрий"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Администратор</Label>
+                  <Input
+                    className="mt-1"
+                    maxLength={120}
+                    value={editDraft.adminName ?? ""}
+                    onChange={(e) => setEditDraft({ ...editDraft, adminName: e.target.value || null })}
+                    placeholder="Ирина"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Именник (для BIRTHDAY)</Label>
+                <Input
+                  className="mt-1"
+                  maxLength={120}
+                  value={editDraft.birthdayChildName ?? ""}
+                  onChange={(e) => setEditDraft({ ...editDraft, birthdayChildName: e.target.value || null })}
+                  placeholder="Мира"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-3">
+                <div>
+                  <Label className="text-xs">Школа (для CLASS)</Label>
+                  <Input
+                    className="mt-1"
+                    maxLength={120}
+                    value={editDraft.schoolName ?? ""}
+                    onChange={(e) => setEditDraft({ ...editDraft, schoolName: e.target.value || null })}
+                    placeholder="Школа №42"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Класс</Label>
+                  <Input
+                    className="mt-1"
+                    maxLength={20}
+                    value={editDraft.schoolClass ?? ""}
+                    onChange={(e) => setEditDraft({ ...editDraft, schoolClass: e.target.value || null })}
+                    placeholder="3А"
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => { setEditGame(null); setEditDraft(null) }}
+                disabled={savingEdit}
+                className="w-full sm:w-auto"
+              >
+                Отмена
+              </Button>
+              <Button
+                disabled={savingEdit}
+                onClick={async () => {
+                  // Собираем только реально изменившиеся поля — иначе 422 empty patch.
+                  const patch: Partial<EditableFields> = {}
+                  const orig: EditableFields = {
+                    hostName: editGame.hostName,
+                    adminName: editGame.adminName,
+                    birthdayChildName: editGame.birthdayChildName,
+                    schoolName: editGame.schoolName,
+                    schoolClass: editGame.schoolClass,
+                  }
+                  ;(Object.keys(orig) as (keyof EditableFields)[]).forEach((k) => {
+                    if ((editDraft[k] ?? null) !== (orig[k] ?? null)) patch[k] = editDraft[k] ?? null
+                  })
+                  if (Object.keys(patch).length === 0) {
+                    setEditGame(null)
+                    setEditDraft(null)
+                    return
+                  }
+                  setSavingEdit(true)
+                  try {
+                    const res = await fetch(`/api/passports/games/${editGame.id}`, {
+                      method: "PATCH",
+                      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+                      body: JSON.stringify(patch),
+                    })
+                    if (!res.ok) {
+                      const t = await res.text().catch(() => "")
+                      alert(`Не удалось сохранить: HTTP ${res.status}\n${t}`)
+                      return
+                    }
+                    setEditGame(null)
+                    setEditDraft(null)
+                    await load()
+                  } finally {
+                    setSavingEdit(false)
+                  }
+                }}
+                className="w-full sm:w-auto"
+              >
+                {savingEdit && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+                Сохранить
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )

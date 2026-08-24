@@ -1,15 +1,23 @@
 "use client"
 
 import { useState } from "react"
-import { Gamepad2, Search, BarChart3, MessageSquare, Gift, Trophy } from "lucide-react"
+import { Gamepad2, Search, BarChart3, MessageSquare, Gift, Trophy, Ticket } from "lucide-react"
 import { PassportsGames } from "@/components/passports-games"
 import { PassportsMetrics } from "@/components/passports-metrics"
 import { PassportsSearch } from "@/components/passports-search"
 import { PassportsReviews } from "@/components/passports-reviews"
 import { PassportsGiftOffers } from "@/components/passports-gift-offers"
 import { PassportsBonusRules } from "@/components/passports-bonus-rules"
+import { PassportsBonusRedeem } from "@/components/passports-bonus-redeem"
 
-type Tab = "games" | "search" | "metrics" | "reviews" | "gift-offers" | "bonus-rules"
+type Tab =
+  | "games"
+  | "search"
+  | "metrics"
+  | "reviews"
+  | "gift-offers"
+  | "bonus-rules"
+  | "bonus-redeem"
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: "games", label: "Игры", icon: Gamepad2 },
@@ -18,6 +26,7 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: "reviews", label: "Отзывы", icon: MessageSquare },
   { id: "gift-offers", label: "Скидки", icon: Gift },
   { id: "bonus-rules", label: "Правила лояльности", icon: Trophy },
+  { id: "bonus-redeem", label: "Погашение", icon: Ticket },
 ]
 
 export default function PassportsPage() {
@@ -50,6 +59,7 @@ export default function PassportsPage() {
         {tab === "reviews" && <PassportsReviews />}
         {tab === "gift-offers" && <PassportsGiftOffers />}
         {tab === "bonus-rules" && <PassportsBonusRules />}
+        {tab === "bonus-redeem" && <PassportsBonusRedeem />}
       </div>
     </div>
   )
