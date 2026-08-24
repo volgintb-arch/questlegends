@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertCircle, Loader2, RefreshCw, Check, X, Film, Pencil, ExternalLink, Copy } from "lucide-react"
+import { AlertCircle, Loader2, RefreshCw, Check, X, Film, Pencil, ExternalLink, Copy, Upload } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -93,6 +93,7 @@ export function PassportsGames() {
   const [editGame, setEditGame] = useState<Game | null>(null)
   const [editDraft, setEditDraft] = useState<EditableFields | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
+  const [uploadingReelId, setUploadingReelId] = useState<string | null>(null)
 
   const load = async () => {
     setState({ kind: "loading" })
@@ -125,6 +126,43 @@ export function PassportsGames() {
   const cancelEditReel = () => {
     setEditingReelId(null)
     setReelDraft("")
+  }
+
+  // Multipart-загрузка видео: POST в seeker'ский /api/admin/games/:id/reel
+  // через наш прокси. Content-Type с boundary'ем прокси проксирует как есть.
+  // Файл читается в память как arrayBuffer в прокси — предупреждаем на >100MB.
+  const REEL_MAX_BYTES = 200 * 1024 * 1024
+  const REEL_WARN_BYTES = 100 * 1024 * 1024
+  const uploadReelFile = async (gameId: string, file: File) => {
+    if (!file.type.startsWith("video/")) {
+      alert("Ожидается видео-файл (video/*)")
+      return
+    }
+    if (file.size > REEL_MAX_BYTES) {
+      alert(`Файл ${Math.round(file.size / 1024 / 1024)} MB, лимит ${REEL_MAX_BYTES / 1024 / 1024} MB.`)
+      return
+    }
+    if (file.size > REEL_WARN_BYTES) {
+      if (!confirm(`Файл ${Math.round(file.size / 1024 / 1024)} MB — загрузка займёт минуты, прокси может отвалиться по timeout. Продолжить?`)) return
+    }
+    setUploadingReelId(gameId)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch(`/api/passports/games/${gameId}/reel`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: formData,
+      })
+      if (!res.ok) {
+        const t = await res.text().catch(() => "")
+        alert(`Не удалось загрузить: HTTP ${res.status}\n${t}`)
+        return
+      }
+      await load()
+    } finally {
+      setUploadingReelId(null)
+    }
   }
   const saveReel = async (gameId: string) => {
     setSavingReel(true)
@@ -346,6 +384,11 @@ export function PassportsGames() {
                                   <X size={16} />
                                 </button>
                               </div>
+                            ) : uploadingReelId === g.id ? (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Loader2 size={12} className="animate-spin" />
+                                Загрузка…
+                              </div>
                             ) : g.reel?.url ? (
                               <div className="flex items-center gap-2">
                                 <a
@@ -360,19 +403,55 @@ export function PassportsGames() {
                                 <button
                                   onClick={() => startEditReel(g)}
                                   className="text-muted-foreground hover:text-foreground"
-                                  title="Изменить"
+                                  title="Изменить URL"
                                 >
                                   <Pencil size={12} />
                                 </button>
+                                <label
+                                  className="text-muted-foreground hover:text-foreground cursor-pointer"
+                                  title="Заменить файлом"
+                                >
+                                  <Upload size={12} />
+                                  <input
+                                    type="file"
+                                    accept="video/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0]
+                                      if (f) void uploadReelFile(g.id, f)
+                                      e.target.value = ""
+                                    }}
+                                  />
+                                </label>
                               </div>
                             ) : (
-                              <button
-                                onClick={() => startEditReel(g)}
-                                className="text-xs text-orange-500 hover:text-orange-400 flex items-center gap-1"
-                              >
-                                <Film size={12} />
-                                Добавить
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => startEditReel(g)}
+                                  className="text-xs text-orange-500 hover:text-orange-400 flex items-center gap-1"
+                                  title="Указать URL"
+                                >
+                                  <Film size={12} />
+                                  URL
+                                </button>
+                                <label
+                                  className="text-xs text-orange-500 hover:text-orange-400 flex items-center gap-1 cursor-pointer"
+                                  title="Загрузить файл"
+                                >
+                                  <Upload size={12} />
+                                  Файл
+                                  <input
+                                    type="file"
+                                    accept="video/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0]
+                                      if (f) void uploadReelFile(g.id, f)
+                                      e.target.value = ""
+                                    }}
+                                  />
+                                </label>
+                              </div>
                             )}
                           </td>
                           <td className="px-4 py-2 text-right">

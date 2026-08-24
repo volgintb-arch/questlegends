@@ -1,10 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertCircle, Loader2, RefreshCw, Search, Phone, Mail, Send } from "lucide-react"
+import { AlertCircle, Loader2, RefreshCw, Search, Phone, Mail, Send, Trash2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
 type Passport = {
   id: string
@@ -54,6 +58,10 @@ export function PassportsSearch() {
   const { getAuthHeaders } = useAuth()
   const [query, setQuery] = useState("")
   const [state, setState] = useState<State>({ kind: "loading" })
+  const [deleteTarget, setDeleteTarget] = useState<Passport | null>(null)
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false)
+  const [deleteReason, setDeleteReason] = useState("")
+  const [deleting, setDeleting] = useState(false)
 
   const load = async (q: string) => {
     setState({ kind: "loading" })
@@ -172,12 +180,13 @@ export function PassportsSearch() {
                     <th className="text-right px-4 py-2 font-medium">Экспед.</th>
                     <th className="text-left px-4 py-2 font-medium">Статус</th>
                     <th className="text-left px-4 py-2 font-medium">Выдан</th>
+                    <th className="text-right px-4 py-2 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {state.passports.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                         Ничего не найдено
                       </td>
                     </tr>
@@ -232,6 +241,21 @@ export function PassportsSearch() {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-xs whitespace-nowrap">{formatDate(p.issuedAt)}</td>
+                        <td className="px-4 py-2 text-right">
+                          {p.status !== "DELETED" && (
+                            <button
+                              onClick={() => {
+                                setDeleteTarget(p)
+                                setDeleteConfirmed(false)
+                                setDeleteReason("")
+                              }}
+                              className="text-destructive hover:text-destructive/80"
+                              title="Удалить паспорт (152-ФЗ)"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}
@@ -241,6 +265,99 @@ export function PassportsSearch() {
           </div>
         </>
       )}
+
+      {/* 152-ФЗ удаление паспорта */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDeleteTarget(null)
+            setDeleteConfirmed(false)
+            setDeleteReason("")
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-500">
+              Удаление паспорта {deleteTarget?.displayNumber} ({deleteTarget?.childName})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div className="bg-red-500/5 border border-red-500/20 rounded p-3 text-red-600 text-xs space-y-1">
+              <div className="font-medium">Что будет удалено (безвозвратно):</div>
+              <ul className="list-disc pl-4">
+                <li>Passport.status = DELETED, childName стирается</li>
+                <li>Фото удаляется с диска</li>
+                <li>Бонусы паспорта → EXPIRED</li>
+                <li>Kid-slugs revoked, отзывы отвязываются</li>
+                <li>Если последний паспорт родителя — scrub Parent (phone hash, email/tg null)</li>
+              </ul>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="del-confirm"
+                checked={deleteConfirmed}
+                onCheckedChange={(v) => setDeleteConfirmed(v === true)}
+                className="mt-0.5"
+              />
+              <Label htmlFor="del-confirm" className="text-sm cursor-pointer">
+                Понимаю, что данные будут стёрты безвозвратно
+              </Label>
+            </div>
+            <div>
+              <Label className="text-xs">Причина (min 5 символов, попадёт в audit-log)</Label>
+              <Textarea
+                className="mt-1"
+                rows={2}
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="Запрос родителя на удаление данных по 152-ФЗ, обращение №…"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+              className="w-full sm:w-auto"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!deleteConfirmed || deleteReason.trim().length < 5 || deleting}
+              onClick={async () => {
+                if (!deleteTarget) return
+                setDeleting(true)
+                try {
+                  const res = await fetch(`/api/passports/passports/${deleteTarget.id}/delete`, {
+                    method: "POST",
+                    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ reason: deleteReason.trim() }),
+                  })
+                  if (!res.ok) {
+                    const t = await res.text().catch(() => "")
+                    alert(`Не удалось удалить: HTTP ${res.status}\n${t}`)
+                    return
+                  }
+                  setDeleteTarget(null)
+                  setDeleteConfirmed(false)
+                  setDeleteReason("")
+                  await load(query)
+                } finally {
+                  setDeleting(false)
+                }
+              }}
+              className="w-full sm:w-auto"
+            >
+              {deleting && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+              Удалить безвозвратно
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
