@@ -11,6 +11,7 @@ import {
   Ticket,
   ClipboardCheck,
   Filter,
+  MapPin,
 } from "lucide-react"
 import { PassportsGames } from "@/components/passports-games"
 import { PassportsMetrics } from "@/components/passports-metrics"
@@ -21,6 +22,7 @@ import { PassportsBonusRules } from "@/components/passports-bonus-rules"
 import { PassportsBonusRedeem } from "@/components/passports-bonus-redeem"
 import { PassportsActivationConfirm } from "@/components/passports-activation-confirm"
 import { PassportsFunnel } from "@/components/passports-funnel"
+import { PassportsVenues } from "@/components/passports-venues"
 
 type Tab =
   | "games"
@@ -32,6 +34,7 @@ type Tab =
   | "bonus-rules"
   | "bonus-redeem"
   | "activation-confirm"
+  | "venues"
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: "games", label: "Игры", icon: Gamepad2 },
@@ -43,6 +46,7 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: "bonus-rules", label: "Правила лояльности", icon: Trophy },
   { id: "bonus-redeem", label: "Погашение", icon: Ticket },
   { id: "activation-confirm", label: "Подтверждение", icon: ClipboardCheck },
+  { id: "venues", label: "Точки", icon: MapPin },
 ]
 
 export default function PassportsPage() {
@@ -78,6 +82,7 @@ export default function PassportsPage() {
         {tab === "bonus-rules" && <PassportsBonusRules />}
         {tab === "bonus-redeem" && <PassportsBonusRedeem />}
         {tab === "activation-confirm" && <PassportsActivationConfirm />}
+        {tab === "venues" && <PassportsVenues />}
       </div>
     </div>
   )
