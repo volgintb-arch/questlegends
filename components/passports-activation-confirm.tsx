@@ -22,16 +22,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 
 type UnconfirmedActivation = {
   id: string
-  status: "UNCONFIRMED"
+  sessionId?: string
+  status: "UNCONFIRMED" | "INCOMPLETE" | "CONFIRMED"
+  role?: string
+  confirmedBy?: string | null
+  attemptCount?: number
   createdAt: string
   passport: {
     id: string
     displayNumber: string
     childName: string
+    childBirthdate?: string | null
     citySlug: string
     cityName: string | null
+    parent?: { id: string; phone: string | null; email?: string | null } | null
   }
-  parent: { id: string; phone: string | null } | null
+  game?: { id: string; startsAt: string | null; venueName?: string | null } | null
 }
 
 type GameChoice = {
@@ -249,36 +255,70 @@ export function PassportsActivationConfirm() {
                     <th className="text-left px-4 py-2 font-medium">Ребёнок</th>
                     <th className="text-left px-4 py-2 font-medium">Город</th>
                     <th className="text-left px-4 py-2 font-medium">Родитель</th>
+                    <th className="text-right px-4 py-2 font-medium">Попыток</th>
                     <th className="text-right px-4 py-2 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {state.items.map((a) => (
-                    <tr key={a.id} className="border-t border-border hover:bg-muted/40">
-                      <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDateTime(a.createdAt)}</td>
-                      <td className="px-4 py-2 font-mono text-xs">{a.passport.displayNumber}</td>
-                      <td className="px-4 py-2">
-                        <UserIcon size={11} className="inline mr-1" />
-                        {a.passport.childName}
-                      </td>
-                      <td className="px-4 py-2 text-xs">{a.passport.cityName ?? a.passport.citySlug}</td>
-                      <td className="px-4 py-2 text-xs">
-                        {a.parent?.phone ? (
-                          <a href={`tel:${a.parent.phone}`} className="hover:text-primary">
-                            {a.parent.phone}
-                          </a>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <Button size="sm" onClick={() => openConfirm(a)}>
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
-                          Подтвердить
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {state.items.map((a) => {
+                    const parent = a.passport.parent
+                    return (
+                      <tr key={a.id} className="border-t border-border hover:bg-muted/40">
+                        <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDateTime(a.createdAt)}</td>
+                        <td className="px-4 py-2 font-mono text-xs">{a.passport.displayNumber}</td>
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-1">
+                            <UserIcon size={11} />
+                            <span>{a.passport.childName}</span>
+                          </div>
+                          {a.passport.childBirthdate && (
+                            <div className="text-[11px] text-muted-foreground">
+                              ДР {formatDate(a.passport.childBirthdate)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-xs">{a.passport.cityName ?? a.passport.citySlug}</td>
+                        <td className="px-4 py-2 text-xs">
+                          {parent?.phone ? (
+                            <div className="flex flex-col gap-0.5">
+                              <a href={`tel:${parent.phone}`} className="hover:text-primary">
+                                {parent.phone}
+                              </a>
+                              {parent.email && (
+                                <a href={`mailto:${parent.email}`} className="hover:text-primary text-muted-foreground">
+                                  {parent.email}
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right text-xs">
+                          {typeof a.attemptCount === "number" ? (
+                            <span
+                              className={
+                                a.attemptCount >= 3
+                                  ? "text-amber-500 font-semibold"
+                                  : "text-muted-foreground"
+                              }
+                              title={a.attemptCount >= 3 ? "Родитель сильно пытался — стоит помочь" : ""}
+                            >
+                              {a.attemptCount}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <Button size="sm" onClick={() => openConfirm(a)}>
+                            <CheckCircle2 className="w-3 h-3 mr-1" />
+                            Подтвердить
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
