@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { AlertCircle, Loader2, RefreshCw, Check, X, Film, Pencil, ExternalLink, Copy, Upload } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { AlertCircle, Loader2, RefreshCw, Check, X, Film, Pencil, ExternalLink, Copy, Upload, Search, Filter } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,11 +43,24 @@ type Game = {
 
 type State =
   | { kind: "loading" }
-  | { kind: "ok"; games: Game[] }
+  | { kind: "ok"; games: Game[]; total: number }
   | { kind: "not-ready" }
   | { kind: "upstream-down" }
   | { kind: "auth" }
   | { kind: "error"; message: string; status?: number }
+
+type StatusFilter = "all" | "upcoming" | "completed" | "cancelled" | "dateless"
+
+const STATUS_LABEL: Record<StatusFilter, string> = {
+  all: "Все",
+  upcoming: "Предстоящие",
+  completed: "Прошедшие",
+  cancelled: "Отменённые",
+  dateless: "Без даты",
+}
+const STATUS_ORDER: StatusFilter[] = ["all", "upcoming", "completed", "cancelled", "dateless"]
+
+const PAGE_LIMIT = 500
 
 const GROUP_LABEL: Record<string, string> = {
   BIRTHDAY: "ДР",
@@ -95,10 +108,34 @@ export function PassportsGames() {
   const [savingEdit, setSavingEdit] = useState(false)
   const [uploadingReelId, setUploadingReelId] = useState<string | null>(null)
 
+  // Фильтры — уходят на seeker как ?status=&q=&from=&to=&limit=&includeCancelled=
+  const [status, setStatus] = useState<StatusFilter>("all")
+  const [searchInput, setSearchInput] = useState("")
+  const [searchQuery, setSearchQuery] = useState("") // дебаунсенное значение для запроса
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [showFilters, setShowFilters] = useState(false)
+
+  // Дебаунс на поиск чтобы не молотить seeker по каждой букве
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
   const load = async () => {
     setState({ kind: "loading" })
     try {
-      const res = await fetch(`/api/passports/games`, { headers: getAuthHeaders() })
+      const qs = new URLSearchParams()
+      if (status !== "all") qs.set("status", status)
+      // cancelled статус seeker и так вернёт; для остальных значений
+      // seeker по умолчанию отменённые скрывает — явно попросим включить
+      // только когда status=all (админ хочет видеть общую картину).
+      if (status === "all") qs.set("includeCancelled", "true")
+      if (searchQuery) qs.set("q", searchQuery)
+      if (dateFrom) qs.set("from", dateFrom)
+      if (dateTo) qs.set("to", dateTo)
+      qs.set("limit", String(PAGE_LIMIT))
+      const res = await fetch(`/api/passports/games?${qs}`, { headers: getAuthHeaders() })
       if (res.status === 404) return setState({ kind: "not-ready" })
       if (res.status === 502) return setState({ kind: "upstream-down" })
       if (res.status === 401 || res.status === 403) return setState({ kind: "auth" })
@@ -108,7 +145,8 @@ export function PassportsGames() {
       }
       const json = await res.json()
       const games: Game[] = json?.data?.games ?? json?.games ?? []
-      setState({ kind: "ok", games })
+      const total: number = json?.data?.total ?? json?.total ?? games.length
+      setState({ kind: "ok", games, total })
     } catch (err: any) {
       setState({ kind: "error", message: String(err?.message ?? err) })
     }
@@ -117,7 +155,7 @@ export function PassportsGames() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [status, searchQuery, dateFrom, dateTo])
 
   const startEditReel = (game: Game) => {
     setEditingReelId(game.id)
@@ -199,6 +237,83 @@ export function PassportsGames() {
         </Button>
       </div>
 
+      {/* Фильтры */}
+      <div className="bg-card border border-border rounded-lg p-3 space-y-3">
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Поиск по площадке, ведущему, ребёнку, коду…"
+              className="pl-9 h-9"
+            />
+          </div>
+          <Button
+            variant={showFilters || dateFrom || dateTo ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowFilters(!showFilters)}
+            className="shrink-0"
+          >
+            <Filter className="w-4 h-4 mr-2" />
+            Даты{dateFrom || dateTo ? " ✓" : ""}
+          </Button>
+        </div>
+
+        {/* Сегменты статуса — прокидываем в seeker ?status= */}
+        <div className="inline-flex rounded-lg border border-border overflow-hidden text-xs flex-wrap">
+          {STATUS_ORDER.map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatus(s)}
+              className={`px-3 py-1.5 transition-colors ${
+                status === s
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-transparent hover:bg-muted border-l border-border first:border-l-0"
+              }`}
+            >
+              {STATUS_LABEL[s]}
+            </button>
+          ))}
+        </div>
+
+        {showFilters && (
+          <div className="flex flex-col sm:flex-row gap-3 items-end pt-2 border-t border-border">
+            <div className="flex-1 max-w-[200px]">
+              <label className="text-xs text-muted-foreground">Дата игры с</label>
+              <Input
+                type="date"
+                className="mt-1 h-8"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </div>
+            <div className="flex-1 max-w-[200px]">
+              <label className="text-xs text-muted-foreground">по</label>
+              <Input
+                type="date"
+                className="mt-1 h-8"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
+            {(dateFrom || dateTo) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDateFrom("")
+                  setDateTo("")
+                }}
+              >
+                <X className="w-3 h-3 mr-1" />
+                Сбросить даты
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
       {state.kind === "loading" && (
         <div className="flex items-center gap-2 text-muted-foreground p-6 border border-border rounded-lg bg-card">
           <Loader2 className="w-4 h-4 animate-spin" />
@@ -248,8 +363,27 @@ export function PassportsGames() {
 
       {state.kind === "ok" && (
         <>
-          <div className="text-xs text-muted-foreground">
-            Найдено игр: <span className="font-medium text-foreground">{state.games.length}</span>
+          <div className="text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
+            <span>
+              Найдено игр: <span className="font-medium text-foreground">{state.games.length}</span>
+              {state.total > state.games.length && (
+                <span className="text-amber-600 ml-1">из {state.total} (показаны первые {PAGE_LIMIT}, сузьте фильтры)</span>
+              )}
+            </span>
+            {(status !== "all" || searchQuery || dateFrom || dateTo) && (
+              <button
+                onClick={() => {
+                  setStatus("all")
+                  setSearchInput("")
+                  setSearchQuery("")
+                  setDateFrom("")
+                  setDateTo("")
+                }}
+                className="text-primary hover:underline text-xs"
+              >
+                Сбросить фильтры
+              </button>
+            )}
           </div>
           <div className="bg-card border border-border rounded-lg overflow-hidden">
             <div className="overflow-x-auto">

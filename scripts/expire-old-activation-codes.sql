@@ -1,6 +1,6 @@
--- D-011: 2-месячный TTL на activationCode для завершённых игр.
--- Идея: родитель может активировать паспорт после игры, но через 2 месяца
--- освобождаем код для повторного использования.
+-- D-011: 6-месячный TTL на activationCode для завершённых игр.
+-- Родитель может активировать паспорт после игры в течение полугода,
+-- потом код освобождается для повторного использования.
 --
 -- Запускать по крону раз в сутки:
 --   0 3 * * *  bash -lc 'cd /var/www/questlegends && \
@@ -12,4 +12,4 @@ UPDATE "GameLead"
 SET "activationCode" = NULL, "updatedAt" = NOW()
 WHERE "activationCode" IS NOT NULL
   AND "completedAt" IS NOT NULL
-  AND "completedAt" < NOW() - INTERVAL '2 months';
+  AND "completedAt" < NOW() - INTERVAL '6 months';
