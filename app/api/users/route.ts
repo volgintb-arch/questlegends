@@ -3,6 +3,7 @@ import { neon } from "@/lib/neon-compat"
 import bcrypt from "bcryptjs"
 import { v4 as uuidv4 } from "uuid"
 import { verifyRequest } from "@/lib/simple-auth"
+import { isUkRole } from "@/lib/tenant"
 import { cache } from "@/lib/cache"
 
 // getCurrentUser is unused — authentication is handled via verifyRequest from simple-auth
@@ -17,15 +18,25 @@ export async function GET(request: Request) {
 
     const sql = neon(process.env.DATABASE_URL!)
     const { searchParams } = new URL(request.url)
-    const franchiseeId = searchParams.get("franchiseeId")
     const roleFilter = searchParams.get("role")
     const rolesFilter = searchParams.get("roles")
+
+    // Tenant scope. UK roles may see everyone and filter by any franchisee.
+    // Everyone else sees their own franchisee plus UK staff (needed to message
+    // the management company) — the franchiseeId query param is ignored.
+    // Previously roles not in an explicit list (employee, uk_employee, ...)
+    // fell through to unscoped queries and got the whole network's directory.
+    const isUk = isUkRole(user.role)
+    if (!isUk && !user.franchiseeId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+    const franchiseeId = isUk ? searchParams.get("franchiseeId") : null
 
     let users
 
     if (rolesFilter) {
       const roles = rolesFilter.split(",")
-      if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
+      if (!isUk) {
         users = await sql`
           SELECT 
             u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp,
@@ -35,7 +46,7 @@ export async function GET(request: Request) {
           FROM "User" u
           LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
           LEFT JOIN "Personnel" p ON p."userId" = u.id
-          WHERE u."franchiseeId" = ${user.franchiseeId}
+          WHERE (u."franchiseeId" = ${user.franchiseeId} OR u.role IN ('uk', 'uk_employee'))
             AND u.role = ANY(${roles})
           ORDER BY u.name ASC
         `
@@ -75,7 +86,7 @@ export async function GET(request: Request) {
         WHERE u.role IN ('uk', 'uk_employee')
         ORDER BY u."createdAt" DESC
       `
-    } else if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin") {
+    } else if (!isUk) {
       users = await sql`
         SELECT
           u.id, u.phone, u.name, u.role, u.telegram, u.whatsapp,
@@ -85,7 +96,7 @@ export async function GET(request: Request) {
         FROM "User" u
         LEFT JOIN "Franchisee" f ON u."franchiseeId" = f.id
         LEFT JOIN "Personnel" p ON p."userId" = u.id
-        WHERE u."franchiseeId" = ${user.franchiseeId}
+        WHERE u."franchiseeId" = ${user.franchiseeId} OR u.role IN ('uk', 'uk_employee')
         ORDER BY u."createdAt" DESC
       `
     } else if (franchiseeId) {
