@@ -115,7 +115,7 @@ export async function getAuditLogs(params: {
   const df = dateFrom ?? null
   const dt = dateTo ?? null
 
-  const neonSql = neon(process.env.DATABASE_URL)
+  const neonSql = sql
 
   const logsResult = await neonSql`
     SELECT * FROM "AuditLog"
@@ -140,7 +140,7 @@ export async function getAuditLogs(params: {
   `
 
   return {
-    logs: logsResult as AuditLogEntry[],
+    logs: logsResult as unknown as AuditLogEntry[],
     total: Number.parseInt(countResult[0]?.count || "0", 10),
   }
 }

@@ -68,7 +68,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   } catch (error) {
     console.error("[v0] Error editing message:", String(error))
     return NextResponse.json(
-      { error: "Internal error", message: error instanceof Error ? error.message : String(error) },
+      { error: "Internal error" },
       { status: 500 },
     )
   }

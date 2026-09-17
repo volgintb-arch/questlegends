@@ -78,6 +78,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Managers can also change role, isActive, password
     if (body.name !== undefined) {
       await sql`UPDATE "User" SET name = ${body.name}, "updatedAt" = NOW() WHERE id = ${id}`
+      await sql`UPDATE "Personnel" SET name = ${body.name} WHERE "userId" = ${id}`
     }
     if (body.phone !== undefined) {
       await sql`UPDATE "User" SET phone = ${body.phone}, "updatedAt" = NOW() WHERE id = ${id}`
@@ -103,27 +104,57 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (body.role !== undefined) {
         const personnelRoles = ["animator", "host", "dj"]
         const requestedRole = body.role
+
+        // Privilege escalation guard: the caller may only assign roles that
+        // are below their own level. Mirrors the rule already enforced in
+        // POST /api/users; PATCH was missing it entirely.
+        const assignableRoles: Record<string, string[]> = {
+          uk: ["franchisee", "own_point", "uk_employee", "admin", "employee", "animator", "host", "dj"],
+          super_admin: ["franchisee", "own_point", "uk_employee", "admin", "employee", "animator", "host", "dj"],
+          uk_employee: ["franchisee", "own_point", "admin", "employee", "animator", "host", "dj"],
+          franchisee: ["admin", "employee", "animator", "host", "dj"],
+          own_point: ["admin", "employee", "animator", "host", "dj"],
+          admin: ["employee", "animator", "host", "dj"],
+        }
         // DB Role enum only has: uk, uk_employee, franchisee, admin, employee
         const dbRole = personnelRoles.includes(requestedRole) ? "employee" : requestedRole
-        await sql`UPDATE "User" SET role = ${dbRole}, "updatedAt" = NOW() WHERE id = ${id}`
-
-        // Manage Personnel record for animator/host/dj
-        const userFranchiseeId = targetUser.franchiseeId || currentUser.franchiseeId
-        if (personnelRoles.includes(requestedRole) && userFranchiseeId) {
-          const existingPersonnel = await sql`SELECT id FROM "Personnel" WHERE "userId" = ${id}`
-          if (existingPersonnel.length > 0) {
-            await sql`UPDATE "Personnel" SET role = ${requestedRole}, name = ${body.name || targetUser.name || ''} WHERE "userId" = ${id}`
-          } else {
-            const personnelId = uuidv4()
-            const userName = body.name || (await sql`SELECT name, phone, telegram, whatsapp FROM "User" WHERE id = ${id}`)[0]
-            await sql`
-              INSERT INTO "Personnel" (id, "franchiseeId", name, role, phone, telegram, whatsapp, "userId")
-              VALUES (${personnelId}, ${userFranchiseeId}, ${userName?.name || ''}, ${requestedRole}, ${userName?.phone || null}, ${userName?.telegram || null}, ${userName?.whatsapp || null}, ${id})
-            `
+        // The edit form always echoes the current role back; only an actual
+        // change is subject to the allow-list. An empty role is ignored.
+        // A personnel role (animator/host/dj) always counts as a change: the DB
+        // role stays "employee" but Personnel.role must still be updated.
+        const roleChanges =
+          typeof requestedRole === "string" &&
+          requestedRole !== "" &&
+          (dbRole !== targetUser.role || personnelRoles.includes(requestedRole))
+        if (roleChanges) {
+          const allowed = assignableRoles[currentUser.role] || []
+          if (!allowed.includes(requestedRole)) {
+            return NextResponse.json({ error: "Недостаточно прав для назначения этой роли" }, { status: 403 })
           }
-        } else if (!personnelRoles.includes(requestedRole)) {
-          // Changed away from personnel role — remove Personnel record
-          await sql`DELETE FROM "Personnel" WHERE "userId" = ${id}`
+          await sql`UPDATE "User" SET role = ${dbRole}, "updatedAt" = NOW() WHERE id = ${id}`
+
+          // Manage Personnel record for animator/host/dj — ONLY when the role
+          // actually changes. Previously this ran on every edit: the form
+          // echoes the DB role ("employee") for an animator, which is not in
+          // personnelRoles, so editing an animator's phone deleted their
+          // Personnel row and (via cascade) their game assignments.
+          const userFranchiseeId = targetUser.franchiseeId || currentUser.franchiseeId
+          if (personnelRoles.includes(requestedRole) && userFranchiseeId) {
+            const existingPersonnel = await sql`SELECT id FROM "Personnel" WHERE "userId" = ${id}`
+            if (existingPersonnel.length > 0) {
+              await sql`UPDATE "Personnel" SET role = ${requestedRole}, name = ${body.name || targetUser.name || ''} WHERE "userId" = ${id}`
+            } else {
+              const personnelId = uuidv4()
+              const userName = body.name || (await sql`SELECT name, phone, telegram, whatsapp FROM "User" WHERE id = ${id}`)[0]
+              await sql`
+                INSERT INTO "Personnel" (id, "franchiseeId", name, role, phone, telegram, whatsapp, "userId")
+                VALUES (${personnelId}, ${userFranchiseeId}, ${userName?.name || ''}, ${requestedRole}, ${userName?.phone || null}, ${userName?.telegram || null}, ${userName?.whatsapp || null}, ${id})
+              `
+            }
+          } else if (!personnelRoles.includes(requestedRole)) {
+            // Changed away from personnel role — remove Personnel record
+            await sql`DELETE FROM "Personnel" WHERE "userId" = ${id}`
+          }
         }
       }
       if (body.isActive !== undefined) {
@@ -132,7 +163,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         await sql`UPDATE "Personnel" SET "isActive" = ${body.isActive} WHERE "userId" = ${id}`
       }
       if (body.franchiseeId !== undefined) {
-        await sql`UPDATE "User" SET "franchiseeId" = ${body.franchiseeId}, "updatedAt" = NOW() WHERE id = ${id}`
+        // Moving a user between franchisees is a UK-owner operation.
+        // Other managers may send the field back unchanged (form round-trip) but
+        // may not change it — that would be a cross-tenant transfer.
+        const isUkOwner = currentUser.role === "uk" || currentUser.role === "super_admin"
+        const unchanged = (body.franchiseeId || null) === (targetUser.franchiseeId || null)
+        if (!isUkOwner && !unchanged) {
+          return NextResponse.json({ error: "Недостаточно прав для смены франшизы" }, { status: 403 })
+        }
+        if (isUkOwner) {
+          await sql`UPDATE "User" SET "franchiseeId" = ${body.franchiseeId}, "updatedAt" = NOW() WHERE id = ${id}`
+        }
       }
     }
 
@@ -161,7 +202,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ success: true, data: updated[0] })
   } catch (error: any) {
     console.error("[users/id] PATCH error:", error?.message || error)
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 

@@ -21,12 +21,15 @@ export async function GET(request: Request) {
     }
 
     // --- Кеш: формируем ключ на основе роли и franchiseeId ---
+    // The role is always part of the key: previously a UK owner and any user
+    // with an empty franchiseeId shared the same "all" entry, so whoever hit
+    // the endpoint first poisoned the cache for the other.
     const cacheKey =
       user.role === "uk_employee"
         ? `${CACHE_PREFIX}uk_employee:${user.userId}`
         : user.franchiseeId
-          ? `${CACHE_PREFIX}franchisee:${user.franchiseeId}`
-          : `${CACHE_PREFIX}all`
+          ? `${CACHE_PREFIX}${user.role}:franchisee:${user.franchiseeId}`
+          : `${CACHE_PREFIX}${user.role}:all`
 
     // --- Кеш: проверяем наличие данных в кеше ---
     const cached = await cache.get<unknown[]>(cacheKey)

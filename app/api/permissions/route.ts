@@ -261,7 +261,6 @@ export async function PUT(request: Request) {
       {
         success: false,
         error: "Failed to update permissions",
-        message: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
     )
