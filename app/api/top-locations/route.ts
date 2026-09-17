@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
         COALESCE(SUM(t.amount), 0)::numeric as revenue
       FROM "Franchisee" f
       LEFT JOIN "Transaction" t ON t."franchiseeId" = f.id
+        AND t.type IS DISTINCT FROM 'expense'
         AND t."createdAt" >= NOW() - INTERVAL '30 days'
       GROUP BY f.id, f.name, f.city
       ORDER BY revenue DESC
