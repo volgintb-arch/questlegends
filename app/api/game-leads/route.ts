@@ -182,6 +182,30 @@ export async function POST(req: NextRequest) {
       RETURNING *
     `
 
+    // Record the prepayment as a transaction immediately. Previously this only
+    // happened when the prepayment field was later edited via PATCH, so a
+    // prepayment entered at creation never reached the books: on completion
+    // only (total - prepayment) was posted and revenue was understated by the
+    // prepayment amount. Mirrors the INSERT in PATCH /api/game-leads/[id].
+    const prepaymentAmount = Number(prepayment) || 0
+    if (prepaymentAmount > 0) {
+      await sql`
+        INSERT INTO "Transaction" (
+          id, type, amount, category, description, "franchiseeId", "gameLeadId", date, "createdAt"
+        ) VALUES (
+          ${globalThis.crypto.randomUUID()},
+          'income',
+          ${prepaymentAmount},
+          'prepayment',
+          ${"Предоплата за игру: " + clientName},
+          ${franchiseeId},
+          ${lead.id},
+          ${gameDate || new Date().toISOString().split("T")[0]},
+          NOW()
+        )
+      `
+    }
+
     const [stage] = await sql`SELECT name FROM "GamePipelineStage" WHERE id = ${stageId}`
 
     const logId = globalThis.crypto.randomUUID()

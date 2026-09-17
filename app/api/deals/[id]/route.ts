@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { canAccessFranchisee } from "@/lib/tenant"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 import crypto from "crypto"
@@ -82,11 +83,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const deal = deals[0]
 
-    // H3: Cross-tenant check — non-UK roles can only access their own franchisee's deals
-    if (!["uk", "super_admin", "uk_employee"].includes(user.role)) {
-      if (deal.franchiseeId && user.franchiseeId && deal.franchiseeId !== user.franchiseeId) {
-        return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 })
-      }
+    // Cross-tenant check. Uses the shared helper so a deal or user with an
+    // empty franchiseeId no longer bypasses isolation (the old condition
+    // required BOTH ids to be non-null before it would refuse anything).
+    if (!canAccessFranchisee(user, deal.franchiseeId)) {
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 })
     }
 
     return NextResponse.json({
@@ -117,10 +118,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const sql = neon(process.env.DATABASE_URL!)
 
-    // H3: Cross-tenant check for PATCH
-    if (!["uk", "super_admin", "uk_employee"].includes(user.role) && user.franchiseeId) {
+    // Cross-tenant check for PATCH (same helper as GET; see note there)
+    {
       const [dealCheck] = await sql`SELECT "franchiseeId" FROM "Deal" WHERE id = ${id}`
-      if (dealCheck && dealCheck.franchiseeId && dealCheck.franchiseeId !== user.franchiseeId) {
+      if (!dealCheck) {
+        return NextResponse.json({ success: false, error: "Deal not found" }, { status: 404 })
+      }
+      if (!canAccessFranchisee(user, dealCheck.franchiseeId)) {
         return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 })
       }
     }

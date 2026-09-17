@@ -47,8 +47,9 @@ export async function GET(request: Request) {
         ),
         stats AS (
           SELECT
-            COALESCE((SELECT SUM(t.amount) FROM "Transaction" t WHERE t."franchiseeId" IN (SELECT "franchiseeId" FROM af)), 0) as "totalRevenue",
-            COALESCE((SELECT SUM(e.amount) FROM "Expense" e WHERE e."franchiseeId" IN (SELECT "franchiseeId" FROM af)), 0) as "totalExpenses",
+            COALESCE((SELECT SUM(t.amount) FROM "Transaction" t WHERE t."franchiseeId" IN (SELECT "franchiseeId" FROM af) AND t.type IS DISTINCT FROM 'expense'), 0) as "totalRevenue",
+            COALESCE((SELECT SUM(e.amount) FROM "Expense" e WHERE e."franchiseeId" IN (SELECT "franchiseeId" FROM af)), 0)
+              + COALESCE((SELECT SUM(t.amount) FROM "Transaction" t WHERE t."franchiseeId" IN (SELECT "franchiseeId" FROM af) AND t.type = 'expense'), 0) as "totalExpenses",
             (SELECT COUNT(*) FROM "Franchisee" f WHERE f.id IN (SELECT "franchiseeId" FROM af)) as "franchiseesCount",
             (SELECT COUNT(*) FROM "Deal" d WHERE d."franchiseeId" IN (SELECT "franchiseeId" FROM af)) as "dealsCount"
         ),
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
           SELECT f.id, f.name, f.city,
             COALESCE(SUM(t.amount), 0) as revenue
           FROM "Franchisee" f
-          LEFT JOIN "Transaction" t ON t."franchiseeId" = f.id
+          LEFT JOIN "Transaction" t ON t."franchiseeId" = f.id AND t.type IS DISTINCT FROM 'expense'
           WHERE f.id IN (SELECT "franchiseeId" FROM af)
           GROUP BY f.id, f.name, f.city
           ORDER BY revenue DESC
@@ -85,8 +86,9 @@ export async function GET(request: Request) {
       const result = await sql`
         WITH stats AS (
           SELECT
-            COALESCE((SELECT SUM(amount) FROM "Transaction"), 0) as "totalRevenue",
-            COALESCE((SELECT SUM(amount) FROM "Expense"), 0) as "totalExpenses",
+            COALESCE((SELECT SUM(amount) FROM "Transaction" WHERE type IS DISTINCT FROM 'expense'), 0) as "totalRevenue",
+            COALESCE((SELECT SUM(amount) FROM "Expense"), 0)
+              + COALESCE((SELECT SUM(amount) FROM "Transaction" WHERE type = 'expense'), 0) as "totalExpenses",
             (SELECT COUNT(*) FROM "Franchisee") as "franchiseesCount",
             (SELECT COUNT(*) FROM "Deal") as "dealsCount"
         ),
@@ -94,7 +96,7 @@ export async function GET(request: Request) {
           SELECT f.id, f.name, f.city,
             COALESCE(SUM(t.amount), 0) as revenue
           FROM "Franchisee" f
-          LEFT JOIN "Transaction" t ON t."franchiseeId" = f.id
+          LEFT JOIN "Transaction" t ON t."franchiseeId" = f.id AND t.type IS DISTINCT FROM 'expense'
           GROUP BY f.id, f.name, f.city
           ORDER BY revenue DESC
           LIMIT 5
@@ -121,8 +123,9 @@ export async function GET(request: Request) {
     if (user.franchiseeId) {
       const result = await sql`
         SELECT
-          COALESCE((SELECT SUM(amount) FROM "Transaction" WHERE "franchiseeId" = ${user.franchiseeId}), 0) as "totalRevenue",
-          COALESCE((SELECT SUM(amount) FROM "Expense" WHERE "franchiseeId" = ${user.franchiseeId}), 0) as "totalExpenses",
+          COALESCE((SELECT SUM(amount) FROM "Transaction" WHERE "franchiseeId" = ${user.franchiseeId} AND type IS DISTINCT FROM 'expense'), 0) as "totalRevenue",
+          COALESCE((SELECT SUM(amount) FROM "Expense" WHERE "franchiseeId" = ${user.franchiseeId}), 0)
+            + COALESCE((SELECT SUM(amount) FROM "Transaction" WHERE "franchiseeId" = ${user.franchiseeId} AND type = 'expense'), 0) as "totalExpenses",
           1 as "franchiseesCount",
           (SELECT COUNT(*) FROM "Deal" WHERE "franchiseeId" = ${user.franchiseeId}) as "dealsCount"
       `

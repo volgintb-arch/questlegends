@@ -78,6 +78,11 @@ export async function GET(request: Request) {
       : sql``
 
     if (user.role === "franchisee" || user.role === "own_point" || user.role === "admin" || user.role === "employee") {
+      // A non-UK user without a franchisee must not fall through to the
+      // unscoped query below (that returned every deal in the network).
+      if (!user.franchiseeId) {
+        return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 })
+      }
       if (user.franchiseeId) {
         deals = await sql`
           SELECT 
