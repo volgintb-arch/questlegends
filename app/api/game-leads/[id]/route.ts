@@ -178,7 +178,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         } else if (field === "responsibleId") {
           await sql`UPDATE "GameLead" SET "responsibleId" = ${value || null}, "updatedAt" = NOW() WHERE id = ${id}`
 
-          if (value && value !== oldResponsibleId && value !== user?.id) {
+          // TokenPayload has userId, not id — the old comparison was always true,
+          // so a self-assignment notified the assigner about themselves.
+          if (value && value !== oldResponsibleId && value !== user?.userId) {
             const notificationId = globalThis.crypto.randomUUID()
             const now = new Date().toISOString()
 
