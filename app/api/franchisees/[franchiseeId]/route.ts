@@ -94,7 +94,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ success: true, data: result[0] })
   } catch (error: any) {
     console.error("[v0] FRANCHISEE_PATCH error:", error?.message || error, error?.stack)
-    return NextResponse.json({ error: "Internal server error", detail: error?.message || String(error) }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 

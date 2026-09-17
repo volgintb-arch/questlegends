@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
+import { canAccessFranchisee } from "@/lib/tenant"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -11,8 +12,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
-    const ukRoles = ["uk", "super_admin", "uk_employee"]
 
     const [game] = await sql`
       SELECT g.*, u.name as "responsibleName"
@@ -25,7 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Game not found" }, { status: 404 })
     }
 
-    if (!ukRoles.includes(user.role) && game.franchiseeId !== user.franchiseeId) {
+    if (!canAccessFranchisee(user, game.franchiseeId)) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
@@ -50,6 +49,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const [currentGame] = await sql`SELECT * FROM "GameLead" WHERE id = ${id}`
     if (!currentGame) {
       return NextResponse.json({ error: "Game not found" }, { status: 404 })
+    }
+
+    // Tenant isolation: only UK roles or the owning franchisee may modify a lead.
+    // This check existed in GET and DELETE but was missing here — and PATCH is
+    // the method that creates/deletes financial transactions on stage change.
+    if (!canAccessFranchisee(user, currentGame.franchiseeId)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
     // Get old stage name and type
@@ -448,14 +454,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const ukRoles = ["uk", "super_admin", "uk_employee"]
-
     const [game] = await sql`SELECT * FROM "GameLead" WHERE id = ${id}`
     if (!game) {
       return NextResponse.json({ error: "Game not found" }, { status: 404 })
     }
 
-    if (!ukRoles.includes(user.role) && game.franchiseeId !== user.franchiseeId) {
+    if (!canAccessFranchisee(user, game.franchiseeId)) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 

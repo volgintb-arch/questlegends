@@ -58,7 +58,8 @@ export async function GET(request: Request) {
       } else if (user.role === "uk_employee") {
         const transactions = await sql`
           SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
-            t."dealId", t."franchiseeId", t."royaltyAmount",
+            t."dealId", t."gameLeadId", t."franchiseeId", t."royaltyAmount",
+            t.type, t.category, t.description, t.date,
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
@@ -74,7 +75,8 @@ export async function GET(request: Request) {
         // UK/super_admin sees all or filtered by franchiseeId
         const transactions = await sql`
           SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
-            t."dealId", t."franchiseeId", t."royaltyAmount",
+            t."dealId", t."gameLeadId", t."franchiseeId", t."royaltyAmount",
+            t.type, t.category, t.description, t.date,
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
@@ -109,7 +111,8 @@ export async function GET(request: Request) {
       } else if (user.role === "uk_employee") {
         const transactions = await sql`
           SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
-            t."dealId", t."franchiseeId", t."royaltyAmount",
+            t."dealId", t."gameLeadId", t."franchiseeId", t."royaltyAmount",
+            t.type, t.category, t.description, t.date,
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t
@@ -125,7 +128,8 @@ export async function GET(request: Request) {
         // UK/super_admin sees all transactions
         const transactions = await sql`
           SELECT t.id, t.amount, t.notes, t."paymentMethod", t."paymentDate", t."createdAt",
-            t."dealId", t."franchiseeId", t."royaltyAmount",
+            t."dealId", t."gameLeadId", t."franchiseeId", t."royaltyAmount",
+            t.type, t.category, t.description, t.date,
             d."clientName" as "dealTitle",
             f.name as "franchiseeName", f.city as "franchiseeCity"
           FROM "Transaction" t

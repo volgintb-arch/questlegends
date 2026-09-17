@@ -113,7 +113,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (channel === "vk") {
       return new NextResponse("ok", { status: 200 })
     }
-    return NextResponse.json({ error: String(error) }, { status: 500 })
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
   }
 }
 

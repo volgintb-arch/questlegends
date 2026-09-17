@@ -31,6 +31,9 @@ export async function GET(request: NextRequest) {
 
     const sql = neon(process.env.DATABASE_URL)
     const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
     const { searchParams } = new URL(request.url)
     const category = searchParams.get("category")

@@ -236,6 +236,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, data: lead })
   } catch (error) {
     console.error("[v0] Error creating game lead:", error)
-    return NextResponse.json({ error: "Failed to create lead", details: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    return NextResponse.json({ error: "Failed to create lead" }, { status: 500 })
   }
 }

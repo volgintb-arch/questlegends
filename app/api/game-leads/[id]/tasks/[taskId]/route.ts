@@ -1,14 +1,30 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
+import { canAccessFranchisee } from "@/lib/tenant"
 
 const sql = neon(process.env.DATABASE_URL!)
+
+/** 403 unless the caller may access the lead that owns these tasks. */
+async function assertLeadAccess(user: { role: string; franchiseeId?: string | null }, leadId: string) {
+  const [lead] = await sql`SELECT "franchiseeId" FROM "GameLead" WHERE id = ${leadId}`
+  if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 })
+  if (!canAccessFranchisee(user, lead.franchiseeId)) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 })
+  }
+  return null
+}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; taskId: string }> }) {
   try {
     const { id, taskId } = await params
-    const body = await req.json()
     const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    const denied = await assertLeadAccess(user, id)
+    if (denied) return denied
+    const body = await req.json()
 
     const [task] = await sql`SELECT * FROM "GameLeadTask" WHERE id = ${taskId} AND "leadId" = ${id}`
     if (!task) {
@@ -55,6 +71,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const { id, taskId } = await params
     const user = await verifyRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    const denied = await assertLeadAccess(user, id)
+    if (denied) return denied
 
     const [task] = await sql`SELECT * FROM "GameLeadTask" WHERE id = ${taskId} AND "leadId" = ${id}`
     if (!task) {
