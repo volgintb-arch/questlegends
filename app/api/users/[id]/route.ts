@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
+import { logAuditEvent } from "@/lib/audit-log"
 import { cache } from "@/lib/cache"
 import bcrypt from "bcryptjs"
 import { v4 as uuidv4 } from "uuid"
@@ -72,6 +73,39 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!canEdit) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    // A password change is validated here, before the first UPDATE: every field
+    // below is written by its own statement, so a late 403 would leave the form
+    // half-applied (name/phone saved, "error" shown).
+    const wantsPasswordChange =
+      typeof body.password === "string" && body.password.trim() !== "" && body.password.length >= 8
+    if (wantsPasswordChange) {
+      if (isSelfEdit) {
+        // Own password: current password is required
+        if (!body.currentPassword) {
+          return NextResponse.json({ error: "Текущий пароль обязателен" }, { status: 400 })
+        }
+        const userWithHash = await sql`SELECT "passwordHash" FROM "User" WHERE id = ${id}`
+        const isValid = await bcrypt.compare(body.currentPassword, userWithHash[0]?.passwordHash || "")
+        if (!isValid) {
+          return NextResponse.json({ error: "Неверный текущий пароль" }, { status: 400 })
+        }
+      } else {
+        // Someone else's password. Access to an account is access to its money,
+        // so this is narrower than canEdit: UK owners for anyone, a franchisee
+        // for their own staff. uk_employee (hired staff, not an owner) may not
+        // reset a franchisee's password and then log in as them.
+        const isUkOwner = currentUser.role === "uk" || currentUser.role === "super_admin"
+        const isOwnStaff =
+          (currentUser.role === "franchisee" || currentUser.role === "own_point") &&
+          !!currentUser.franchiseeId &&
+          targetUser.franchiseeId === currentUser.franchiseeId &&
+          ["admin", "employee", "animator", "host", "dj"].includes(targetUser.role)
+        if (!isUkOwner && !isOwnStaff) {
+          return NextResponse.json({ error: "Недостаточно прав для смены пароля этого пользователя" }, { status: 403 })
+        }
+      }
     }
 
     // Self-edit: only allow name, phone, email, telegram fields
@@ -177,20 +211,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
     }
 
-    if (body.password && body.password.trim() && body.password.length >= 8) {
-      // For self-edit, verify current password first
-      if (isSelfEdit) {
-        if (!body.currentPassword) {
-          return NextResponse.json({ error: "Текущий пароль обязателен" }, { status: 400 })
-        }
-        const userWithHash = await sql`SELECT "passwordHash" FROM "User" WHERE id = ${id}`
-        const isValid = await bcrypt.compare(body.currentPassword, userWithHash[0]?.passwordHash || "")
-        if (!isValid) {
-          return NextResponse.json({ error: "Неверный текущий пароль" }, { status: 400 })
-        }
-      }
+    if (wantsPasswordChange) {
+      // Permission and current-password checks were done above, before any UPDATE.
       const hashedPassword = await bcrypt.hash(body.password, 12)
       await sql`UPDATE "User" SET "passwordHash" = ${hashedPassword}, "updatedAt" = NOW() WHERE id = ${id}`
+      if (!isSelfEdit) {
+        await logAuditEvent({
+          action: "user_updated",
+          entityType: "user",
+          entityId: id,
+          userId: currentUser.userId,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          franchiseeId: currentUser.franchiseeId || null,
+          details: { change: "password_reset_by_manager", targetRole: targetUser.role },
+        })
+      }
     }
 
     const updated = await sql`

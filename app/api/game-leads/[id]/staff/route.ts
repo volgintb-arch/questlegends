@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
+import { canAccessFranchisee } from "@/lib/tenant"
+import { AccessControl, type SystemRole } from "@/lib/access-control"
+import { resolveAssignmentRate, findTimeConflict } from "@/lib/staffing"
 import { checkStaffTests } from "@/lib/check-staff-tests"
 
 const sql = neon(process.env.DATABASE_URL!)
@@ -45,21 +48,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { id } = await params
     const body = await req.json()
-    const { personnelId, role, rate } = body
+    const { personnelId, role } = body
+
+    const [lead] = await sql`
+      SELECT "franchiseeId", "gameDate", "gameTime", "gameDuration", "clientName", "playersCount", "totalAmount",
+             "animatorRate", "hostRate", "djRate",
+             TO_CHAR("gameDate", 'YYYY-MM-DD') as "gameDay"
+      FROM "GameLead" WHERE id = ${id}
+    `
+    if (!lead) {
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 })
+    }
+    if (!canAccessFranchisee(user, lead.franchiseeId)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 })
+    }
+    if (!personnelId || !role) {
+      return NextResponse.json({ error: "personnelId and role are required" }, { status: 400 })
+    }
+
+    // Rate snapshot: the lead's planned rate for the role; a client value only
+    // when there is no plan and the caller may edit leads (it ends up in the books).
+    const canSetRate = new AccessControl({
+      id: user.userId,
+      role: user.role as SystemRole,
+      franchiseeId: user.franchiseeId,
+    }).canPerformAction("leads", "edit")
+    const rate = resolveAssignmentRate(body.rate, role, lead, canSetRate)
 
     let schedule = await sql`
       SELECT id, "franchiseeId" FROM "GameSchedule" WHERE "leadId" = ${id} LIMIT 1
     `
 
     if (schedule.length === 0) {
-      // Get lead data to create schedule
-      const [lead] = await sql`
-        SELECT "franchiseeId", "gameDate", "gameTime", "clientName", "playersCount", "totalAmount" 
-        FROM "GameLead" WHERE id = ${id}
-      `
-
-      if (!lead) {
-        return NextResponse.json({ error: "Lead not found" }, { status: 404 })
+      // GameSchedule.gameDate is NOT NULL — refuse clearly instead of failing on INSERT
+      if (!lead.gameDate) {
+        return NextResponse.json({ error: "Сначала укажите дату игры" }, { status: 400 })
       }
 
       const scheduleId = globalThis.crypto.randomUUID()
@@ -70,10 +93,42 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       `
     }
 
+    // The person must belong to the same franchisee as the game. Without this a
+    // caller could attach (and, via the conflict message, learn about) another
+    // franchisee's staff.
+    const [person] = await sql`SELECT "franchiseeId" FROM "Personnel" WHERE id = ${personnelId}`
+    if (!person) {
+      return NextResponse.json({ error: "Personnel not found" }, { status: 404 })
+    }
+    if (person.franchiseeId !== lead.franchiseeId) {
+      return NextResponse.json({ error: "Сотрудник относится к другой франшизе" }, { status: 403 })
+    }
+
     // Check if staff has passed required tests
     const testError = await checkStaffTests(personnelId, role)
     if (testError) {
       return NextResponse.json({ error: testError }, { status: 400 })
+    }
+
+    // Double booking: same person on another game that overlaps in time the same day.
+    if (lead.gameDate) {
+      const others = await sql`
+        SELECT gs.id, gs."clientName", gs."gameTime", COALESCE(gl."gameDuration", 3) as duration
+        FROM "GameScheduleStaff" gss
+        JOIN "GameSchedule" gs ON gs.id = gss."scheduleId"
+        LEFT JOIN "GameLead" gl ON gl.id = gs."leadId"
+        WHERE gss."personnelId" = ${personnelId}
+          AND gs."franchiseeId" = ${lead.franchiseeId}
+          AND gs.id <> ${schedule[0].id}
+          AND DATE(gs."gameDate") = ${lead.gameDay}::date
+      `
+      const conflict = findTimeConflict({ gameTime: lead.gameTime, duration: lead.gameDuration }, others)
+      if (conflict) {
+        return NextResponse.json(
+          { error: `Сотрудник уже назначен на игру в это время: ${conflict.clientName || "без имени"} в ${conflict.gameTime}` },
+          { status: 409 },
+        )
+      }
     }
 
     // Get personnel name
@@ -82,8 +137,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const staffAssignmentId = globalThis.crypto.randomUUID()
     const [assignment] = await sql`
       INSERT INTO "GameScheduleStaff" (id, "scheduleId", "personnelId", role, rate)
-      VALUES (${staffAssignmentId}, ${schedule[0].id}, ${personnelId}, ${role}, ${rate || 0})
-      ON CONFLICT ("scheduleId", "personnelId") DO UPDATE SET role = ${role}, rate = ${rate || 0}
+      VALUES (${staffAssignmentId}, ${schedule[0].id}, ${personnelId}, ${role}, ${rate})
+      ON CONFLICT ("scheduleId", "personnelId") DO UPDATE SET role = ${role}, rate = ${rate}
       RETURNING *
     `
 

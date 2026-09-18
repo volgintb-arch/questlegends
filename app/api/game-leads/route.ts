@@ -19,6 +19,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const pipelineId = searchParams.get("pipelineId")
     const franchiseeId = searchParams.get("franchiseeId")
+    // ?status=completed|scheduled|cancelled — matched against the stage's stageType.
+    // The dashboard already sends this; it was silently ignored, so "games" counted every lead.
+    const statusParam = searchParams.get("status")
+    const status = statusParam && ["completed", "scheduled", "cancelled"].includes(statusParam) ? statusParam : null
+    const statusClause = status ? sql`AND s."stageType" = ${status}` : sql``
 
     let leads
 
@@ -34,6 +39,7 @@ export async function GET(req: NextRequest) {
           LEFT JOIN "User" u ON g."responsibleId" = u.id
           LEFT JOIN "GamePipelineStage" s ON g."stageId" = s.id
           WHERE g."pipelineId" = ${pipelineId}
+          ${statusClause}
           ORDER BY g."createdAt" DESC
         `
       } else if (franchiseeId) {
@@ -46,6 +52,7 @@ export async function GET(req: NextRequest) {
           LEFT JOIN "User" u ON g."responsibleId" = u.id
           LEFT JOIN "GamePipelineStage" s ON g."stageId" = s.id
           WHERE g."franchiseeId" = ${franchiseeId}
+          ${statusClause}
           ORDER BY g."createdAt" DESC
         `
       } else {
@@ -57,8 +64,10 @@ export async function GET(req: NextRequest) {
           FROM "GameLead" g
           LEFT JOIN "User" u ON g."responsibleId" = u.id
           LEFT JOIN "GamePipelineStage" s ON g."stageId" = s.id
+          WHERE TRUE
+          ${statusClause}
           ORDER BY g."createdAt" DESC
-          LIMIT 100
+          ${status ? sql`` : sql`LIMIT 100`}
         `
       }
     } else {
@@ -79,6 +88,7 @@ export async function GET(req: NextRequest) {
           LEFT JOIN "GamePipelineStage" s ON g."stageId" = s.id
           WHERE g."pipelineId" = ${pipelineId}
           AND g."franchiseeId" = ${userFranchiseeId}
+          ${statusClause}
           ORDER BY g."createdAt" DESC
         `
       } else {
@@ -91,6 +101,7 @@ export async function GET(req: NextRequest) {
           LEFT JOIN "User" u ON g."responsibleId" = u.id
           LEFT JOIN "GamePipelineStage" s ON g."stageId" = s.id
           WHERE g."franchiseeId" = ${userFranchiseeId}
+          ${statusClause}
           ORDER BY g."createdAt" DESC
         `
       }
@@ -155,6 +166,19 @@ export async function POST(req: NextRequest) {
 
     if (!access.canAccessFranchisee(franchiseeId)) {
       return NextResponse.json({ error: "Forbidden: no access to this franchisee" }, { status: 403 })
+    }
+
+    // The stage must belong to the given pipeline, and the pipeline to the franchisee.
+    const [stageCheck] = await sql`
+      SELECT s."pipelineId", p."franchiseeId"
+      FROM "GamePipelineStage" s JOIN "GamePipeline" p ON p.id = s."pipelineId"
+      WHERE s.id = ${stageId}
+    `
+    if (!stageCheck || stageCheck.pipelineId !== pipelineId) {
+      return NextResponse.json({ error: "Этап не принадлежит указанной воронке" }, { status: 400 })
+    }
+    if (stageCheck.franchiseeId && stageCheck.franchiseeId !== franchiseeId) {
+      return NextResponse.json({ error: "Воронка принадлежит другой франшизе" }, { status: 400 })
     }
 
     const totalAmount = playersCount * pricePerPerson

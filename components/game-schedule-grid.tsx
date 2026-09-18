@@ -249,7 +249,9 @@ export function GameScheduleGrid() {
           setSelectedItem(updated.data || updated)
         }
       } else {
+        const err = await res.json().catch(() => ({}))
         console.error("[v0] Failed to assign staff, status:", res.status)
+        alert(err?.error || "Не удалось назначить сотрудника")
       }
     } catch (e) {
       console.error("[v0] Error assigning staff:", e)

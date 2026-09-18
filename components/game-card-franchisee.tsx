@@ -490,6 +490,9 @@ export function GameCardFranchisee({
       if (res.ok) {
         loadStaffAssignments()
         loadEvents()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(err?.error || "Не удалось назначить сотрудника")
       }
     } catch (e) {
       console.error("[v0] Error assigning staff:", e)
@@ -967,7 +970,7 @@ export function GameCardFranchisee({
                     <Select
                       onValueChange={(id) => {
                         const p = personnel.find((x) => x.id === id)
-                        if (p) handleAssignStaff(id, "animator", 1500)
+                        if (p) handleAssignStaff(id, "animator", 0)
                       }}
                     >
                       <SelectTrigger className="h-7 text-xs">
@@ -987,7 +990,7 @@ export function GameCardFranchisee({
                     <Select
                       onValueChange={(id) => {
                         const p = personnel.find((x) => x.id === id)
-                        if (p) handleAssignStaff(id, "host", 2000)
+                        if (p) handleAssignStaff(id, "host", 0)
                       }}
                     >
                       <SelectTrigger className="h-7 text-xs">
@@ -1007,7 +1010,7 @@ export function GameCardFranchisee({
                     <Select
                       onValueChange={(id) => {
                         const p = personnel.find((x) => x.id === id)
-                        if (p) handleAssignStaff(id, "dj", 2500)
+                        if (p) handleAssignStaff(id, "dj", 0)
                       }}
                     >
                       <SelectTrigger className="h-7 text-xs">

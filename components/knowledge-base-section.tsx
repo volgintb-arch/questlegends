@@ -538,6 +538,11 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
     if (!selectedArticle) return
     const validQuestions = editingQuestions.filter((q) => q.text.trim() && q.options.some((o) => o.trim()))
     if (!editingQuizTitle.trim() || validQuestions.length === 0) return
+    const broken = validQuestions.findIndex((q) => !(q.options[q.correctIndex] || "").trim())
+    if (broken >= 0) {
+      alert(`Вопрос ${broken + 1}: правильный ответ указывает на пустой вариант. Выберите другой правильный ответ.`)
+      return
+    }
 
     setQuizLoading(true)
     try {
@@ -547,17 +552,27 @@ export function KnowledgeBaseSection({ role }: KnowledgeBaseSectionProps) {
         body: JSON.stringify({
           title: editingQuizTitle,
           passingScore: editingQuizScore,
-          questions: validQuestions.map((q) => ({
-            text: q.text,
-            options: q.options.filter((o) => o.trim()),
-            correctIndex: q.correctIndex,
-          })),
+          questions: validQuestions.map((q) => {
+            // Dropping empty options shifts indexes — re-map correctIndex to the
+            // kept option, otherwise the "right" answer silently moves.
+            const kept: number[] = []
+            q.options.forEach((o, i) => { if (o.trim()) kept.push(i) })
+            const newIndex = kept.indexOf(q.correctIndex)
+            return {
+              text: q.text,
+              options: kept.map((i) => q.options[i]),
+              correctIndex: newIndex >= 0 ? newIndex : 0,
+            }
+          }),
         }),
       })
       if (response.ok) {
         setShowQuizEditor(false)
         await loadQuiz(selectedArticle.id)
         await loadArticles()
+      } else {
+        const err = await response.json().catch(() => ({}))
+        alert(err?.error || "Не удалось сохранить тест")
       }
     } catch (error) {
       console.error("Error saving quiz:", error)
