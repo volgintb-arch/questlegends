@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
+import { canAccessFranchisee } from "@/lib/tenant"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -11,7 +12,22 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { staffId } = await params
+    const { id, staffId } = await params
+
+    // Removal is scoped like assignment: the row must belong to this schedule
+    // and the caller must have access to that franchisee.
+    const [assignment] = await sql`
+      SELECT a.id, a."scheduleId", gs."franchiseeId"
+      FROM "GameScheduleStaff" a
+      JOIN "GameSchedule" gs ON gs.id = a."scheduleId"
+      WHERE a.id = ${staffId}
+    `
+    if (!assignment) {
+      return NextResponse.json({ error: "Assignment not found" }, { status: 404 })
+    }
+    if (assignment.scheduleId !== id || !canAccessFranchisee(user, assignment.franchiseeId)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 })
+    }
 
     await sql`DELETE FROM "GameScheduleStaff" WHERE id = ${staffId}`
 

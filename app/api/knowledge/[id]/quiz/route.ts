@@ -75,21 +75,52 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await request.json()
     const { title, passingScore, questions } = body
 
-    if (!title || !questions || questions.length === 0) {
+    if (!title || !Array.isArray(questions) || questions.length === 0) {
       return NextResponse.json({ error: "Title and questions are required" }, { status: 400 })
     }
 
-    // Delete existing quiz for this article (cascade deletes questions and attempts)
-    await sql`DELETE FROM "KnowledgeQuiz" WHERE "articleId" = ${articleId}`
+    // Validate questions server-side: the client used to drop empty options
+    // without re-mapping correctIndex, so the "right" answer silently shifted.
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i]
+      const options = Array.isArray(q?.options) ? q.options.filter((o: unknown) => typeof o === "string" && o.trim()) : []
+      const idx = Number(q?.correctIndex)
+      if (!q?.text || typeof q.text !== "string" || !q.text.trim()) {
+        return NextResponse.json({ error: `Вопрос ${i + 1}: пустой текст` }, { status: 400 })
+      }
+      if (options.length < 2) {
+        return NextResponse.json({ error: `Вопрос ${i + 1}: нужно минимум два варианта ответа` }, { status: 400 })
+      }
+      if (!Number.isInteger(idx) || idx < 0 || idx >= options.length) {
+        return NextResponse.json({ error: `Вопрос ${i + 1}: правильный ответ не указывает на существующий вариант` }, { status: 400 })
+      }
+      questions[i] = { text: q.text.trim(), options, correctIndex: idx }
+    }
 
-    // Create new quiz
-    const quizId = globalThis.crypto.randomUUID()
-    await sql`
-      INSERT INTO "KnowledgeQuiz" (id, "articleId", title, "passingScore", "createdById", "createdAt", "updatedAt")
-      VALUES (${quizId}, ${articleId}, ${title}, ${passingScore || 70}, ${user.userId}, NOW(), NOW())
-    `
+    const score = Number(passingScore)
+    const normalizedPassingScore = Number.isFinite(score) && score >= 1 && score <= 100 ? Math.round(score) : 70
 
-    // Insert questions
+    // Update in place. The previous implementation deleted the quiz and
+    // re-created it, which cascaded to QuizAttempt and wiped every employee's
+    // results whenever a typo was fixed. Keeping the quiz id keeps the history.
+    const existing = await sql`SELECT id FROM "KnowledgeQuiz" WHERE "articleId" = ${articleId} LIMIT 1`
+    let quizId: string
+    if (existing.length > 0) {
+      quizId = existing[0].id
+      await sql`
+        UPDATE "KnowledgeQuiz"
+        SET title = ${title}, "passingScore" = ${normalizedPassingScore}, "updatedAt" = NOW()
+        WHERE id = ${quizId}
+      `
+      await sql`DELETE FROM "QuizQuestion" WHERE "quizId" = ${quizId}`
+    } else {
+      quizId = globalThis.crypto.randomUUID()
+      await sql`
+        INSERT INTO "KnowledgeQuiz" (id, "articleId", title, "passingScore", "createdById", "createdAt", "updatedAt")
+        VALUES (${quizId}, ${articleId}, ${title}, ${normalizedPassingScore}, ${user.userId}, NOW(), NOW())
+      `
+    }
+
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i]
       const qId = globalThis.crypto.randomUUID()
@@ -99,7 +130,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       `
     }
 
-    return NextResponse.json({ success: true, quizId }, { status: 201 })
+    return NextResponse.json({ success: true, quizId }, { status: existing.length > 0 ? 200 : 201 })
   } catch (error: any) {
     console.error("[knowledge/quiz] POST error:", error?.message)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

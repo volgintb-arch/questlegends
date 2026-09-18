@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@/lib/neon-compat"
 import { verifyRequest } from "@/lib/simple-auth"
 import { canAccessFranchisee } from "@/lib/tenant"
+import { AccessControl, type SystemRole } from "@/lib/access-control"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -67,6 +68,36 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       oldStageType = oldStage?.stageType || ""
     }
 
+    // Validate the target stage BEFORE any UPDATE below: the field loop writes
+    // stageId, so a late check would reject the request after the lead had
+    // already moved to a foreign stage (and vanished from its board).
+    const stageChanging = !!body.stageId && body.stageId !== currentGame.stageId
+    let newStage: { name: string | null; stageType: string | null; pipelineId: string } | null = null
+    if (stageChanging) {
+      const [st] = await sql`SELECT name, "stageType", "pipelineId" FROM "GamePipelineStage" WHERE id = ${body.stageId}`
+      if (!st || st.pipelineId !== currentGame.pipelineId) {
+        return NextResponse.json({ error: "Этап не принадлежит воронке этой заявки" }, { status: 400 })
+      }
+      newStage = { name: st.name, stageType: st.stageType, pipelineId: st.pipelineId }
+    }
+
+    // Money on a completed game is bookkeeping: the recalculation further down
+    // rewrites the postpayment posting, so it needs the "edit leads" permission
+    // (employees may move cards but not change the books).
+    const moneyFieldsTouched = ["playersCount", "pricePerPerson", "totalAmount", "prepayment"].some(
+      (f) => body[f] !== undefined,
+    )
+    if (moneyFieldsTouched && oldStageType === "completed") {
+      const access = new AccessControl({
+        id: user.userId,
+        role: user.role as SystemRole,
+        franchiseeId: user.franchiseeId,
+      })
+      if (!access.canPerformAction("leads", "edit")) {
+        return NextResponse.json({ error: "Недостаточно прав для изменения сумм завершённой игры" }, { status: 403 })
+      }
+    }
+
     const allowedFields = [
       "clientName",
       "clientPhone",
@@ -128,6 +159,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           await sql`UPDATE "GameLead" SET "clientEmail" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
         } else if (field === "gameDate") {
           await sql`UPDATE "GameLead" SET "gameDate" = ${value}, "updatedAt" = NOW() WHERE id = ${id}`
+          // Keep the system postings of this game (prepayment; for a completed game
+          // also postpayment, extras and fot) in the same period as the game. Manual
+          // transactions linked to the lead keep the date the user chose.
+          if (value) {
+            await sql`
+              UPDATE "Transaction" SET date = ${value}
+              WHERE "gameLeadId" = ${id} AND category IN ('prepayment', 'postpayment', 'extras', 'fot')
+            `
+          }
 
           const scheduleUpdateResult = await sql`
             UPDATE "GameSchedule" 
@@ -281,11 +321,75 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
-    if (body.stageId && body.stageId !== currentGame.stageId) {
-      // Get new stage info from database
-      const [newStage] = await sql`SELECT name, "stageType" FROM "GamePipelineStage" WHERE id = ${body.stageId}`
-      const newStageName = newStage?.name || body.stageName || ""
-      const stageType = newStage?.stageType || body.stageType || ""
+    // Edits to a lead that is already completed must be reflected in the books:
+    // previously only a stage change recalculated postings, so changing players,
+    // price or prepayment after completion left the postpayment row stale.
+    if (moneyFieldsTouched && !stageChanging && oldStageType === "completed") {
+      const [g] = await sql`SELECT "totalAmount", prepayment, "clientName", "playersCount", "franchiseeId", "gameDate" FROM "GameLead" WHERE id = ${id}`
+      const total = Number.parseFloat(g.totalAmount) || 0
+      const prepaid = Number.parseFloat(g.prepayment) || 0
+      const postpayment = total - prepaid
+      const existingPost = await sql`SELECT id, amount FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'postpayment'`
+      const bookedPost = existingPost.length > 0 ? Number.parseFloat(existingPost[0].amount) || 0 : 0
+      // The card saves on blur, so most requests carry unchanged numbers — touch
+      // the books (and the feed) only when the postpayment actually differs.
+      if (Math.abs(Math.max(postpayment, 0) - bookedPost) > 0.01) {
+        if (postpayment > 0) {
+          if (existingPost.length > 0) {
+            await sql`
+              UPDATE "Transaction"
+              SET amount = ${postpayment}, description = ${"Постоплата за игру: " + g.clientName + " (" + g.playersCount + " чел.)"}
+              WHERE "gameLeadId" = ${id} AND category = 'postpayment'
+            `
+          } else {
+            await sql`
+              INSERT INTO "Transaction" (id, type, amount, category, description, "franchiseeId", "gameLeadId", date, "createdAt")
+              VALUES (${globalThis.crypto.randomUUID()}, 'income', ${postpayment}, 'postpayment',
+                      ${"Постоплата за игру: " + g.clientName + " (" + g.playersCount + " чел.)"},
+                      ${g.franchiseeId}, ${id}, ${g.gameDate || new Date().toISOString().split("T")[0]}, NOW())
+            `
+          }
+        } else if (existingPost.length > 0) {
+          await sql`DELETE FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'postpayment'`
+        }
+        await sql`
+          INSERT INTO "GameLeadEvent" (id, "leadId", type, content, "userId", "userName")
+          VALUES (${globalThis.crypto.randomUUID()}, ${id}, 'system', ${"Проводки пересчитаны после правки завершённой игры: постоплата " + bookedPost + " → " + Math.max(postpayment, 0) + " ₽"}, ${user?.userId || null}, ${user?.name || null})
+        `
+      }
+    }
+
+    if (stageChanging && newStage) {
+      const newStageName = newStage.name || ""
+      const stageType = newStage.stageType || ""
+
+      // Actual staff cost is read HERE, before the unschedule block below deletes
+      // the assignments: "scheduled → completed" is the main path and must see
+      // them. A row with rate 0 means "rate unknown", not "free" — per row, fall
+      // back to the lead's planned rate for that role.
+      let actualStaffCost = 0
+      let assignedCount = 0
+      if (stageType === "completed") {
+        try {
+          const [agg] = await sql`
+            SELECT COALESCE(SUM(CASE
+                     WHEN COALESCE(gss.rate, 0) > 0 THEN gss.rate
+                     WHEN gss.role = 'animator' THEN COALESCE(gl."animatorRate", 0)
+                     WHEN gss.role = 'host' THEN COALESCE(gl."hostRate", 0)
+                     WHEN gss.role = 'dj' THEN COALESCE(gl."djRate", 0)
+                     ELSE 0 END), 0)::int as total,
+                   COUNT(*)::int as cnt
+            FROM "GameScheduleStaff" gss
+            JOIN "GameSchedule" gs ON gs.id = gss."scheduleId"
+            JOIN "GameLead" gl ON gl.id = gs."leadId"
+            WHERE gs."leadId" = ${id}
+          `
+          actualStaffCost = Number(agg?.total) || 0
+          assignedCount = Number(agg?.cnt) || 0
+        } catch (e) {
+          console.error("[game-leads] staff cost lookup failed, using plan:", e)
+        }
+      }
 
       await sql`
         INSERT INTO "GameLeadLog" (id, "leadId", action, "fromStageName", "toStageName", "fromStageId", "toStageId", "pipelineId", "userId", "userName", "franchiseeId", "clientName")
@@ -351,10 +455,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const prepayment = Number.parseFloat(game.prepayment) || 0
         const postpayment = totalAmount - prepayment
 
-        const animatorsCost = (Number.parseInt(game.animatorsCount) || 0) * (Number.parseFloat(game.animatorRate) || 0)
-        const hostsCost = (Number.parseInt(game.hostsCount) || 0) * (Number.parseFloat(game.hostRate) || 0)
-        const djsCost = (Number.parseInt(game.djsCount) || 0) * (Number.parseFloat(game.djRate) || 0)
-        const totalStaffCost = animatorsCost + hostsCost + djsCost
+        // Staff cost: actual assignments (read above, before unschedule) win over the plan.
+        const plannedStaffCost =
+          (Number.parseInt(game.animatorsCount) || 0) * (Number.parseFloat(game.animatorRate) || 0) +
+          (Number.parseInt(game.hostsCount) || 0) * (Number.parseFloat(game.hostRate) || 0) +
+          (Number.parseInt(game.djsCount) || 0) * (Number.parseFloat(game.djRate) || 0)
+        const staffCostSource = assignedCount > 0 && actualStaffCost > 0 ? "actual" : "plan"
+        const totalStaffCost = staffCostSource === "actual" ? actualStaffCost : plannedStaffCost
 
         const gameDate = game.gameDate || new Date().toISOString().split("T")[0]
 
@@ -428,7 +535,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
         await sql`
           INSERT INTO "GameLeadLog" (id, "leadId", action, details, "pipelineId", "userId", "userName", "franchiseeId", "clientName")
-          VALUES (${globalThis.crypto.randomUUID()}, ${id}, 'completed', ${"Игра завершена. Выручка: " + totalAmount + " ₽, ФОТ: " + totalStaffCost + " ₽"}, ${game.pipelineId}, ${user?.userId || null}, ${user?.name || null}, ${game.franchiseeId || null}, ${game.clientName || null})
+          VALUES (${globalThis.crypto.randomUUID()}, ${id}, 'completed', ${"Игра завершена. Выручка: " + totalAmount + " ₽, ФОТ: " + totalStaffCost + " ₽" + (staffCostSource === "actual" ? " (по назначенному персоналу: " + assignedCount + " чел.)" : " (по плану — персонал не назначен)")}, ${game.pipelineId}, ${user?.userId || null}, ${user?.name || null}, ${game.franchiseeId || null}, ${game.clientName || null})
         `
       }
 
@@ -436,6 +543,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const [oldStage] = await sql`SELECT "stageType" FROM "GamePipelineStage" WHERE id = ${currentGame.stageId}`
         if (oldStage?.stageType === "completed") {
           await sql`DELETE FROM "Transaction" WHERE "gameLeadId" = ${id} AND category != 'prepayment'`
+          // The prepayment row is intentionally kept: the money was received. If it is
+          // being refunded, that is a separate manual transaction — say so in the feed.
+          const [pp] = await sql`SELECT amount FROM "Transaction" WHERE "gameLeadId" = ${id} AND category = 'prepayment' LIMIT 1`
+          await sql`
+            INSERT INTO "GameLeadEvent" (id, "leadId", type, content, "userId", "userName")
+            VALUES (${globalThis.crypto.randomUUID()}, ${id}, 'system',
+              ${"Игра выведена из «Завершено»: постоплата, допродажи и ФОТ удалены из книг." + (pp ? " Предоплата " + pp.amount + " ₽ осталась в книгах — при возврате оформите расход вручную." : "")},
+              ${user?.userId || null}, ${user?.name || null})
+          `
         }
       }
     }
