@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { ProfileSettingsModal } from "./profile-settings-modal"
 import { GlobalSearch } from "./global-search"
+import { useVisibleInterval } from "@/lib/use-visible-interval"
 
 interface HeaderProps {
   userName: string
@@ -45,9 +46,9 @@ export function Header({ userName, role, onViewChange, onMobileMenuToggle }: Hea
 
   useEffect(() => {
     fetchNotificationCount()
-    const interval = setInterval(fetchNotificationCount, 10000) // Refresh every 10s
-    return () => clearInterval(interval)
   }, [fetchNotificationCount])
+  // A badge counter does not need 10s polling from every open tab.
+  useVisibleInterval(fetchNotificationCount, 30000)
 
   useEffect(() => {
     const handleRefresh = () => fetchNotificationCount()

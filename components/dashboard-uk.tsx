@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import { useVisibleInterval } from "@/lib/use-visible-interval"
 import { RussianRuble, TrendingUp, Users, BarChart3 } from "lucide-react"
 import { MetricCard } from "./metric-card"
 
@@ -51,6 +52,7 @@ export function DashboardUK() {
   ]
 
   const isUkEmployee = user?.role === "uk_employee"
+  const fetchRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     const fetchData = async () => {
@@ -113,10 +115,12 @@ export function DashboardUK() {
       }
     }
 
+    fetchRef.current = fetchData
     fetchData()
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
   }, [getAuthHeaders, user?.role, isUkEmployee])
+
+  // Refresh once a minute, only while the tab is visible.
+  useVisibleInterval(() => fetchRef.current(), 60000)
 
   // Обогащённые данные по каждому франчайзи (только базовые 4 метрики)
   const enrichedFranchises = useMemo(() => {

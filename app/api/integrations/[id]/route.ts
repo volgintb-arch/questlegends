@@ -103,7 +103,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       RETURNING *
     `
 
-    return NextResponse.json({ integration: (result as any[])[0] })
+    return NextResponse.json({ integration: { ...(result as any[])[0], credentials: "***REDACTED***" } })
   } catch (error) {
     console.error("[v0] Error updating integration:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

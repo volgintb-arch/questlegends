@@ -148,7 +148,8 @@ export function GlobalSearch() {
         <Search className="w-5 h-5" />
       </button>
 
-      <CommandDialog open={open} onOpenChange={setOpen}>
+      {/* The API already matched name/phone/etc.; cmdk's own filter hid results whose title did not contain the query (e.g. a phone search). */}
+      <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
         <CommandInput placeholder="Поиск по всей системе..." value={search} onValueChange={setSearch} />
         <CommandList>
           <CommandEmpty>

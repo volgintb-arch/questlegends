@@ -3,6 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import { useVisibleInterval } from "@/lib/use-visible-interval"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -212,12 +213,9 @@ export function MessagingSection() {
   }
 
   useEffect(() => {
-    if (selectedPartner) {
-      fetchMessages(selectedPartner.id)
-      const interval = setInterval(() => fetchMessages(selectedPartner.id), 5000)
-      return () => clearInterval(interval)
-    }
+    if (selectedPartner) fetchMessages(selectedPartner.id)
   }, [selectedPartner]) // eslint-disable-line react-hooks/exhaustive-deps
+  useVisibleInterval(() => selectedPartner && fetchMessages(selectedPartner.id), 10000, !!selectedPartner)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
