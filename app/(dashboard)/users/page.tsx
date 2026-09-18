@@ -112,11 +112,17 @@ export default function UsersPage() {
     }
   }
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Удалить этого пользователя?")) return
+  const handleDeleteUser = async (target: User) => {
+    // Deleting a franchisee-role user deletes the whole franchise on the server
+    // (cascade to staff, leads, schedule, transactions) — say so, not a generic prompt.
+    const message =
+      target.role === "franchisee" && target.franchisee?.id
+        ? `Удалить франчайзи «${target.name}»?\n\nВНИМАНИЕ: вместе с ним будет удалена вся франшиза «${target.franchisee.name}» — сотрудники, заявки, график, проводки и расходы. Отменить это нельзя.`
+        : `Удалить пользователя «${target.name}»?`
+    if (!confirm(message)) return
 
     try {
-      const response = await fetch(`/api/users/${userId}`, {
+      const response = await fetch(`/api/users/${target.id}`, {
         method: "DELETE",
         headers: getAuthHeaders(),
       })
@@ -259,7 +265,7 @@ export default function UsersPage() {
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-destructive"
-              onClick={() => handleDeleteUser(userItem.id)}
+              onClick={() => handleDeleteUser(userItem)}
             >
               <Trash2 size={12} />
             </Button>

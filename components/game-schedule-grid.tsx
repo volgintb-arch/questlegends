@@ -51,6 +51,14 @@ interface Personnel {
   rate?: number
 }
 
+/** YYYY-MM-DD in the browser's local time zone (toISOString shifts the day for UTC+N). */
+function toLocalDateStr(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
+
 export function GameScheduleGrid() {
   const { user, getAuthHeaders } = useAuth()
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([])
@@ -93,10 +101,10 @@ export function GameScheduleGrid() {
 
     try {
       setLoading(true)
-      const startDate = currentWeekStart.toISOString().split("T")[0]
+      const startDate = toLocalDateStr(currentWeekStart)
       const endDate = new Date(currentWeekStart)
       endDate.setDate(endDate.getDate() + 6)
-      const endDateStr = endDate.toISOString().split("T")[0]
+      const endDateStr = toLocalDateStr(endDate)
 
       console.log("[v0] Fetching schedule for:", startDate, "to", endDateStr)
 
@@ -209,20 +217,24 @@ export function GameScheduleGrid() {
     setDraggedPerson(null)
   }
 
-  const handleDrop = async (item: ScheduleItem) => {
-    if (!draggedPerson) return
+  // The modal passes the person explicitly: setState is async, so reading
+  // draggedPerson right after setDraggedPerson saw the previous value and the
+  // first click in the modal did nothing.
+  const handleDrop = async (item: ScheduleItem, personOverride?: Personnel) => {
+    const person = personOverride ?? draggedPerson
+    if (!person) return
 
-    console.log("[v0] Dropping staff:", draggedPerson.name, "on game:", item.clientName)
+    console.log("[v0] Dropping staff:", person.name, "on game:", item.clientName)
 
-    if (item.staff?.some((s) => s.personnelId === draggedPerson.id)) {
+    if (item.staff?.some((s) => s.personnelId === person.id)) {
       alert("Этот сотрудник уже назначен на эту игру")
       setDraggedPerson(null)
       return
     }
 
-    if (!canAssignMore(item, draggedPerson.role)) {
+    if (!canAssignMore(item, person.role)) {
       alert(
-        `Все ${draggedPerson.role === "animator" ? "аниматоры" : draggedPerson.role === "host" ? "ведущие" : "DJ"} уже назначены`,
+        `Все ${person.role === "animator" ? "аниматоры" : person.role === "host" ? "ведущие" : "DJ"} уже назначены`,
       )
       setDraggedPerson(null)
       return
@@ -234,10 +246,10 @@ export function GameScheduleGrid() {
         method: "POST",
         headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
-          personnelId: draggedPerson.id,
-          personnelName: draggedPerson.name,
-          role: draggedPerson.role,
-          rate: draggedPerson.rate || 0,
+          personnelId: person.id,
+          personnelName: person.name,
+          role: person.role,
+          rate: person.rate || 0,
         }),
       })
 
@@ -646,10 +658,7 @@ export function GameScheduleGrid() {
                     .map((person) => (
                       <div
                         key={person.id}
-                        onClick={() => {
-                          setDraggedPerson(person)
-                          handleDrop(selectedItem)
-                        }}
+                        onClick={() => handleDrop(selectedItem, person)}
                         className="p-2 border rounded cursor-pointer hover:bg-muted transition-colors flex items-center gap-2"
                       >
                         {getRoleIcon(person.role)}

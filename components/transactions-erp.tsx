@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { FranchiseFinancialView } from "./franchise-financial-view"
 import { TransactionFormModal } from "./transaction-form-modal"
-import type { FilterConfig } from "./advanced-filters"
+import type { FilterConfig } from "@/lib/filter-config"
 import * as XLSX from "xlsx"
 import {
   AreaChart,

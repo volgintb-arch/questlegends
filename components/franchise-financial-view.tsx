@@ -124,7 +124,9 @@ export function FranchiseFinancialView({ searchTerm = "" }: FranchiseFinancialVi
         const completedGames = Number(f.completedGames) || 0
         const cancelledGames = Number(f.cancelledGames) || 0
         const gamesRevenue = Number(f.gamesRevenue) || 0
-        const cancelRate = completedGames > 0 ? Math.round((cancelledGames / completedGames) * 100) : 0
+        // Share of refusals among all closed games — "refusals per completed game" could exceed 100%.
+        const closedGames = completedGames + cancelledGames
+        const cancelRate = closedGames > 0 ? Math.round((cancelledGames / closedGames) * 100) : 0
         const avgCheck = completedGames > 0 ? Math.round(gamesRevenue / completedGames) : 0
 
         return {

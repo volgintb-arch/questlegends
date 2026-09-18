@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
       details: { action: "created", channel, owner_type, owner_id },
     })
 
-    return NextResponse.json({ integration }, { status: 201 })
+    return NextResponse.json({ integration: { ...integration, credentials: "***REDACTED***" } }, { status: 201 })
   } catch (error) {
     console.error("[v0] Error creating integration:")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

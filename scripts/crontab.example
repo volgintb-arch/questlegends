@@ -1,0 +1,8 @@
+# Telegram game notifications. vercel.json crons do not run on the VPS, and the
+# route only accepts POST with the internal API key. Add to the server crontab
+# (crontab -e), replacing the host and key; times are server-local.
+#
+# 09:00 — reminders two days before the game
+0 9 * * *  curl -sS -X POST -H "Content-Type: application/json" -H "x-api-key: $INTERNAL_API_KEY" -d '{"type":"TWO_DAYS_BEFORE"}' https://crm.example.ru/api/notifications/send >/dev/null
+# 20:00 — follow-up after the game
+0 20 * * * curl -sS -X POST -H "Content-Type: application/json" -H "x-api-key: $INTERNAL_API_KEY" -d '{"type":"AFTER_GAME"}' https://crm.example.ru/api/notifications/send >/dev/null

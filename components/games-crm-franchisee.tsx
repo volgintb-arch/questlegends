@@ -281,6 +281,18 @@ export function GamesCRMFranchisee() {
   const handleLeadMove = async (leadId: string, newStageId: string) => {
     const headers = getAuthHeaders()
 
+    // Entering or leaving "Завершено" writes or deletes postings in the books —
+    // a mis-drop must not do that silently.
+    const movedLead = leads.find((l) => l.id === leadId)
+    const fromType = stages.find((s) => s.id === movedLead?.stageId)?.stageType
+    const toType = stages.find((s) => s.id === newStageId)?.stageType
+    const who = movedLead?.clientName ? `«${movedLead.clientName}»` : ""
+    if (toType === "completed" && fromType !== "completed") {
+      if (!confirm(`Завершить игру ${who}? В книги будут записаны постоплата, допродажи и ФОТ.`)) return
+    } else if (fromType === "completed" && toType !== "completed") {
+      if (!confirm(`Вернуть игру ${who} из «Завершено»? Постоплата, допродажи и ФОТ будут удалены из книг, предоплата останется.`)) return
+    }
+
     setLeads((prev) => prev.map((lead) => (lead.id === leadId ? { ...lead, stageId: newStageId } : lead)))
 
     try {
